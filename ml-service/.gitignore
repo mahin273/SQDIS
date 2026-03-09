@@ -1,0 +1,178 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+.venv/
+
+# PyCharm
+.idea/
+*.iml
+*.iws
+.idea_modules/
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# Environment Variables
+.env
+.env.local
+.env.*.local
+*.env
+
+# ML Models & Data
+models/
+*.pkl
+*.joblib
+*.h5
+*.hdf5
+*.pb
+*.pth
+*.onnx
+*.tflite
+mlruns/
+mlflow/
+artifacts/
+
+# Training Data & Datasets
+data/
+datasets/
+*.csv
+*.json
+*.parquet
+*.feather
+*.arrow
+
+# Logs
+logs/
+*.log
+*.out
+*.err
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+.hypothesis/
+
+# MyPy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre
+.pyre/
+
+# Pytype
+.pytype/
+
+# Celery
+celerybeat-schedule
+celerybeat.pid
+
+# Redis dump
+dump.rdb
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.backup
+
+# Docker
+.dockerignore
+
+# Prometheus metrics (if stored locally)
+metrics/
+
+# Experiment tracking
+experiments/
+runs/
+wandb/
+
+# Large files
+*.zip
+*.tar.gz
+*.rar
+*.7z
+
+# Secrets & Credentials
+secrets/
+credentials/
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+
+# MLflow
+mlartifacts/
+mlruns/
+
+# Weights & Biases
+wandb/
+
+# TensorBoard
+tensorboard/
+tb_logs/
+
+# Profiling
+*.prof
+*.lprof
+*.pyprof
+
+# Cache
+.cache/
+*.cache
+
+# Build artifacts
+*.whl
+
