@@ -1,0 +1,1437 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ==================== ORGANIZATION & AUTH ====================
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  slug      String   @unique
+  logoUrl   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  members               OrganizationMember[]
+  invitations           Invitation[]
+  githubConnections     GitHubConnection[]
+  repositories          Repository[]
+  unmappedEmails        UnmappedEmail[]
+  teams                 Team[]
+  projects              Project[]
+  sprints               Sprint[]
+  releases              Release[]
+  alerts                Alert[]
+  digestQueue           DigestQueue[]
+  alertThresholdConfigs AlertThresholdConfig[]
+  goals                 Goal[]
+  goalTemplates         GoalTemplate[]
+  auditLogs             AuditLog[]
+  auditRetentionPolicy  AuditRetentionPolicy?
+  webhookRateLimit      WebhookRateLimit?
+
+  @@map("organizations")
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  passwordHash String?
+  name         String
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // OAuth
+  googleId String? @unique
+  githubId String? @unique
+
+  // Relations
+  memberships             OrganizationMember[]
+  emailAliases            EmailAlias[]
+  refreshTokens           RefreshToken[]
+  passwordResetTokens     PasswordResetToken[]
+  commits                 Commit[]
+  dqsScores               DQSScore[]
+  teamMemberships         TeamMembership[]
+  leadingTeams            Team[]             @relation("TeamLead")
+  reviews                 Review[]
+  reviewComments          ReviewComment[]
+  notifications           Notification[]
+  authoredDebtItems       DebtItem[]         @relation("DebtAuthor")
+  resolvedDebtItems       DebtItem[]         @relation("DebtResolver")
+  onboarding              Onboarding?
+  mentoring               Onboarding[]       @relation("Mentor")
+  acknowledgedAlerts      Alert[]            @relation("AlertAcknowledger")
+  resolvedAlerts          Alert[]            @relation("AlertResolver")
+  notificationPreferences NotificationPreference?
+  digestQueue             DigestQueue[]
+  ownedGoals              Goal[]             @relation("GoalOwner")
+  auditLogs               AuditLog[]
+
+  @@map("users")
+}
+
+model OrganizationMember {
+  id             String   @id @default(uuid())
+  organizationId String
+  userId         String
+  role           Role     @default(DEVELOPER)
+  joinedAt       DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@map("organization_members")
+}
+
+model Invitation {
+  id             String    @id @default(uuid())
+  organizationId String
+  email          String
+  token          String    @unique
+  expiresAt      DateTime
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("invitations")
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  TEAM_LEAD
+  DEVELOPER
+}
+
+// ==================== EMAIL MAPPING ====================
+
+model EmailAlias {
+  id          String      @id @default(uuid())
+  userId      String
+  email       String      @unique
+  isVerified  Boolean     @default(false)
+  verifyToken String?
+  tokenExpiry DateTime?
+  source      AliasSource @default(MANUAL)
+  createdAt   DateTime    @default(now())
+  verifiedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("email_aliases")
+}
+
+enum AliasSource {
+  MANUAL
+  GITHUB_OAUTH
+  ADMIN_ASSIGNED
+}
+
+// ==================== UNMAPPED EMAILS ====================
+
+model UnmappedEmail {
+  id             String   @id @default(uuid())
+  organizationId String
+  email          String
+  authorName     String?
+  commitCount    Int      @default(1)
+  firstSeenAt    DateTime @default(now())
+  lastSeenAt     DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@map("unmapped_emails")
+}
+
+// ==================== REFRESH TOKENS ====================
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+
+// ==================== GITHUB INTEGRATION ====================
+
+model GitHubConnection {
+  id             String   @id @default(uuid())
+  organizationId String   @unique
+  encryptedPAT   String
+  scopes         String[]
+  connectedAt    DateTime @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("github_connections")
+}
+
+model Repository {
+  id             String    @id @default(uuid())
+  organizationId String
+  githubId       Int
+  name           String
+  fullName       String
+  isEnabled      Boolean   @default(false)
+  webhookId      Int?
+  webhookSecret  String?
+  lastSyncAt     DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization        Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  commits             Commit[]
+  projectRepositories ProjectRepository[]
+  reviews             Review[]
+  debtItems           DebtItem[]
+  coverageReports     CoverageReport[]
+  webhookLogs         WebhookLog[]
+  pullRequests        PullRequest[]
+  issues              Issue[]
+  githubReleases      GitHubRelease[]
+  commitComments      CommitComment[]
+
+  @@unique([organizationId, githubId])
+  @@map("repositories")
+}
+
+// ==================== WEBHOOK PROCESSING ====================
+
+// Webhook delivery logs
+model WebhookLog {
+  id             String        @id @default(uuid())
+  deliveryId     String        @unique
+  eventType      String
+  repositoryId   String
+  status         WebhookStatus @default(PENDING)
+  responseTimeMs Int?
+  errorMessage   String?
+  payloadSize    Int
+  payload        String?       @db.Text
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, createdAt])
+  @@index([status])
+  @@map("webhook_logs")
+}
+
+enum WebhookStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+// Idempotency tracking
+model WebhookIdempotency {
+  id         String   @id @default(uuid())
+  deliveryId String   @unique
+  result     Json     // Cached WebhookProcessingResult
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime // 7 days from creation
+
+  @@index([expiresAt])
+  @@map("webhook_idempotency")
+}
+
+// Pull requests
+model PullRequest {
+  id            String           @id @default(uuid())
+  repositoryId  String
+  githubPrId    Int
+  prNumber      Int
+  title         String
+  body          String?
+  state         PullRequestState
+  merged        Boolean          @default(false)
+  mergedAt      DateTime?
+  authorLogin   String
+  authorId      Int
+  baseBranch    String
+  headBranch    String
+  baseCommitSha String
+  headCommitSha String
+  createdAt     DateTime
+  updatedAt     DateTime
+  closedAt      DateTime?
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, githubPrId])
+  @@index([repositoryId, state])
+  @@map("pull_requests")
+}
+
+enum PullRequestState {
+  OPEN
+  CLOSED
+  MERGED
+}
+
+// Issues
+model Issue {
+  id            String     @id @default(uuid())
+  repositoryId  String
+  githubIssueId Int
+  issueNumber   Int
+  title         String
+  body          String?
+  state         IssueState
+  authorLogin   String
+  authorId      Int
+  labels        String[]   @default([])
+  assignees     String[]   @default([])
+  createdAt     DateTime
+  updatedAt     DateTime
+  closedAt      DateTime?
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, githubIssueId])
+  @@index([repositoryId, state])
+  @@map("issues")
+}
+
+enum IssueState {
+  OPEN
+  CLOSED
+}
+
+// GitHub Releases
+model GitHubRelease {
+  id              String    @id @default(uuid())
+  repositoryId    String
+  githubReleaseId Int
+  tagName         String
+  releaseName     String?
+  body            String?
+  isDraft         Boolean   @default(false)
+  isPrerelease    Boolean   @default(false)
+  authorLogin     String
+  authorId        Int
+  createdAt       DateTime
+  publishedAt     DateTime?
+  deletedAt       DateTime?
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, githubReleaseId])
+  @@index([repositoryId])
+  @@map("github_releases")
+}
+
+// Commit comments
+model CommitComment {
+  id              String   @id @default(uuid())
+  repositoryId    String
+  commitId        String? // Reference to Commit.id if exists
+  githubCommentId Int
+  commitSha       String
+  body            String
+  filePath        String?
+  lineNumber      Int?
+  authorLogin     String
+  authorId        Int
+  createdAt       DateTime
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  commit     Commit?    @relation(fields: [commitId], references: [id])
+
+  @@unique([repositoryId, githubCommentId])
+  @@index([repositoryId, commitSha])
+  @@map("commit_comments")
+}
+
+// Rate limiting
+model WebhookRateLimit {
+  id                String   @id @default(uuid())
+  organizationId    String   @unique
+  requestsPerMinute Int      @default(100)
+  enabled           Boolean  @default(true)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@map("webhook_rate_limits")
+}
+
+
+// ==================== COMMITS & METRICS ====================
+
+model Commit {
+  id             String               @id @default(uuid())
+  repositoryId   String
+  developerId    String?
+  sha            String
+  message        String
+  authorEmail    String
+  authorName     String
+  classification CommitClassification?
+  linesAdded     Int
+  linesDeleted   Int
+  filesChanged   Int
+  churnRatio     Float?
+  anomalyFlag    Boolean              @default(false)
+  anomalyScore   Float?
+  committedAt    DateTime
+  processedAt    DateTime             @default(now())
+
+  repository           Repository   @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  developer            User?        @relation(fields: [developerId], references: [id])
+  fileChanges          FileChange[]
+  introducedDebtItems  DebtItem[]   @relation("DebtIntroducedCommit")
+  resolvedDebtItems    DebtItem[]   @relation("DebtResolvedCommit")
+  commitComments       CommitComment[]
+
+  @@unique([repositoryId, sha])
+  @@map("commits")
+}
+
+model FileChange {
+  id         String @id @default(uuid())
+  commitId   String
+  filePath   String
+  additions  Int
+  deletions  Int
+  churnRatio Float?
+
+  commit Commit @relation(fields: [commitId], references: [id], onDelete: Cascade)
+
+  @@map("file_changes")
+}
+
+enum CommitClassification {
+  BUGFIX
+  FEATURE
+  REFACTOR
+  TEST
+  DOCS
+}
+
+// ==================== SCORES ====================
+
+model DQSScore {
+  id            String   @id @default(uuid())
+  developerId   String
+  score         Float
+  modelVersion  String
+  featureValues Json     // Stores feature values used for calculation
+  shapValues    Json?    // Stores SHAP explanation values
+  calculatedAt  DateTime @default(now())
+
+  developer User @relation(fields: [developerId], references: [id], onDelete: Cascade)
+
+  @@index([developerId, calculatedAt])
+  @@map("dqs_scores")
+}
+
+model SQSScore {
+  id              String   @id @default(uuid())
+  projectId       String   // References repository ID for now
+  score           Float
+  modelVersion    String
+  featureValues   Json     // Stores feature values used for calculation
+  riskyModules    Json?    // Stores risky modules array
+  recommendations Json?    // Stores AI recommendations array
+  calculatedAt    DateTime @default(now())
+
+  @@index([projectId, calculatedAt])
+  @@map("sqs_scores")
+}
+
+// ==================== TEAMS & PROJECTS ====================
+
+model Team {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  leadId         String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization       Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  lead               User?                  @relation("TeamLead", fields: [leadId], references: [id])
+  memberships        TeamMembership[]
+  projectAssignments TeamProjectAssignment[]
+  sprints            Sprint[]
+
+  @@unique([organizationId, name])
+  @@map("teams")
+}
+
+model TeamMembership {
+  id       String    @id @default(uuid())
+  teamId   String
+  userId   String
+  joinedAt DateTime  @default(now())
+  leftAt   DateTime?
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, userId])
+  @@map("team_memberships")
+}
+
+model Project {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  description    String?
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization       Organization            @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  repositories       ProjectRepository[]
+  teamAssignments    TeamProjectAssignment[]
+  goals              Goal[]
+
+  @@unique([organizationId, name])
+  @@map("projects")
+}
+
+model ProjectRepository {
+  id           String   @id @default(uuid())
+  projectId    String
+  repositoryId String
+  assignedAt   DateTime @default(now())
+
+  project    Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, repositoryId])
+  @@map("project_repositories")
+}
+
+model TeamProjectAssignment {
+  id        String    @id @default(uuid())
+  teamId    String
+  projectId String
+  startDate DateTime  @default(now())
+  endDate   DateTime?
+
+  team    Team    @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([teamId, projectId])
+  @@map("team_project_assignments")
+}
+
+
+// ==================== CODE REVIEWS ====================
+
+model Review {
+  id                String          @id @default(uuid())
+  repositoryId      String
+  reviewerId        String?
+  githubReviewId    Int
+  githubPrId        Int
+  prNumber          Int
+  prTitle           String
+  prUrl             String
+  state             ReviewState     @default(PENDING)
+  body              String?
+  turnaroundMinutes Int?
+  turnaroundClass   TurnaroundClass?
+  submittedAt       DateTime?
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  repository Repository     @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  reviewer   User?          @relation(fields: [reviewerId], references: [id])
+  comments   ReviewComment[]
+
+  @@unique([repositoryId, githubReviewId])
+  @@index([reviewerId])
+  @@index([state])
+  @@map("reviews")
+}
+
+model ReviewComment {
+  id              String        @id @default(uuid())
+  reviewId        String
+  authorId        String?
+  parentId        String?
+  githubCommentId Int
+  body            String
+  filePath        String?
+  lineNumber      Int?
+  diffHunk        String?
+  commentClass    CommentClass?
+  isResolved      Boolean       @default(false)
+  resolvedAt      DateTime?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  review   Review          @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+  author   User?           @relation(fields: [authorId], references: [id])
+  parent   ReviewComment?  @relation("CommentReplies", fields: [parentId], references: [id])
+  replies  ReviewComment[] @relation("CommentReplies")
+
+  @@unique([reviewId, githubCommentId])
+  @@index([authorId])
+  @@map("review_comments")
+}
+
+enum ReviewState {
+  PENDING
+  APPROVED
+  CHANGES_REQUESTED
+  COMMENTED
+  DISMISSED
+}
+
+enum TurnaroundClass {
+  FAST
+  NORMAL
+  SLOW
+}
+
+enum CommentClass {
+  CONSTRUCTIVE
+  NITPICK
+  NEUTRAL
+}
+
+// ==================== SPRINTS & RELEASES ====================
+
+model Sprint {
+  id             String   @id @default(uuid())
+  organizationId String
+  teamId         String
+  name           String
+  startDate      DateTime
+  endDate        DateTime
+  isActive       Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  organization        Organization               @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  team                Team                       @relation(fields: [teamId], references: [id])
+  reports             SprintReport[]
+  releaseAssociations ReleaseSprintAssociation[]
+  goals               SprintGoal[]
+  retrospective       SprintRetrospective?
+  carryOversFrom      SprintCarryOver[]          @relation("CarryOverFrom")
+  carryOversTo        SprintCarryOver[]          @relation("CarryOverTo")
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@map("sprints")
+}
+
+model SprintReport {
+  id              String   @id @default(uuid())
+  sprintId        String
+  totalCommits    Int
+  bugfixCommits   Int
+  featureCommits  Int
+  refactorCommits Int
+  testCommits     Int
+  docsCommits     Int
+  bugsIntroduced  Int
+  bugsFixed       Int
+  avgDQS          Float
+  coveragePct     Float
+  generatedAt     DateTime @default(now())
+
+  sprint Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  @@index([sprintId])
+  @@map("sprint_reports")
+}
+
+// ==================== RELEASES ====================
+
+model Release {
+  id             String    @id @default(uuid())
+  organizationId String
+  version        String
+  targetDate     DateTime
+  description    String?
+  shippedAt      DateTime?
+  isActive       Boolean   @default(true)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  organization       Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  sprintAssociations ReleaseSprintAssociation[]
+
+  @@unique([organizationId, version])
+  @@index([organizationId])
+  @@map("releases")
+}
+
+model ReleaseSprintAssociation {
+  id         String   @id @default(uuid())
+  releaseId  String
+  sprintId   String
+  assignedAt DateTime @default(now())
+
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  sprint  Sprint  @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  @@unique([releaseId, sprintId])
+  @@index([releaseId])
+  @@index([sprintId])
+  @@map("release_sprint_associations")
+}
+
+// ==================== SPRINT GOALS & RETROSPECTIVES ====================
+
+model SprintGoal {
+  id          String           @id @default(uuid())
+  sprintId    String
+  title       String
+  description String?
+  metricType  SprintMetricType
+  targetValue Float
+  currentValue Float           @default(0)
+  status      SprintGoalStatus @default(IN_PROGRESS)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  sprint Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  @@index([sprintId])
+  @@map("sprint_goals")
+}
+
+enum SprintMetricType {
+  DQS
+  COMMITS
+  BUGS_FIXED
+  BUG_REDUCTION
+  COVERAGE
+  FEATURE_COMMITS
+}
+
+enum SprintGoalStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  ACHIEVED
+  FAILED
+}
+
+model SprintRetrospective {
+  id           String   @id @default(uuid())
+  sprintId     String   @unique
+  wentWell     String[] @default([])
+  needsImprovement String[] @default([])
+  actionItems  String[] @default([])
+  notes        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  sprint Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+
+  @@map("sprint_retrospectives")
+}
+
+model SprintCarryOver {
+  id             String   @id @default(uuid())
+  fromSprintId   String
+  toSprintId     String
+  description    String
+  reason         String?
+  createdAt      DateTime @default(now())
+
+  fromSprint Sprint @relation("CarryOverFrom", fields: [fromSprintId], references: [id], onDelete: Cascade)
+  toSprint   Sprint @relation("CarryOverTo", fields: [toSprintId], references: [id], onDelete: Cascade)
+
+  @@index([fromSprintId])
+  @@index([toSprintId])
+  @@map("sprint_carry_overs")
+}
+
+// ==================== NOTIFICATIONS ====================
+
+model Notification {
+  id             String           @id @default(uuid())
+  userId         String
+  organizationId String
+  type           NotificationType
+  title          String
+  message        String
+  metadata       Json?
+  isRead         Boolean          @default(false)
+  readAt         DateTime?
+  createdAt      DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead])
+  @@index([organizationId])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  SPRINT_REPORT_READY
+  ALERT
+  MILESTONE_ACHIEVED
+  MENTEE_MILESTONE
+  REVIEW_REQUESTED
+  MENTION
+  SYSTEM
+  GOAL_ACHIEVED
+}
+
+// ==================== TECHNICAL DEBT ====================
+
+model DebtItem {
+  id                 String      @id @default(uuid())
+  repositoryId       String
+  introducedCommitId String?
+  resolvedCommitId   String?
+  authorId           String?
+  resolverId         String?
+  markerType         DebtMarker
+  content            String
+  filePath           String
+  lineNumber         Int
+  isResolved         Boolean     @default(false)
+  resolvedAt         DateTime?
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  repository        Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  introducedCommit  Commit?    @relation("DebtIntroducedCommit", fields: [introducedCommitId], references: [id])
+  resolvedCommit    Commit?    @relation("DebtResolvedCommit", fields: [resolvedCommitId], references: [id])
+  author            User?      @relation("DebtAuthor", fields: [authorId], references: [id])
+  resolver          User?      @relation("DebtResolver", fields: [resolverId], references: [id])
+
+  @@index([repositoryId])
+  @@index([authorId])
+  @@index([isResolved])
+  @@index([filePath])
+  @@map("debt_items")
+}
+
+enum DebtMarker {
+  TODO
+  FIXME
+  HACK
+  XXX
+}
+
+// ==================== ONBOARDING ====================
+
+model Onboarding {
+  id           String           @id @default(uuid())
+  userId       String           @unique
+  mentorId     String?
+  startDate    DateTime         @default(now())
+  endDate      DateTime
+  status       OnboardingStatus @default(ACTIVE)
+
+  user           User                      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  mentor         User?                     @relation("Mentor", fields: [mentorId], references: [id])
+  milestones     OnboardingMilestone[]
+  checklistItems OnboardingChecklistItem[]
+
+  @@map("onboardings")
+}
+
+enum OnboardingStatus {
+  ACTIVE
+  COMPLETED
+  EXTENDED
+}
+
+model OnboardingMilestone {
+  id           String        @id @default(uuid())
+  onboardingId String
+  type         MilestoneType
+  achievedAt   DateTime      @default(now())
+
+  onboarding Onboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+
+  @@unique([onboardingId, type])
+  @@map("onboarding_milestones")
+}
+
+enum MilestoneType {
+  FIRST_COMMIT
+  FIRST_BUGFIX
+  FIRST_FEATURE
+  FIRST_REVIEW
+  FIRST_PR_MERGED
+  FIRST_TEST
+}
+
+model OnboardingChecklistItem {
+  id           String    @id @default(uuid())
+  onboardingId String
+  title        String
+  description  String?
+  dueDate      DateTime?
+  completedAt  DateTime?
+  order        Int
+
+  onboarding Onboarding @relation(fields: [onboardingId], references: [id], onDelete: Cascade)
+
+  @@map("onboarding_checklist_items")
+}
+
+model OnboardingTemplate {
+  id             String   @id @default(uuid())
+  organizationId String
+  name           String
+  items          Json     // Array of checklist items
+  createdAt      DateTime @default(now())
+
+  @@map("onboarding_templates")
+}
+
+
+// ==================== ALERTS ====================
+
+model Alert {
+  id              String        @id @default(uuid())
+  organizationId  String
+  commitId        String?
+  type            AlertType
+  severity        AlertSeverity
+  message         String
+  anomalyScore    Float?
+  modelVersion    String?
+  status          AlertStatus   @default(OPEN)
+  acknowledgedBy  String?
+  acknowledgedAt  DateTime?
+  resolvedBy      String?
+  resolvedAt      DateTime?
+  resolutionNotes String?
+  createdAt       DateTime      @default(now())
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  acknowledger User?        @relation("AlertAcknowledger", fields: [acknowledgedBy], references: [id])
+  resolver     User?        @relation("AlertResolver", fields: [resolvedBy], references: [id])
+  digestQueue  DigestQueue[]
+
+  @@index([organizationId])
+  @@index([severity])
+  @@index([status])
+  @@index([createdAt])
+  @@map("alerts")
+}
+
+enum AlertType {
+  ANOMALY
+  THRESHOLD
+  SYSTEM
+  WEBHOOK_FAILURE
+}
+
+enum AlertSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model NotificationPreference {
+  id              String        @id @default(uuid())
+  userId          String        @unique
+  emailEnabled    Boolean       @default(true)
+  slackEnabled    Boolean       @default(false)
+  slackWebhookUrl String?       // Slack incoming webhook URL for notifications
+  inAppEnabled    Boolean       @default(true)
+  quietStart      String?       // HH:mm format
+  quietEnd        String?       // HH:mm format
+  digestMode      Boolean       @default(false)
+  digestFrequency String        @default("daily") // hourly, daily, weekly
+  minSeverity     AlertSeverity @default(MEDIUM)
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notification_preferences")
+}
+
+// Model for storing pending digest notifications
+model DigestQueue {
+  id             String        @id @default(uuid())
+  userId         String
+  organizationId String
+  alertId        String
+  alertType      AlertType
+  alertSeverity  AlertSeverity
+  alertMessage   String
+  alertCreatedAt DateTime
+  queuedAt       DateTime      @default(now())
+  processed      Boolean       @default(false)
+  processedAt    DateTime?
+
+  user           User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  alert          Alert         @relation(fields: [alertId], references: [id], onDelete: Cascade)
+
+  @@index([userId, processed])
+  @@index([processedAt])
+  @@map("digest_queue")
+}
+
+// ==================== ALERT THRESHOLD CONFIGURATION ====================
+
+// Model for storing configurable alert thresholds per organization
+
+model AlertThresholdConfig {
+  id             String        @id @default(uuid())
+  organizationId String
+  alertType      AlertType     @default(ANOMALY)
+  
+  // Custom severity boundaries (anomaly score thresholds)
+  lowThreshold      Float       @default(0.0)   // Below this = no alert
+  mediumThreshold   Float       @default(0.5)   // Above this = MEDIUM
+  highThreshold     Float       @default(0.7)   // Above this = HIGH
+  criticalThreshold Float       @default(0.9)   // Above this = CRITICAL
+  
+  // Minimum severity to generate alerts
+  minSeverity    AlertSeverity @default(LOW)
+  
+  // Whether this config is active
+  isActive       Boolean       @default(true)
+  
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  createdBy      String?
+  updatedBy      String?
+
+  organization   Organization  @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, alertType])
+  @@index([organizationId])
+  @@map("alert_threshold_configs")
+}
+
+// ==================== GOALS & OKRs ====================
+
+// Model for quality goals and OKRs
+
+model Goal {
+  id             String       @id @default(uuid())
+  organizationId String
+  ownerId        String
+  teamId         String?
+  projectId      String?
+  name           String
+  description    String?
+  metricType     MetricType
+  targetValue    Float
+  currentValue   Float        @default(0)
+  operator       ComparisonOp
+  startDate      DateTime
+  endDate        DateTime
+  isPublic       Boolean      @default(true)
+  status         GoalStatus   @default(ACTIVE)
+  achievedAt     DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  owner          User         @relation("GoalOwner", fields: [ownerId], references: [id])
+  project        Project?     @relation(fields: [projectId], references: [id])
+  keyResults     KeyResult[]
+
+  @@index([organizationId])
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([status])
+  @@map("goals")
+}
+
+// Enum for metric types used in goals
+
+enum MetricType {
+  DQS
+  COVERAGE
+  BUG_COUNT
+  COMMIT_COUNT
+  REVIEW_COUNT
+}
+
+// Enum for comparison operators
+
+enum ComparisonOp {
+  GT    // >
+  LT    // <
+  EQ    // =
+  GTE   // >=
+  LTE   // <=
+}
+
+// Enum for goal status
+
+enum GoalStatus {
+  ACTIVE
+  AT_RISK
+  ACHIEVED
+  FAILED
+}
+
+// Model for key results within OKRs
+
+model KeyResult {
+  id           String   @id @default(uuid())
+  goalId       String
+  description  String
+  targetValue  Float
+  currentValue Float    @default(0)
+  weight       Float    @default(1)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  goal         Goal     @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId])
+  @@map("key_results")
+}
+
+// Model for goal templates
+
+model GoalTemplate {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  metricType     MetricType
+  targetValue    Float
+  operator       ComparisonOp
+  durationDays   Int
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("goal_templates")
+}
+
+// Model for goal snapshots (historical tracking)
+
+model GoalSnapshot {
+  id               String       @id @default(uuid())
+  goalId           String
+  organizationId   String
+  ownerId          String
+  teamId           String?
+  projectId        String?
+  name             String
+  description      String?
+  metricType       MetricType
+  targetValue      Float
+  finalValue       Float
+  operator         ComparisonOp
+  startDate        DateTime
+  endDate          DateTime
+  finalStatus      GoalStatus
+  progressPercentage Float
+  wasAchieved      Boolean
+  snapshotAt       DateTime     @default(now())
+
+  @@index([organizationId])
+  @@index([ownerId])
+  @@index([teamId])
+  @@index([snapshotAt])
+  @@map("goal_snapshots")
+}
+
+
+// ==================== REPORTS ====================
+
+// Model for generated reports
+
+model Report {
+  id             String       @id @default(uuid())
+  organizationId String
+  createdById    String
+  type           ReportType
+  scope          ReportScope
+  status         ReportStatus @default(PENDING)
+  title          String
+  filename       String?
+  filePath       String?
+  fileSize       Int?
+  startDate      DateTime
+  endDate        DateTime
+  teamId         String?
+  projectId      String?
+  repositoryId   String?
+  developerId    String?
+  errorMessage   String?
+  createdAt      DateTime     @default(now())
+  completedAt    DateTime?
+
+  @@index([organizationId])
+  @@index([createdById])
+  @@index([status])
+  @@index([createdAt])
+  @@map("reports")
+}
+
+// Enum for report types
+enum ReportType {
+  PDF
+  CSV
+}
+
+// Enum for report scope
+enum ReportScope {
+  ORGANIZATION
+  TEAM
+  PROJECT
+  DEVELOPER
+}
+
+// Enum for report status
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+
+// ==================== COVERAGE ====================
+
+// Model for coverage reports
+
+model CoverageReport {
+  id                        String         @id @default(uuid())
+  repositoryId              String
+  uploadedById              String
+  format                    CoverageFormat
+  status                    CoverageStatus @default(PENDING)
+  originalFilename          String
+  filePath                  String
+  fileSize                  Int
+  fileHash                  String         // SHA-256 hash for deduplication
+  commitSha                 String?
+  branch                    String?
+  linesTotal                Int?
+  linesCovered              Int?
+  coveragePercentage        Float?
+  previousCoveragePercentage Float?        // For delta calculation
+  coverageDelta             Float?         
+  errorMessage              String?
+  createdAt                 DateTime       @default(now())
+  processedAt               DateTime?
+
+  repository Repository       @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  modules    CoverageModule[]
+
+  @@index([repositoryId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("coverage_reports")
+}
+
+// Model for coverage per module/file
+
+model CoverageModule {
+  id                 String  @id @default(uuid())
+  reportId           String
+  modulePath         String
+  linesTotal         Int
+  linesCovered       Int
+  coveragePercentage Float
+
+  report CoverageReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  @@index([reportId])
+  @@index([modulePath])
+  @@map("coverage_modules")
+}
+
+// Enum for coverage formats
+
+enum CoverageFormat {
+  LCOV
+  COBERTURA
+  NYC_JSON
+  JACOCO
+}
+
+// Enum for coverage status
+enum CoverageStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// ==================== PASSWORD RESET ====================
+
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  token     String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("password_reset_tokens")
+}
+
+// ==================== AUDIT LOGGING ====================
+
+// Model for comprehensive audit logging
+
+model AuditLog {
+  id             String   @id @default(uuid())
+  userId         String
+  organizationId String
+  action         String   // CREATE, UPDATE, DELETE, READ, LOGIN, LOGOUT, PERMISSION_CHECK, ROLE_CHANGE, EXPORT, SESSION_EXPIRED, SESSION_REVOKED
+  resourceType   String   // Team, Project, Repository, Organization, User, etc.
+  resourceId     String?
+  metadata       Json?    // Additional context (snapshots, request details, etc.)
+  granted        Boolean? // For permission checks
+  requiredRole   Role?    // For permission checks
+  userRole       Role?    // For permission checks
+  timestamp      DateTime @default(now())
+  
+  // New fields for enhanced audit logging
+  ipAddress         String?
+  userAgent         String?
+  entryHash         String         // SHA-256 hash of entry contents
+  previousEntryHash String?        // Hash of previous entry for chain verification
+  severity          AuditSeverity? // For security events
+  
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([timestamp])
+  @@index([severity])
+  @@index([entryHash])
+  @@map("audit_logs")
+}
+
+// Enum for audit severity levels
+enum AuditSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Model for archived audit logs (cold storage)
+
+model ArchivedAuditLog {
+  id                 String         @id @default(uuid())
+  userId             String
+  organizationId     String
+  action             String
+  resourceType       String
+  resourceId         String?
+  compressedMetadata Bytes?         // Gzip-compressed JSON
+  granted            Boolean?
+  requiredRole       Role?
+  userRole           Role?
+  timestamp          DateTime
+  ipAddress          String?
+  userAgent          String?
+  entryHash          String
+  previousEntryHash  String?
+  severity           AuditSeverity?
+  archivedAt         DateTime       @default(now())
+  
+  @@index([userId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([resourceType])
+  @@index([timestamp])
+  @@index([archivedAt])
+  @@map("archived_audit_logs")
+}
+
+// Model for audit retention policies
+
+model AuditRetentionPolicy {
+  id                      String   @id @default(uuid())
+  organizationId          String   @unique
+  defaultRetentionDays    Int      @default(90)
+  actionSpecificRetention Json?    // Map of action -> retention days
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+  
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  
+  @@map("audit_retention_policies")
+}
+
+// Model for audit export jobs
+
+model AuditExport {
+  id               String       @id @default(uuid())
+  userId           String
+  organizationId   String
+  format           ExportFormat
+  status           ExportStatus @default(QUEUED)
+  filters          Json         // Stored filter criteria
+  estimatedRecords Int
+  actualRecords    Int?
+  filename         String?
+  s3Key            String?
+  downloadUrl      String?
+  expiresAt        DateTime?
+  error            String?
+  createdAt        DateTime     @default(now())
+  completedAt      DateTime?
+  
+  @@index([userId])
+  @@index([organizationId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("audit_exports")
+}
+
+// Enum for export formats
+enum ExportFormat {
+  CSV
+  JSON
+}
+
+// Enum for export status
+enum ExportStatus {
+  QUEUED
+  PROCESSING
+  COMPLETED
+  FAILED
+}
