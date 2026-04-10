@@ -22,4 +22,3 @@ import { OrganizationsModule } from './modules/organizations/organizations.modul
   providers: [AppService, PrismaService],
 })
 export class AppModule {}
-
