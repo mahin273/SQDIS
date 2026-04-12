@@ -5,7 +5,7 @@ import {
   OnModuleInit,
   Optional,
 } from '@nestjs/common';
-import { PrismaClient } from '../../generated/prisma/client.js';
+import { PrismaClient } from '@prisma/client';
 import { Pool } from 'pg';
 import { PrismaPg} from '@prisma/adapter-pg';
 

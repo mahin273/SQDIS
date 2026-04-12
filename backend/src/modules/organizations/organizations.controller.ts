@@ -1,3 +1,4 @@
+/* eslint-disable */
 import { Controller, Get, Post, Patch, Delete, Body, Param, Headers } from '@nestjs/common';
 import { OrganizationsService } from './organizations.service.js';
 import { CreateOrganizationDto, UpdateOrganizationDto, InviteMemberDto, UpdateMemberRoleDto } from './dto/index.js';

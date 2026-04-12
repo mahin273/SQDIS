@@ -1,301 +1,694 @@
-import { Injectable, NotFoundException, ConflictException, ForbiddenException, GoneException } from '@nestjs/common';
-import { CreateOrganizationDto, UpdateOrganizationDto, InviteMemberDto, UpdateMemberRoleDto, Role } from './dto/index.js';
+/* eslint-disable */
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+  ForbiddenException,
+  BadRequestException,
+  GoneException,
+} from '@nestjs/common';
+import { PrismaService } from "../../prisma/prisma.service.js";
+import { CreateOrganizationDto, UpdateOrganizationDto } from './dto/index.js';
+import { Role } from '@prisma/client';
 import { randomBytes } from 'crypto';
 
-// Interface representing an Organization
-export interface Organization {
+/**
+ * Response type for organization data
+ */
+export interface OrganizationResponse {
   id: string;
   name: string;
   slug: string;
-  logoUrl?: string;
+  logoUrl: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
-// Interface representing an Organization Member
-export interface OrganizationMember {
+/**
+ * Response type for organization with member count
+ */
+export interface OrganizationWithMemberCount extends OrganizationResponse {
+  memberCount: number;
+}
+
+/**
+ * Response type for organization member
+ */
+export interface OrganizationMemberResponse {
   id: string;
-  organizationId: string;
   userId: string;
   role: Role;
   joinedAt: Date;
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    avatarUrl: string | null;
+  };
 }
 
-// Interface representing an Invitation
-export interface Invitation {
+/**
+ * Response type for invitation
+ */
+export interface InvitationResponse {
   id: string;
-  organizationId: string;
   email: string;
   token: string;
   expiresAt: Date;
-  acceptedAt?: Date;
   createdAt: Date;
+  acceptedAt: Date | null;
+  organizationId: string;
 }
 
 @Injectable()
 export class OrganizationsService {
-  // In-memory storage (will be replaced with Prisma later)
-  private organizations: Organization[] = [];
-  private members: OrganizationMember[] = [];
-  private invitations: Invitation[] = [];
+  constructor(
+    private readonly prisma: PrismaService,
+    // private readonly auditLogService: AuditLogService,
+  ) {}
 
   /**
-   * Creates a new organization and assigns the creator as OWNER
-   * @param dto - Organization creation data
-   * @param userId - ID of the user creating the organization
+   * Create a new organization
+   * Validates: Requirements 0.1.2, 0.1.3, 0.1.4, 0.1.5
    */
-  create(dto: CreateOrganizationDto, userId: string): Organization {
-    // Check if slug is already taken
-    const existing = this.organizations.find(o => o.slug === dto.slug.toLowerCase());
-    if (existing) {
-      throw new ConflictException('Organization with this slug already exists');
+  async create(dto: CreateOrganizationDto, ownerId: string): Promise<OrganizationResponse> {
+    // Check if slug already exists (Requirement 0.1.5)
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { slug: dto.slug.toLowerCase() },
+    });
+
+    if (existingOrg) {
+      throw new ConflictException(`Organization with slug '${dto.slug}' already exists`);
     }
 
-    // Create the new organization
-    const org: Organization = {
-      id: randomBytes(8).toString('hex'),
-      name: dto.name,
-      slug: dto.slug.toLowerCase(),
-      logoUrl: dto.logoUrl,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.organizations.push(org);
+    // Create organization and assign creator as OWNER (Requirement 0.1.3)
+    const organization = await this.prisma.organization.create({
+      data: {
+        name: dto.name,
+        slug: dto.slug.toLowerCase(),
+        members: {
+          create: {
+            userId: ownerId,
+            role: Role.OWNER,
+          },
+        },
+      },
+    });
 
-    // Automatically make the creator the OWNER
-    const member: OrganizationMember = {
-      id: randomBytes(8).toString('hex'),
-      organizationId: org.id,
-      userId,
-      role: Role.OWNER,
-      joinedAt: new Date(),
-    };
-    this.members.push(member);
-
-    return org;
+    return this.mapToResponse(organization);
   }
 
   /**
-   * Returns all organizations the user is a member of
-   * @param userId - ID of the current user
+   * Find organization by ID
+   * Validates: Requirements 0.4.1
    */
-  findAllForUser(userId: string): Organization[] {
-    // Get all organization IDs where this user is a member
-    const userOrgIds = this.members
-      .filter(m => m.userId === userId)
-      .map(m => m.organizationId);
+  async findById(id: string): Promise<OrganizationResponse> {
+    const organization = await this.prisma.organization.findUnique({
+      where: { id },
+    });
 
-    return this.organizations.filter(o => userOrgIds.includes(o.id));
+    if (!organization) {
+      throw new NotFoundException(`Organization with ID '${id}' not found`);
+    }
+
+    return this.mapToResponse(organization);
   }
 
   /**
-   * Finds a single organization by ID
-   * @param id - Organization ID
-   * @param userId - ID of the current user (must be a member)
+   * Find organization by slug
    */
-  findById(id: string, userId: string): Organization {
-    const org = this.organizations.find(o => o.id === id);
-    if (!org) {
-      throw new NotFoundException('Organization not found');
+  async findBySlug(slug: string): Promise<OrganizationResponse> {
+    const organization = await this.prisma.organization.findUnique({
+      where: { slug: slug.toLowerCase() },
+    });
+
+    if (!organization) {
+      throw new NotFoundException(`Organization with slug '${slug}' not found`);
     }
 
-    // Make sure the user is a member
-    const isMember = this.members.some(m => m.organizationId === id && m.userId === userId);
-    if (!isMember) {
+    return this.mapToResponse(organization);
+  }
+
+  /**
+   * Update organization settings
+   * Validates: Requirements 0.4.1, 0.4.2
+   */
+  async update(id: string, dto: UpdateOrganizationDto): Promise<OrganizationResponse> {
+    // Check if organization exists
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id },
+    });
+
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${id}' not found`);
+    }
+
+    // If slug is being updated, check for uniqueness
+    if (dto.slug && dto.slug.toLowerCase() !== existingOrg.slug) {
+      const slugExists = await this.prisma.organization.findUnique({
+        where: { slug: dto.slug.toLowerCase() },
+      });
+
+      if (slugExists) {
+        throw new ConflictException(`Organization with slug '${dto.slug}' already exists`);
+      }
+    }
+
+    // Update organization
+    const organization = await this.prisma.organization.update({
+      where: { id },
+      data: {
+        ...(dto.name && { name: dto.name }),
+        ...(dto.slug && { slug: dto.slug.toLowerCase() }),
+        ...(dto.logoUrl !== undefined && { logoUrl: dto.logoUrl }),
+      },
+    });
+
+    return this.mapToResponse(organization);
+  }
+
+  /**
+   * Delete organization (cascade deletes all related data)
+   * Validates: Requirements 0.5.5
+   */
+  async delete(id: string): Promise<void> {
+    // Check if organization exists
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id },
+    });
+
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${id}' not found`);
+    }
+
+    // Delete organization (cascade will handle related data)
+    await this.prisma.organization.delete({
+      where: { id },
+    });
+  }
+
+  /**
+   * Get all organizations for a user
+   */
+  async findAllForUser(userId: string): Promise<OrganizationWithMemberCount[]> {
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: { userId },
+      include: {
+        organization: {
+          include: {
+            _count: {
+              select: { members: true },
+            },
+          },
+        },
+      },
+    });
+
+    return memberships.map((membership) => ({
+      ...this.mapToResponse(membership.organization),
+      memberCount: membership.organization._count.members,
+    }));
+  }
+
+  /**
+   * Check if user is a member of the organization
+   * Validates: Requirements 0.5.2
+   */
+  async isUserMember(organizationId: string, userId: string): Promise<boolean> {
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId,
+        },
+      },
+    });
+
+    return !!membership;
+  }
+
+  /**
+   * Get user's role in organization
+   */
+  async getUserRole(organizationId: string, userId: string): Promise<Role | null> {
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId,
+        },
+      },
+    });
+
+    return membership?.role ?? null;
+  }
+
+  /**
+   * Verify user has required role or higher
+   * Validates: Requirements 0.5.2, 0.5.4
+   */
+  async verifyUserRole(
+    organizationId: string,
+    userId: string,
+    requiredRoles: Role[],
+  ): Promise<void> {
+    const role = await this.getUserRole(organizationId, userId);
+
+    if (!role) {
       throw new ForbiddenException('You do not have access to this organization');
     }
 
-    return org;
+    if (!requiredRoles.includes(role)) {
+      throw new ForbiddenException('You do not have permission to perform this action');
+    }
   }
 
   /**
-   * Updates organization details (name or logo)
-   * @param id - Organization ID
-   * @param dto - Fields to update
-   * @param userId - Must be OWNER or ADMIN
+   * Get organization members
+   * Validates: Requirements 0.2.5
    */
-  update(id: string, dto: UpdateOrganizationDto, userId: string): Organization {
-    const org = this.organizations.find(o => o.id === id);
-    if (!org) {
-      throw new NotFoundException('Organization not found');
+  async getMembers(organizationId: string): Promise<OrganizationMemberResponse[]> {
+    // Check if organization exists
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${organizationId}' not found`);
     }
 
-    // Only OWNER or ADMIN can update
-    this.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
+    const members = await this.prisma.organizationMember.findMany({
+      where: { organizationId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
+      orderBy: { joinedAt: 'asc' },
+    });
 
-    // Apply updates
-    if (dto.name) org.name = dto.name;
-    if (dto.logoUrl) org.logoUrl = dto.logoUrl;
-    org.updatedAt = new Date();
-
-    return org;
+    return members.map((member) => ({
+      id: member.id,
+      userId: member.userId,
+      role: member.role,
+      joinedAt: member.joinedAt,
+      user: member.user,
+    }));
   }
 
   /**
-   * Deletes an organization permanently
-   * @param id - Organization ID
-   * @param userId - Must be OWNER
+   * Create invitation with 7-day expiry token
+   * Validates: Requirements 0.2.1, 0.2.4
    */
-  delete(id: string, userId: string): void {
-    const orgIndex = this.organizations.findIndex(o => o.id === id);
-    if (orgIndex === -1) {
-      throw new NotFoundException('Organization not found');
+  async createInvitation(organizationId: string, email: string): Promise<InvitationResponse> {
+    // Check if organization exists
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${organizationId}' not found`);
     }
 
-    // Only OWNER can delete the organization
-    this.verifyUserRole(id, userId, [Role.OWNER]);
+    // Check if user is already a member (Requirement 0.2.4)
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
 
-    // Remove organization and all related data
-    this.organizations.splice(orgIndex, 1);
-    this.members = this.members.filter(m => m.organizationId !== id);
-    this.invitations = this.invitations.filter(i => i.organizationId !== id);
-  }
+    if (existingUser) {
+      const existingMembership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: existingUser.id,
+          },
+        },
+      });
 
-  /**
-   * Returns all members of an organization
-   * @param id - Organization ID
-   * @param userId - Must be a member
-   */
-  getMembers(id: string, userId: string): OrganizationMember[] {
-    this.findById(id, userId);
-    return this.members.filter(m => m.organizationId === id);
-  }
+      if (existingMembership) {
+        throw new ConflictException('User is already a member of this organization');
+      }
+    }
 
-  /**
-   * Sends an invitation to join the organization
-   * @param id - Organization ID
-   * @param dto - Contains the email to invite
-   * @param userId - Must be OWNER or ADMIN
-   */
-  createInvitation(id: string, dto: InviteMemberDto, userId: string): Invitation {
-    this.findById(id, userId);
+    // Check for existing pending invitation
+    const existingInvitation = await this.prisma.invitation.findFirst({
+      where: {
+        organizationId,
+        email: email.toLowerCase(),
+        acceptedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+    });
 
-    // Only OWNER or ADMIN can invite members
-    this.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
+    if (existingInvitation) {
+      throw new ConflictException('An active invitation already exists for this email');
+    }
 
-    // Create invitation with 7-day expiry
-    const invitation: Invitation = {
-      id: randomBytes(8).toString('hex'),
-      organizationId: id,
-      email: dto.email,
-      token: randomBytes(32).toString('hex'),
-      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
-      createdAt: new Date(),
+    // Generate secure token and set 7-day expiry (Requirement 0.2.1)
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const invitation = await this.prisma.invitation.create({
+      data: {
+        organizationId,
+        email: email.toLowerCase(),
+        token,
+        expiresAt,
+      },
+    });
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      token: invitation.token,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+      acceptedAt: invitation.acceptedAt,
+      organizationId: invitation.organizationId,
     };
-    this.invitations.push(invitation);
-
-    return invitation;
   }
 
   /**
-   * Accepts a pending invitation using a token
-   * @param token - Unique invitation token
-   * @param userId - ID of the user accepting
+   * Accept invitation and add user to organization
+   * Validates: Requirements 0.2.2, 0.2.3
    */
-  acceptInvitation(token: string, userId: string): OrganizationMember {
-    const invitation = this.invitations.find(i => i.token === token);
+  async acceptInvitation(token: string, userId: string): Promise<OrganizationMemberResponse> {
+    // Find invitation by token
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { token },
+      include: { organization: true },
+    });
+
     if (!invitation) {
       throw new NotFoundException('Invitation not found');
     }
 
-    // Check if invitation has expired
-    if (invitation.expiresAt < new Date()) {
-      throw new GoneException('Invitation has expired');
+    // Check if invitation is already accepted
+    if (invitation.acceptedAt) {
+      throw new BadRequestException('Invitation has already been accepted');
     }
 
-    // Check if already accepted
-    if (invitation.acceptedAt) {
-      throw new ConflictException('Invitation already accepted');
+    // Check if invitation is expired (Requirement 0.2.3)
+    if (invitation.expiresAt < new Date()) {
+      throw new GoneException('Invitation has expired. Please request a new invitation.');
+    }
+
+    // Get user details
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
     }
 
     // Check if user is already a member
-    const alreadyMember = this.members.some(
-      m => m.organizationId === invitation.organizationId && m.userId === userId
-    );
-    if (alreadyMember) {
+    const existingMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: invitation.organizationId,
+          userId,
+        },
+      },
+    });
+
+    if (existingMembership) {
       throw new ConflictException('User is already a member of this organization');
     }
 
-    // Mark invitation as accepted
-    invitation.acceptedAt = new Date();
+    // Create membership with DEVELOPER role (Requirement 0.2.2) and mark invitation as accepted
+    const [membership] = await this.prisma.$transaction([
+      this.prisma.organizationMember.create({
+        data: {
+          organizationId: invitation.organizationId,
+          userId,
+          role: Role.DEVELOPER,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+              avatarUrl: true,
+            },
+          },
+        },
+      }),
+      this.prisma.invitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      }),
+    ]);
 
-    // Add user as DEVELOPER (default role)
-    const member: OrganizationMember = {
-      id: randomBytes(8).toString('hex'),
-      organizationId: invitation.organizationId,
-      userId,
-      role: Role.DEVELOPER,
-      joinedAt: new Date(),
+    return {
+      id: membership.id,
+      userId: membership.userId,
+      role: membership.role,
+      joinedAt: membership.joinedAt,
+      user: membership.user,
     };
-    this.members.push(member);
-
-    return member;
   }
 
   /**
-   * Updates the role of a member in the organization
-   * @param id - Organization ID
-   * @param targetUserId - User whose role is being changed
-   * @param dto - Contains the new role
-   * @param userId - Must be OWNER or ADMIN
+   * Resend invitation (creates new token with fresh expiry)
+   * Validates: Requirements 0.2.3
    */
-  updateMemberRole(id: string, targetUserId: string, dto: UpdateMemberRoleDto, userId: string): OrganizationMember {
-    // Only OWNER or ADMIN can change roles
-    this.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
+  async resendInvitation(organizationId: string, email: string): Promise<InvitationResponse> {
+    // Find existing invitation
+    const existingInvitation = await this.prisma.invitation.findFirst({
+      where: {
+        organizationId,
+        email: email.toLowerCase(),
+        acceptedAt: null,
+      },
+    });
 
-    const member = this.members.find(m => m.organizationId === id && m.userId === targetUserId);
-    if (!member) {
-      throw new NotFoundException('Member not found');
+    if (!existingInvitation) {
+      throw new NotFoundException('No pending invitation found for this email');
+    }
+
+    // Generate new token and expiry
+    const token = randomBytes(32).toString('hex');
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const invitation = await this.prisma.invitation.update({
+      where: { id: existingInvitation.id },
+      data: {
+        token,
+        expiresAt,
+      },
+    });
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      token: invitation.token,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+      acceptedAt: invitation.acceptedAt,
+      organizationId: invitation.organizationId,
+    };
+  }
+
+  /**
+   * Update member role
+   * Validates: Requirements 0.3.1
+   */
+  async updateMemberRole(
+    organizationId: string,
+    targetUserId: string,
+    newRole: Role,
+    requestingUserId: string,
+  ): Promise<OrganizationMemberResponse> {
+    // Check if organization exists
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${organizationId}' not found`);
+    }
+
+    // Find the target membership
+    const targetMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: targetUserId,
+        },
+      },
+    });
+
+    if (!targetMembership) {
+      throw new NotFoundException('Member not found in this organization');
+    }
+
+    // Prevent changing own role
+    if (targetUserId === requestingUserId) {
+      throw new ForbiddenException('You cannot change your own role');
     }
 
     // Prevent demoting the last OWNER
-    if (member.role === Role.OWNER && dto.role !== Role.OWNER) {
-      const ownerCount = this.members.filter(m => m.organizationId === id && m.role === Role.OWNER).length;
-      if (ownerCount === 1) {
-        throw new ForbiddenException('Cannot demote the last owner of the organization');
+    if (targetMembership.role === Role.OWNER && newRole !== Role.OWNER) {
+      const ownerCount = await this.prisma.organizationMember.count({
+        where: {
+          organizationId,
+          role: Role.OWNER,
+        },
+      });
+
+      if (ownerCount <= 1) {
+        throw new BadRequestException('Cannot demote the last owner. Assign another owner first.');
       }
     }
 
-    member.role = dto.role;
-    return member;
+    // Store old role for audit logging
+    const oldRole = targetMembership.role;
+
+    // Update the role
+    const updatedMembership = await this.prisma.organizationMember.update({
+      where: { id: targetMembership.id },
+      data: { role: newRole },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    // Log role change to audit log 
+    // await this.auditLogService.logRoleChange({
+    //   userId: requestingUserId,
+    //   targetUserId,
+    //   organizationId,
+    //   oldRole,
+    //   newRole,
+    // });
+
+    return {
+      id: updatedMembership.id,
+      userId: updatedMembership.userId,
+      role: updatedMembership.role,
+      joinedAt: updatedMembership.joinedAt,
+      user: updatedMembership.user,
+    };
   }
 
   /**
-   * Removes a member from the organization
-   * @param id - Organization ID
-   * @param targetUserId - User to remove
-   * @param userId - Must be OWNER or ADMIN
+   * Remove member from organization
+   * Validates: Requirements 0.2 (implicit - member management)
    */
-  removeMember(id: string, targetUserId: string, userId: string): void {
-    // Only OWNER or ADMIN can remove members
-    this.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
+  async removeMember(
+    organizationId: string,
+    targetUserId: string,
+    requestingUserId: string,
+  ): Promise<void> {
+    // Check if organization exists
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
 
-    // Users cannot remove themselves
-    if (targetUserId === userId) {
-      throw new ForbiddenException('You cannot remove yourself from the organization');
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${organizationId}' not found`);
     }
 
-    const memberIndex = this.members.findIndex(
-      m => m.organizationId === id && m.userId === targetUserId
-    );
-    if (memberIndex === -1) {
-      throw new NotFoundException('Member not found');
+    // Find the target membership
+    const targetMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: targetUserId,
+        },
+      },
+    });
+
+    if (!targetMembership) {
+      throw new NotFoundException('Member not found in this organization');
     }
 
-    this.members.splice(memberIndex, 1);
+    // Prevent removing self (use leave organization instead)
+    if (targetUserId === requestingUserId) {
+      throw new ForbiddenException('You cannot remove yourself. Use leave organization instead.');
+    }
+
+    // Prevent removing the last OWNER
+    if (targetMembership.role === Role.OWNER) {
+      const ownerCount = await this.prisma.organizationMember.count({
+        where: {
+          organizationId,
+          role: Role.OWNER,
+        },
+      });
+
+      if (ownerCount <= 1) {
+        throw new BadRequestException('Cannot remove the last owner. Assign another owner first.');
+      }
+    }
+
+    // Remove the membership
+    await this.prisma.organizationMember.delete({
+      where: { id: targetMembership.id },
+    });
   }
 
   /**
-   * Checks if a user has the required role in an organization
-   * Throws ForbiddenException if the user does not have permission
-   * @param orgId - Organization ID
-   * @param userId - User to check
-   * @param allowedRoles - List of roles that are allowed
+   * Get invitation by token (for acceptance flow)
    */
-  private verifyUserRole(orgId: string, userId: string, allowedRoles: Role[]): void {
-    const member = this.members.find(m => m.organizationId === orgId && m.userId === userId);
-    if (!member || !allowedRoles.includes(member.role)) {
-      throw new ForbiddenException('You do not have permission to perform this action');
+  async getInvitationByToken(
+    token: string,
+  ): Promise<InvitationResponse & { organization: OrganizationResponse }> {
+    const invitation = await this.prisma.invitation.findUnique({
+      where: { token },
+      include: { organization: true },
+    });
+
+    if (!invitation) {
+      throw new NotFoundException('Invitation not found');
     }
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      token: invitation.token,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+      acceptedAt: invitation.acceptedAt,
+      organizationId: invitation.organizationId,
+      organization: this.mapToResponse(invitation.organization),
+    };
+  }
+
+  /**
+   * Map Prisma organization to response type
+   */
+  private mapToResponse(organization: {
+    id: string;
+    name: string;
+    slug: string;
+    logoUrl: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+  }): OrganizationResponse {
+    return {
+      id: organization.id,
+      name: organization.name,
+      slug: organization.slug,
+      logoUrl: organization.logoUrl,
+      createdAt: organization.createdAt,
+      updatedAt: organization.updatedAt,
+    };
   }
 }
