@@ -80,8 +80,8 @@ export default function DashboardSidebar() {
         {/* Brand */}
         <div className="border-b border-gray-200 px-4 py-4">
           <NavLink to="/dashboard" className="flex items-center gap-3" end>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-900 text-white">
-              <GiChart className="h-6 w-6" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white">
+              <GiChart className="h-6 w-6 text-indigo-600" />
             </div>
             <div className="min-w-0">
               <div className="truncate text-sm font-semibold text-gray-900">
