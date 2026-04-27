@@ -1,14 +1,17 @@
 import { useEffect, useRef, useState, type RefObject } from 'react'
 import {
+  FiAlertTriangle,
   FiBell,
-  FiCheck,
+  FiCheckCircle,
   FiChevronDown,
+  FiInfo,
   FiLogOut,
   FiPlus,
   FiSearch,
   FiSettings,
   FiUser,
   FiX,
+  FiZap,
 } from 'react-icons/fi'
 
 type Organization = {
@@ -30,12 +33,64 @@ type DashboardNavbarProps = {
   onLogout?: () => void
 }
 
-type DashboardNotification = {
+type AlertSeverity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'SUCCESS'
+
+type DashboardAlert = {
   id: string
-  title: string
-  message: string
-  timeLabel: string
   read: boolean
+  severity: AlertSeverity
+  title: string
+  detail: string
+  meta: string
+  acknowledged?: boolean
+  resolved?: boolean
+}
+
+type SeverityFilter = 'ALL' | Exclude<AlertSeverity, 'SUCCESS'>
+
+function severityStyles(severity: AlertSeverity) {
+  if (severity === 'CRITICAL') {
+    return {
+      badge: 'bg-red-600 text-white',
+      border: 'border-red-200',
+      bg: 'bg-red-50',
+      icon: <FiZap />,
+    }
+  }
+
+  if (severity === 'HIGH') {
+    return {
+      badge: 'bg-orange-600 text-white',
+      border: 'border-orange-200',
+      bg: 'bg-orange-50',
+      icon: <FiAlertTriangle />,
+    }
+  }
+
+  if (severity === 'MEDIUM') {
+    return {
+      badge: 'bg-yellow-500 text-white',
+      border: 'border-yellow-200',
+      bg: 'bg-yellow-50',
+      icon: <FiInfo />,
+    }
+  }
+
+  if (severity === 'LOW') {
+    return {
+      badge: 'bg-gray-500 text-white',
+      border: 'border-gray-200',
+      bg: 'bg-gray-50',
+      icon: <FiInfo />,
+    }
+  }
+
+  return {
+    badge: 'bg-green-600 text-white',
+    border: 'border-green-200',
+    bg: 'bg-green-50',
+    icon: <FiCheckCircle />,
+  }
 }
 
 function useOnClickOutside(
@@ -84,27 +139,39 @@ export default function DashboardNavbar({
   const [orgOpen, setOrgOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
+  const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('ALL')
 
-  const [notifications, setNotifications] = useState<DashboardNotification[]>(() => [
+  const [alerts, setAlerts] = useState<DashboardAlert[]>(() => [
     {
       id: 'n-1',
-      title: 'New alert detected',
-      message: 'A repository triggered a new quality alert.',
-      timeLabel: 'Just now',
+      severity: 'CRITICAL',
+      title: 'Anomaly detected in auth-service',
+      detail: 'Score: 0.92 • 2 hours ago',
+      meta: 'CRITICAL',
       read: false,
     },
     {
       id: 'n-2',
-      title: 'Weekly report ready',
-      message: 'Your weekly code quality report is available.',
-      timeLabel: '2h ago',
+      severity: 'HIGH',
+      title: 'Low SQS: legacy-system',
+      detail: 'Score: 42.3 • 5 hours ago',
+      meta: 'HIGH',
       read: false,
     },
     {
       id: 'n-3',
-      title: 'Integration connected',
-      message: 'GitHub integration connected successfully.',
-      timeLabel: 'Yesterday',
+      severity: 'MEDIUM',
+      title: 'Coverage dropped below 70%',
+      detail: 'Repository: mobile-app',
+      meta: 'MEDIUM',
+      read: true,
+    },
+    {
+      id: 'n-4',
+      severity: 'SUCCESS',
+      title: 'Goal achieved: Increase DQS to 80',
+      detail: 'Frontend Team • 1 day ago',
+      meta: 'SUCCESS',
       read: true,
     },
   ])
@@ -112,7 +179,8 @@ export default function DashboardNavbar({
   const orgRef = useRef<HTMLDivElement | null>(null)
   const profileRef = useRef<HTMLDivElement | null>(null)
 
-  const unreadCount = notifications.filter((n) => !n.read).length
+  const unreadCount = alerts.filter((n) => !n.read).length
+  const pendingCount = alerts.filter((a) => !a.acknowledged && !a.resolved && a.severity !== 'SUCCESS').length
 
   const currentOrg =
     organizations.find((o) => o.id === currentOrganizationId) ?? organizations[0]
@@ -129,9 +197,18 @@ export default function DashboardNavbar({
     profileOpen,
   )
 
-  const markAllAsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+  const acknowledgeAlert = (id: string) => {
+    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, acknowledged: true, read: true } : a)))
   }
+
+  const resolveAlert = (id: string) => {
+    setAlerts((prev) => prev.map((a) => (a.id === id ? { ...a, resolved: true, read: true } : a)))
+  }
+
+  const visibleAlerts = alerts.filter((a) => {
+    if (severityFilter === 'ALL') return true
+    return a.severity === severityFilter
+  })
 
   return (
     <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
@@ -220,14 +297,17 @@ export default function DashboardNavbar({
           aria-expanded={notificationsOpen}
           onClick={() => {
             setNotificationsOpen((v) => !v)
+            setSeverityFilter('ALL')
             setOrgOpen(false)
             setProfileOpen(false)
           }}
         >
           <FiBell />
-          {(unreadCount || notificationCount) > 0 ? (
+          {(pendingCount || unreadCount || notificationCount) > 0 ? (
             <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-900 px-1 text-[10px] font-semibold text-white">
-              {(unreadCount || notificationCount) > 99 ? '99+' : (unreadCount || notificationCount)}
+              {(pendingCount || unreadCount || notificationCount) > 99
+                ? '99+'
+                : (pendingCount || unreadCount || notificationCount)}
             </span>
           ) : null}
         </button>
@@ -245,30 +325,21 @@ export default function DashboardNavbar({
             <aside
               role="dialog"
               aria-modal="true"
-              aria-label="Notifications panel"
+              aria-label="Alerts and notifications panel"
               className="absolute right-0 top-0 h-full w-full max-w-md border-l border-gray-200 bg-white shadow-sm"
             >
               <div className="flex h-full flex-col">
                 <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-semibold text-gray-900">
-                      Notifications
+                      Alerts & Notifications
                     </div>
                     <div className="text-xs text-gray-500">
-                      {unreadCount} unread
+                      {pendingCount} pending
                     </div>
                   </div>
 
                   <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                      onClick={markAllAsRead}
-                      disabled={unreadCount === 0}
-                    >
-                      <FiCheck />
-                      Mark all as read
-                    </button>
                     <button
                       type="button"
                       className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
@@ -280,45 +351,139 @@ export default function DashboardNavbar({
                   </div>
                 </div>
 
+                <div className="border-b border-gray-200 px-4 py-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {(
+                      [
+                        { label: 'All', value: 'ALL' as const },
+                        { label: 'Critical', value: 'CRITICAL' as const },
+                        { label: 'High', value: 'HIGH' as const },
+                        { label: 'Medium', value: 'MEDIUM' as const },
+                        { label: 'Low', value: 'LOW' as const },
+                      ]
+                    ).map((opt) => {
+                      const active = severityFilter === opt.value
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          className={
+                            'rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ' +
+                            (active
+                              ? 'border-gray-900 bg-gray-900 text-white'
+                              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50')
+                          }
+                          onClick={() => setSeverityFilter(opt.value)}
+                        >
+                          {opt.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
                 <div className="flex-1 overflow-auto p-3">
                   <div className="space-y-2">
-                    {notifications.map((n) => {
-                      const tone = n.read
-                        ? 'bg-white text-gray-700'
-                        : 'bg-gray-50 text-gray-900'
+                    {visibleAlerts.map((a) => {
+                      const s = severityStyles(a.severity)
+                      const muted = a.read ? 'opacity-80' : 'opacity-100'
 
                       return (
                         <div
-                          key={n.id}
+                          key={a.id}
                           className={
-                            'rounded-lg border border-gray-200 p-3 ' +
-                            tone
+                            'rounded-lg border p-3 ' +
+                            s.border +
+                            ' ' +
+                            s.bg +
+                            ' ' +
+                            muted
                           }
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div className="min-w-0">
-                              <div className="flex items-center gap-2">
-                                {!n.read ? (
-                                  <span className="inline-flex h-2 w-2 flex-none rounded-full bg-gray-900" />
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <span className="text-gray-700" aria-hidden="true">
+                                {s.icon}
+                              </span>
+                              <span className={
+                                'rounded-full px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ' +
+                                s.badge
+                              }>
+                                {a.severity}
+                              </span>
+                            </div>
+
+                            <div className="text-sm font-semibold text-gray-900">
+                              {a.title}
+                            </div>
+                            <div className="text-sm text-gray-700">{a.detail}</div>
+
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              {(a.severity === 'CRITICAL' || a.severity === 'HIGH') && !a.acknowledged ? (
+                                <button
+                                  type="button"
+                                  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800"
+                                  onClick={() => acknowledgeAlert(a.id)}
+                                >
+                                  Acknowledge
+                                </button>
+                              ) : null}
+
+                              {a.severity === 'MEDIUM' ? (
+                                <button
+                                  type="button"
+                                  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800"
+                                  onClick={() => {
+                                    // placeholder: open report
+                                  }}
+                                >
+                                  View Report
+                                </button>
+                              ) : null}
+
+                              {(a.severity === 'CRITICAL' || a.severity === 'HIGH') ? (
+                                <button
+                                  type="button"
+                                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                                  onClick={() => {
+                                    // placeholder: view details
+                                  }}
+                                >
+                                  View Details
+                                </button>
+                              ) : null}
+
+                              {a.severity !== 'SUCCESS' ? (
+                                a.resolved ? (
+                                  <span className="text-xs font-semibold text-gray-600">Resolved</span>
                                 ) : (
-                                  <span className="inline-flex h-2 w-2 flex-none rounded-full bg-gray-300" />
-                                )}
-                                <div className="truncate text-sm font-semibold">
-                                  {n.title}
-                                </div>
-                              </div>
-                              <div className="mt-1 text-sm text-gray-600">
-                                {n.message}
-                              </div>
-                              <div className="mt-2 text-xs text-gray-500">
-                                {n.timeLabel}
-                              </div>
+                                  <button
+                                    type="button"
+                                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                                    onClick={() => resolveAlert(a.id)}
+                                  >
+                                    Resolve
+                                  </button>
+                                )
+                              ) : null}
                             </div>
                           </div>
                         </div>
                       )
                     })}
                   </div>
+                </div>
+
+                <div className="border-t border-gray-200 px-4 py-4">
+                  <button
+                    type="button"
+                    className="text-sm font-semibold text-gray-900 hover:underline"
+                    onClick={() => {
+                      // placeholder: navigate to alerts page
+                    }}
+                  >
+                    View All Alerts →
+                  </button>
                 </div>
               </div>
             </aside>
