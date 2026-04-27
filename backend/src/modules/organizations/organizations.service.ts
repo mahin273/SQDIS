@@ -1,4 +1,4 @@
-/* eslint-disable */
+// Organizations Service - Fixed timestamp error
 import {
   Injectable,
   NotFoundException,
@@ -7,10 +7,12 @@ import {
   BadRequestException,
   GoneException,
 } from '@nestjs/common';
-import { PrismaService } from "../../prisma/prisma.service.js";
-import { CreateOrganizationDto, UpdateOrganizationDto } from './dto/index.js';
+import { PrismaService } from '../../prisma';
+import { CreateOrganizationDto } from './dto/create-organization.dto';
+import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Role } from '@prisma/client';
 import { randomBytes } from 'crypto';
+import { AuditLogService } from '../audit/services/audit-log.service';
 
 /**
  * Response type for organization data
@@ -64,15 +66,13 @@ export interface InvitationResponse {
 export class OrganizationsService {
   constructor(
     private readonly prisma: PrismaService,
-    // private readonly auditLogService: AuditLogService,
+    private readonly auditLogService: AuditLogService,
   ) {}
 
   /**
    * Create a new organization
-   * Validates: Requirements 0.1.2, 0.1.3, 0.1.4, 0.1.5
    */
   async create(dto: CreateOrganizationDto, ownerId: string): Promise<OrganizationResponse> {
-    // Check if slug already exists (Requirement 0.1.5)
     const existingOrg = await this.prisma.organization.findUnique({
       where: { slug: dto.slug.toLowerCase() },
     });
@@ -81,7 +81,6 @@ export class OrganizationsService {
       throw new ConflictException(`Organization with slug '${dto.slug}' already exists`);
     }
 
-    // Create organization and assign creator as OWNER (Requirement 0.1.3)
     const organization = await this.prisma.organization.create({
       data: {
         name: dto.name,
@@ -100,7 +99,6 @@ export class OrganizationsService {
 
   /**
    * Find organization by ID
-   * Validates: Requirements 0.4.1
    */
   async findById(id: string): Promise<OrganizationResponse> {
     const organization = await this.prisma.organization.findUnique({
@@ -131,7 +129,6 @@ export class OrganizationsService {
 
   /**
    * Update organization settings
-   * Validates: Requirements 0.4.1, 0.4.2
    */
   async update(id: string, dto: UpdateOrganizationDto): Promise<OrganizationResponse> {
     // Check if organization exists
@@ -169,7 +166,6 @@ export class OrganizationsService {
 
   /**
    * Delete organization (cascade deletes all related data)
-   * Validates: Requirements 0.5.5
    */
   async delete(id: string): Promise<void> {
     // Check if organization exists
@@ -212,7 +208,6 @@ export class OrganizationsService {
 
   /**
    * Check if user is a member of the organization
-   * Validates: Requirements 0.5.2
    */
   async isUserMember(organizationId: string, userId: string): Promise<boolean> {
     const membership = await this.prisma.organizationMember.findUnique({
@@ -245,7 +240,6 @@ export class OrganizationsService {
 
   /**
    * Verify user has required role or higher
-   * Validates: Requirements 0.5.2, 0.5.4
    */
   async verifyUserRole(
     organizationId: string,
@@ -265,7 +259,6 @@ export class OrganizationsService {
 
   /**
    * Get organization members
-   * Validates: Requirements 0.2.5
    */
   async getMembers(organizationId: string): Promise<OrganizationMemberResponse[]> {
     // Check if organization exists
@@ -303,7 +296,6 @@ export class OrganizationsService {
 
   /**
    * Create invitation with 7-day expiry token
-   * Validates: Requirements 0.2.1, 0.2.4
    */
   async createInvitation(organizationId: string, email: string): Promise<InvitationResponse> {
     // Check if organization exists
@@ -315,7 +307,6 @@ export class OrganizationsService {
       throw new NotFoundException(`Organization with ID '${organizationId}' not found`);
     }
 
-    // Check if user is already a member (Requirement 0.2.4)
     const existingUser = await this.prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -349,7 +340,6 @@ export class OrganizationsService {
       throw new ConflictException('An active invitation already exists for this email');
     }
 
-    // Generate secure token and set 7-day expiry (Requirement 0.2.1)
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
@@ -376,7 +366,6 @@ export class OrganizationsService {
 
   /**
    * Accept invitation and add user to organization
-   * Validates: Requirements 0.2.2, 0.2.3
    */
   async acceptInvitation(token: string, userId: string): Promise<OrganizationMemberResponse> {
     // Find invitation by token
@@ -394,7 +383,6 @@ export class OrganizationsService {
       throw new BadRequestException('Invitation has already been accepted');
     }
 
-    // Check if invitation is expired (Requirement 0.2.3)
     if (invitation.expiresAt < new Date()) {
       throw new GoneException('Invitation has expired. Please request a new invitation.');
     }
@@ -422,7 +410,6 @@ export class OrganizationsService {
       throw new ConflictException('User is already a member of this organization');
     }
 
-    // Create membership with DEVELOPER role (Requirement 0.2.2) and mark invitation as accepted
     const [membership] = await this.prisma.$transaction([
       this.prisma.organizationMember.create({
         data: {
@@ -458,7 +445,6 @@ export class OrganizationsService {
 
   /**
    * Resend invitation (creates new token with fresh expiry)
-   * Validates: Requirements 0.2.3
    */
   async resendInvitation(organizationId: string, email: string): Promise<InvitationResponse> {
     // Find existing invitation
@@ -500,7 +486,6 @@ export class OrganizationsService {
 
   /**
    * Update member role
-   * Validates: Requirements 0.3.1
    */
   async updateMemberRole(
     organizationId: string,
@@ -569,14 +554,13 @@ export class OrganizationsService {
       },
     });
 
-    // Log role change to audit log 
-    // await this.auditLogService.logRoleChange({
-    //   userId: requestingUserId,
-    //   targetUserId,
-    //   organizationId,
-    //   oldRole,
-    //   newRole,
-    // });
+    await this.auditLogService.logRoleChange({
+      userId: requestingUserId,
+      targetUserId,
+      organizationId,
+      oldRole,
+      newRole,
+    });
 
     return {
       id: updatedMembership.id,
@@ -589,7 +573,6 @@ export class OrganizationsService {
 
   /**
    * Remove member from organization
-   * Validates: Requirements 0.2 (implicit - member management)
    */
   async removeMember(
     organizationId: string,
