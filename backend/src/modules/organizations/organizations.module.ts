@@ -1,13 +1,14 @@
-import { Module } from '@nestjs/common';
-import { OrganizationsController } from './organizations.controller.js';
-import { OrganizationsService } from './organizations.service.js';
-/**
- * Organizations Module
- * Handles organization creation, member management, and invitations
- */
+import { Module, forwardRef } from '@nestjs/common';
+import { OrganizationsController } from './organizations.controller';
+import { OrganizationsService } from './organizations.service';
+import { PrismaModule } from '../../prisma';
+import { AuthModule } from '../auth/auth.module';
+import { AuditModule } from '../audit/audit.module';
+
 @Module({
+  imports: [PrismaModule, forwardRef(() => AuthModule), AuditModule],
   controllers: [OrganizationsController],
   providers: [OrganizationsService],
-  exports: [OrganizationsService], // Export so other modules can use it
+  exports: [OrganizationsService],
 })
 export class OrganizationsModule {}
