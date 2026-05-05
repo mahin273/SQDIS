@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import health
+from app.routers import health, classification
 
 # Load settings once at startup
 settings = get_settings()
@@ -24,8 +24,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Register routers
+# Register all routers
 app.include_router(health.router)
+app.include_router(classification.router)
 
 
 if __name__ == "__main__":
