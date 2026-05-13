@@ -29,6 +29,7 @@ type DashboardNavbarProps = {
   currentOrganizationId?: string
   user?: DashboardUser
   notificationCount?: number
+  onSelectOrganization?: (organizationId: string) => void
   onCreateOrganization?: () => void
   onLogout?: () => void
 }
@@ -133,6 +134,7 @@ export default function DashboardNavbar({
   currentOrganizationId = 'org-1',
   user = { name: 'Demo User', email: 'demo@sqdis.app' },
   notificationCount = 3,
+  onSelectOrganization,
   onCreateOrganization,
   onLogout,
 }: DashboardNavbarProps) {
@@ -258,7 +260,10 @@ export default function DashboardNavbar({
                         'flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 ' +
                         (active ? 'bg-gray-50 font-semibold text-gray-900' : 'text-gray-700')
                       }
-                      onClick={() => setOrgOpen(false)}
+                      onClick={() => {
+                        setOrgOpen(false)
+                        onSelectOrganization?.(org.id)
+                      }}
                       role="menuitem"
                     >
                       <span className="truncate">{org.name}</span>

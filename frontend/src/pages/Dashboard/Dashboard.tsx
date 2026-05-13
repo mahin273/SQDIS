@@ -1,4 +1,8 @@
+import { useEffect, useState } from 'react'
 import { dashboardStyles } from './Dashboard.styles'
+import { useApi } from '../../hooks/useApi'
+import { authApi } from '../../services'
+import type { Organization } from '../../types/api.types'
 import DashboardNavbar from './components/DashboardNavbar'
 import DashboardSidebar from './components/DashboardSidebar'
 import MetricCard from './components/MetricCard'
@@ -19,6 +23,30 @@ import {
 } from 'react-icons/fi'
 
 export default function Dashboard() {
+  const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [currentOrgId, setCurrentOrgId] = useState<string>('')
+  const { data, call } = useApi(authApi.getOrganizations)
+
+  useEffect(() => {
+    void call()
+  }, [call])
+
+  useEffect(() => {
+    if (data && data.length > 0) {
+      setOrganizations(data)
+      if (!currentOrgId) {
+        setCurrentOrgId(data[0].id)
+      }
+    }
+  }, [data, currentOrgId])
+
+  const handleSelectOrganization = async (orgId: string) => {
+    setCurrentOrgId(orgId)
+    const result = await authApi.switchOrganization(orgId)
+    if (result?.user) {
+      // Token updated, org context switched
+    }
+  }
   return (
     <div className={dashboardStyles.shell}>
       <DashboardSidebar />
@@ -27,6 +55,9 @@ export default function Dashboard() {
         <DashboardNavbar
           notificationCount={3}
           user={{ name: 'Demo User', email: 'demo@sqdis.app' }}
+          organizations={organizations}
+          currentOrganizationId={currentOrgId}
+          onSelectOrganization={handleSelectOrganization}
         />
 
         <div className="flex-1 overflow-y-auto">
