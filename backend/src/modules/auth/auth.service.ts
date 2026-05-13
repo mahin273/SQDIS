@@ -55,12 +55,22 @@ export class AuthService {
     // Hash password with bcrypt cost factor 12
     const passwordHash = await hashPassword(dto.password);
 
+    const dtoAny = dto as unknown as { name?: string; firstName?: string; lastName?: string; email: string };
+    const derivedName =
+      dtoAny.name?.trim() ||
+      [dtoAny.firstName, dtoAny.lastName].filter(Boolean).join(' ').trim() ||
+      dtoAny.email?.split('@')[0]?.trim();
+
+    if (!derivedName) {
+      throw new BadRequestException('Name is required');
+    }
+
     // Create user
     const user = await this.prisma.user.create({
       data: {
         email: dto.email.toLowerCase(),
         passwordHash,
-        name: dto.name,
+        name: derivedName,
       },
     });
 

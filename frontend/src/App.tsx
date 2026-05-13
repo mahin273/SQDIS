@@ -5,13 +5,14 @@ import SignIn from './pages/auth/SignIn'
 import SignUp from './pages/auth/SignUp'
 import Dashboard from './pages/Dashboard/Dashboard'
 import Home from './pages/landing/home'
+import { ThemeProvider } from './context/ThemeContext'
 
-export default function App() {
+function AppContent() {
   const location = useLocation()
   const isDashboardRoute = location.pathname.startsWith('/dashboard')
 
   return (
-    <div className="flex min-h-screen flex-col bg-gray-50">
+    <div className="flex min-h-screen flex-col bg-gray-50 transition-colors duration-200 dark:bg-slate-950">
       {isDashboardRoute ? null : <Navbar />}
       <div className="flex-1">
         <Routes>
@@ -23,5 +24,13 @@ export default function App() {
       </div>
       {isDashboardRoute ? null : <Footer />}
     </div>
+  )
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   )
 }

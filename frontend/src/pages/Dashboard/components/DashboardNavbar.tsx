@@ -6,13 +6,16 @@ import {
   FiChevronDown,
   FiInfo,
   FiLogOut,
+  FiMoon,
   FiPlus,
   FiSearch,
   FiSettings,
+  FiSun,
   FiUser,
   FiX,
   FiZap,
 } from 'react-icons/fi'
+import { useTheme } from '../../../context/ThemeContext'
 
 type Organization = {
   id: string
@@ -29,6 +32,7 @@ type DashboardNavbarProps = {
   currentOrganizationId?: string
   user?: DashboardUser
   notificationCount?: number
+  onSelectOrganization?: (organizationId: string) => void
   onCreateOrganization?: () => void
   onLogout?: () => void
 }
@@ -133,9 +137,11 @@ export default function DashboardNavbar({
   currentOrganizationId = 'org-1',
   user = { name: 'Demo User', email: 'demo@sqdis.app' },
   notificationCount = 3,
+  onSelectOrganization,
   onCreateOrganization,
   onLogout,
 }: DashboardNavbarProps) {
+  const { isDarkMode, toggleTheme } = useTheme()
   const [orgOpen, setOrgOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
@@ -211,15 +217,15 @@ export default function DashboardNavbar({
   })
 
   return (
-    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white">
+    <header className="sticky top-0 z-30 border-b border-gray-200 bg-white transition-colors duration-200 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center gap-3 px-4 py-3">
         {/* Search */}
         <div className="relative flex-1">
-          <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 dark:text-slate-500" />
           <input
             type="search"
             placeholder="Search"
-            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200"
+            className="w-full rounded-lg border border-gray-200 bg-white py-2 pl-10 pr-3 text-sm text-gray-900 placeholder:text-gray-400 focus:border-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-200 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500 dark:focus:border-slate-600 dark:focus:ring-slate-800"
           />
         </div>
 
@@ -231,7 +237,7 @@ export default function DashboardNavbar({
               setOrgOpen((v) => !v)
               setProfileOpen(false)
             }}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800"
             aria-haspopup="menu"
             aria-expanded={orgOpen}
           >
@@ -242,9 +248,9 @@ export default function DashboardNavbar({
           {orgOpen ? (
             <div
               role="menu"
-              className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+              className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
             >
-              <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <div className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400">
                 Organizations
               </div>
               <div className="max-h-64 overflow-auto">
@@ -255,25 +261,30 @@ export default function DashboardNavbar({
                       key={org.id}
                       type="button"
                       className={
-                        'flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 ' +
-                        (active ? 'bg-gray-50 font-semibold text-gray-900' : 'text-gray-700')
+                        'flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-slate-800 ' +
+                        (active
+                          ? 'bg-gray-50 font-semibold text-gray-900 dark:bg-slate-800 dark:text-slate-100'
+                          : 'text-gray-700 dark:text-slate-300')
                       }
-                      onClick={() => setOrgOpen(false)}
+                      onClick={() => {
+                        setOrgOpen(false)
+                        onSelectOrganization?.(org.id)
+                      }}
                       role="menuitem"
                     >
                       <span className="truncate">{org.name}</span>
                       {active ? (
-                        <span className="text-xs text-gray-500">Current</span>
+                        <span className="text-xs text-gray-500 dark:text-slate-400">Current</span>
                       ) : null}
                     </button>
                   )
                 })}
               </div>
 
-              <div className="border-t border-gray-200">
+              <div className="border-t border-gray-200 dark:border-slate-800">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800"
                   onClick={() => {
                     setOrgOpen(false)
                     onCreateOrganization?.()
@@ -291,7 +302,7 @@ export default function DashboardNavbar({
         {/* Notifications */}
         <button
           type="button"
-          className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+          className="relative inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
           aria-label="Notifications"
           aria-haspopup="dialog"
           aria-expanded={notificationsOpen}
@@ -326,15 +337,15 @@ export default function DashboardNavbar({
               role="dialog"
               aria-modal="true"
               aria-label="Alerts and notifications panel"
-              className="absolute right-0 top-0 h-full w-full max-w-md border-l border-gray-200 bg-white shadow-sm"
+              className="absolute right-0 top-0 h-full w-full max-w-md border-l border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
             >
               <div className="flex h-full flex-col">
-                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3">
+                <div className="flex items-center justify-between border-b border-gray-200 px-4 py-3 dark:border-slate-800">
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-gray-900">
+                    <div className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
                       Alerts & Notifications
                     </div>
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-slate-400">
                       {pendingCount} pending
                     </div>
                   </div>
@@ -342,7 +353,7 @@ export default function DashboardNavbar({
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50"
+                      className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200 dark:hover:bg-slate-800"
                       aria-label="Close"
                       onClick={() => setNotificationsOpen(false)}
                     >
@@ -351,7 +362,7 @@ export default function DashboardNavbar({
                   </div>
                 </div>
 
-                <div className="border-b border-gray-200 px-4 py-3">
+                <div className="border-b border-gray-200 px-4 py-3 dark:border-slate-800">
                   <div className="flex flex-wrap items-center gap-2">
                     {(
                       [
@@ -370,8 +381,8 @@ export default function DashboardNavbar({
                           className={
                             'rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ' +
                             (active
-                              ? 'border-gray-900 bg-gray-900 text-white'
-                              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50')
+                              ? 'border-gray-900 bg-gray-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
+                              : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800')
                           }
                           onClick={() => setSeverityFilter(opt.value)}
                         >
@@ -391,7 +402,7 @@ export default function DashboardNavbar({
                       return (
                         <div
                           key={a.id}
-                          className={
+                            className={
                             'rounded-lg border p-3 ' +
                             s.border +
                             ' ' +
@@ -402,7 +413,7 @@ export default function DashboardNavbar({
                         >
                           <div className="space-y-2">
                             <div className="flex items-center gap-2">
-                              <span className="text-gray-700" aria-hidden="true">
+                              <span className="text-gray-700 dark:text-slate-300" aria-hidden="true">
                                 {s.icon}
                               </span>
                               <span className={
@@ -413,16 +424,16 @@ export default function DashboardNavbar({
                               </span>
                             </div>
 
-                            <div className="text-sm font-semibold text-gray-900">
+                            <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">
                               {a.title}
                             </div>
-                            <div className="text-sm text-gray-700">{a.detail}</div>
+                            <div className="text-sm text-gray-700 dark:text-slate-300">{a.detail}</div>
 
                             <div className="flex flex-wrap items-center gap-2 pt-1">
                               {(a.severity === 'CRITICAL' || a.severity === 'HIGH') && !a.acknowledged ? (
                                 <button
                                   type="button"
-                                  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800"
+                                  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
                                   onClick={() => acknowledgeAlert(a.id)}
                                 >
                                   Acknowledge
@@ -432,7 +443,7 @@ export default function DashboardNavbar({
                               {a.severity === 'MEDIUM' ? (
                                 <button
                                   type="button"
-                                  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800"
+                                  className="rounded-lg bg-gray-900 px-3 py-2 text-xs font-semibold text-white hover:bg-gray-800 dark:bg-slate-100 dark:text-slate-950 dark:hover:bg-white"
                                   onClick={() => {
                                     // placeholder: open report
                                   }}
@@ -444,7 +455,7 @@ export default function DashboardNavbar({
                               {(a.severity === 'CRITICAL' || a.severity === 'HIGH') ? (
                                 <button
                                   type="button"
-                                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                                  className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800"
                                   onClick={() => {
                                     // placeholder: view details
                                   }}
@@ -459,7 +470,7 @@ export default function DashboardNavbar({
                                 ) : (
                                   <button
                                     type="button"
-                                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50"
+                                    className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-semibold text-gray-900 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800"
                                     onClick={() => resolveAlert(a.id)}
                                   >
                                     Resolve
@@ -474,10 +485,10 @@ export default function DashboardNavbar({
                   </div>
                 </div>
 
-                <div className="border-t border-gray-200 px-4 py-4">
+                <div className="border-t border-gray-200 px-4 py-4 dark:border-slate-800">
                   <button
                     type="button"
-                    className="text-sm font-semibold text-gray-900 hover:underline"
+                    className="text-sm font-semibold text-gray-900 hover:underline dark:text-slate-100"
                     onClick={() => {
                       // placeholder: navigate to alerts page
                     }}
@@ -498,42 +509,42 @@ export default function DashboardNavbar({
               setProfileOpen((v) => !v)
               setOrgOpen(false)
             }}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50"
+            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-900 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:hover:bg-slate-800"
             aria-haspopup="menu"
             aria-expanded={profileOpen}
           >
-            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white">
+            <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white dark:bg-slate-100 dark:text-slate-950">
               {getInitials(user.name)}
             </span>
             <span className="hidden max-w-[10rem] truncate sm:inline">{user.name}</span>
-            <FiChevronDown className="text-gray-500" />
+            <FiChevronDown className="text-gray-500 dark:text-slate-400" />
           </button>
 
           {profileOpen ? (
             <div
               role="menu"
-              className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+              className="absolute right-0 mt-2 w-64 overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900"
             >
               <div className="px-3 py-3">
                 <div className="flex items-center gap-3">
-                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white">
+                  <div className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 text-sm font-semibold text-white dark:bg-slate-100 dark:text-slate-950">
                     {getInitials(user.name)}
                   </div>
                   <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-gray-900">
+                    <div className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
                       {user.name}
                     </div>
                     {user.email ? (
-                      <div className="truncate text-xs text-gray-500">{user.email}</div>
+                      <div className="truncate text-xs text-gray-500 dark:text-slate-400">{user.email}</div>
                     ) : null}
                   </div>
                 </div>
               </div>
 
-              <div className="border-t border-gray-200">
+              <div className="border-t border-gray-200 dark:border-slate-800">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800"
                   role="menuitem"
                 >
                   <FiUser />
@@ -541,18 +552,33 @@ export default function DashboardNavbar({
                 </button>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800"
                   role="menuitem"
                 >
                   <FiSettings />
                   Settings
                 </button>
-              </div>
-
-              <div className="border-t border-gray-200">
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800"
+                  onClick={(e) => {
+                    e.preventDefault()
+                    console.log('Toggle theme clicked. Current isDarkMode:', isDarkMode)
+                    toggleTheme()
+                    console.log('After toggle, isDarkMode should be:', !isDarkMode)
+                    // Keep dropdown open so user can see the change
+                  }}
+                  role="menuitem"
+                >
+                  {isDarkMode ? <FiSun /> : <FiMoon />}
+                  {isDarkMode ? 'Light mode' : 'Dark mode'}
+                </button>
+              </div>
+
+              <div className="border-t border-gray-200 dark:border-slate-800">
+                <button
+                  type="button"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:text-slate-300 dark:hover:bg-slate-800"
                   onClick={() => {
                     setProfileOpen(false)
                     onLogout?.()

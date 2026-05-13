@@ -38,14 +38,14 @@ export default function MetricCard({
   highlight = 'none',
 }: Props) {
   const valueClass =
-    highlight === 'sqs' ? getSqsTone(value) : 'text-gray-900'
+    highlight === 'sqs' ? getSqsTone(value) : 'text-gray-900 dark:text-slate-100'
 
   return (
-    <div className="rounded-xl border border-gray-200 bg-white p-5">
+    <div className="rounded-xl border border-gray-200 bg-white p-5 transition-colors duration-200 dark:border-slate-800 dark:bg-slate-900">
       <div className="flex items-center justify-between gap-3">
-        <div className="text-sm font-medium text-gray-700">{title}</div>
+        <div className="text-sm font-medium text-gray-700 dark:text-slate-300">{title}</div>
         {icon ? (
-          <div className="text-lg text-gray-500" aria-hidden="true">
+          <div className="text-lg text-gray-500 dark:text-slate-400" aria-hidden="true">
             {icon}
           </div>
         ) : null}
@@ -56,8 +56,8 @@ export default function MetricCard({
       </div>
 
       {trend ? (
-        <div className="mt-2 flex items-center gap-2 text-sm text-gray-600">
-          <span className="text-gray-500" aria-hidden="true">
+        <div className="mt-2 flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
+          <span className="text-gray-500 dark:text-slate-500" aria-hidden="true">
             {getTrendIcon(trend.direction)}
           </span>
           <span>{trend.label}</span>
@@ -65,7 +65,7 @@ export default function MetricCard({
       ) : null}
 
       {secondary ? (
-        <div className="mt-2 text-sm font-medium text-gray-700">{secondary}</div>
+        <div className="mt-2 text-sm font-medium text-gray-700 dark:text-slate-300">{secondary}</div>
       ) : null}
 
     </div>

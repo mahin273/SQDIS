@@ -1,4 +1,7 @@
+import { useEffect, useMemo } from 'react'
 import { dashboardStyles } from './Dashboard.styles'
+import { useApi } from '../../hooks/useApi'
+import { authApi, auditLogsApi } from '../../services'
 import DashboardNavbar from './components/DashboardNavbar'
 import DashboardSidebar from './components/DashboardSidebar'
 import MetricCard from './components/MetricCard'
@@ -18,15 +21,78 @@ import {
   FiUsers,
 } from 'react-icons/fi'
 
+function sumCounts<T extends { count: number }>(items: T[] | null | undefined) {
+  return items?.reduce((total, item) => total + item.count, 0) ?? 0
+}
+
 export default function Dashboard() {
+  const { data: profile, call: loadProfile } = useApi(authApi.getProfile)
+  const { data: orgData, call: loadOrganizations } = useApi(authApi.getOrganizations)
+  const { data: auditLogData, call: loadAuditLogs } = useApi(auditLogsApi.getAll)
+  const { data: activeUsersData, call: loadActiveUsers } = useApi(auditLogsApi.getActiveUsers)
+  const { data: failedPermissionsData, call: loadFailedPermissions } = useApi(auditLogsApi.getFailedPermissions)
+  const { data: actionCountsData, call: loadActionCounts } = useApi(auditLogsApi.getActionCounts)
+  const { data: highLogsData, call: loadHighLogs } = useApi(auditLogsApi.getAll)
+  const { data: criticalLogsData, call: loadCriticalLogs } = useApi(auditLogsApi.getAll)
+
+  useEffect(() => {
+    void loadProfile()
+    void loadOrganizations()
+  }, [loadOrganizations, loadProfile])
+
+  const organizations = orgData ?? []
+  const currentOrgId = profile?.organizationId ?? organizations[0]?.id ?? ''
+
+  useEffect(() => {
+    if (!currentOrgId) return
+
+    void Promise.all([
+      loadAuditLogs({ page: 1, pageSize: 1 }),
+      loadActiveUsers({ limit: 100 }),
+      loadFailedPermissions({}),
+      loadActionCounts({}),
+      loadHighLogs({ page: 1, pageSize: 1, severity: 'HIGH' }),
+      loadCriticalLogs({ page: 1, pageSize: 1, severity: 'CRITICAL' }),
+    ])
+  }, [currentOrgId, loadActionCounts, loadActiveUsers, loadAuditLogs, loadCriticalLogs, loadFailedPermissions, loadHighLogs])
+
+  const handleSelectOrganization = async (orgId: string) => {
+    await authApi.switchOrganization(orgId)
+    void loadProfile()
+    void loadOrganizations()
+  }
+
+  const dashboardUser = useMemo(
+    () => ({
+      name: profile?.name ?? 'Signed-in user',
+      email: profile?.email ?? 'Connected account',
+    }),
+    [profile],
+  )
+
+  const metrics = useMemo(
+    () => ({
+      organizations: organizations.length,
+      activeUsers: activeUsersData?.length ?? 0,
+      auditEvents: auditLogData?.total ?? 0,
+      criticalEvents: (highLogsData?.total ?? 0) + (criticalLogsData?.total ?? 0),
+      failedPermissions: sumCounts(failedPermissionsData),
+      actionVolume: sumCounts(actionCountsData),
+    }),
+    [activeUsersData, actionCountsData, auditLogData?.total, failedPermissionsData, highLogsData?.total, criticalLogsData?.total, organizations.length],
+  )
+
   return (
     <div className={dashboardStyles.shell}>
       <DashboardSidebar />
 
       <div className={dashboardStyles.content}>
         <DashboardNavbar
-          notificationCount={3}
-          user={{ name: 'Demo User', email: 'demo@sqdis.app' }}
+          notificationCount={metrics.criticalEvents}
+          user={dashboardUser}
+          organizations={organizations}
+          currentOrganizationId={currentOrgId}
+          onSelectOrganization={handleSelectOrganization}
         />
 
         <div className="flex-1 overflow-y-auto">
@@ -42,41 +108,40 @@ export default function Dashboard() {
               <div className="lg:col-span-12">
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   <MetricCard
-                    title="Repositories"
+                    title="Organizations"
                     icon={<FiBriefcase />}
-                    value="24"
-                    trend={{ direction: 'up', label: '3 this month' }}
+                    value={metrics.organizations.toString()}
+                    trend={{ direction: 'up', label: 'Connected from auth API' }}
                   />
                   <MetricCard
-                    title="Developers"
+                    title="Active Users"
                     icon={<FiUsers />}
-                    value="156"
-                    trend={{ direction: 'up', label: '12 this month' }}
+                    value={metrics.activeUsers.toString()}
+                    trend={{ direction: 'up', label: 'From audit analytics' }}
                   />
                   <MetricCard
-                    title="Avg SQS"
+                    title="Audit Events"
                     icon={<FiBarChart2 />}
-                    value="78.5"
-                    highlight="sqs"
-                    trend={{ direction: 'up', label: '2.3 from last week' }}
+                    value={metrics.auditEvents.toString()}
+                    trend={{ direction: 'up', label: 'Current organization total' }}
                   />
                   <MetricCard
-                    title="Avg Coverage"
+                    title="Critical Events"
                     icon={<FiCrosshair />}
-                    value="82.3%"
-                    trend={{ direction: 'up', label: '1.2% from last week' }}
+                    value={metrics.criticalEvents.toString()}
+                    trend={{ direction: 'down', label: 'HIGH + CRITICAL logs' }}
                   />
                   <MetricCard
-                    title="Total Commits"
+                    title="Failed Permissions"
                     icon={<FiCode />}
-                    value="45,234"
-                    trend={{ direction: 'up', label: '1,234 this week' }}
+                    value={metrics.failedPermissions.toString()}
+                    trend={{ direction: 'up', label: 'Audit analytics total' }}
                   />
                   <MetricCard
-                    title="Open Alerts"
+                    title="Action Volume"
                     icon={<FiAlertTriangle />}
-                    value="12"
-                    secondary="3 Critical"
+                    value={metrics.actionVolume.toString()}
+                    secondary="From audit action counts"
                   />
                 </div>
               </div>

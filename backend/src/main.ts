@@ -6,6 +6,13 @@ import { writeFileSync } from 'node:fs';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  app.enableCors({
+    origin: true,
+    credentials: true,
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+  });
+
   const config = new DocumentBuilder()
     .setTitle('My API')
     .setDescription('API documentation')

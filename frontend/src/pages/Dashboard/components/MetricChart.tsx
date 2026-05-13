@@ -25,15 +25,15 @@ export default function MetricChart({
   onRangeChange,
 }: Props) {
   return (
-    <section className="rounded-xl border border-gray-200 bg-white">
-      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-5 py-4">
+    <section className="rounded-xl border border-gray-200 bg-white transition-colors duration-200 dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex items-start justify-between gap-3 border-b border-gray-200 px-5 py-4 dark:border-slate-800">
         <div className="flex min-w-0 items-center gap-3">
           {icon ? (
-            <div className="text-lg text-gray-500" aria-hidden="true">
+            <div className="text-lg text-gray-500 dark:text-slate-400" aria-hidden="true">
               {icon}
             </div>
           ) : null}
-          <h2 className="truncate text-sm font-semibold text-gray-900">{title}</h2>
+          <h2 className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">{title}</h2>
         </div>
 
         {rangeOptions && rangeOptions.length > 0 ? (
@@ -47,8 +47,8 @@ export default function MetricChart({
                   className={
                     'rounded-lg border px-3 py-2 text-xs font-semibold transition-colors ' +
                     (active
-                      ? 'border-gray-900 bg-gray-900 text-white'
-                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50')
+                      ? 'border-gray-900 bg-gray-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-950'
+                      : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300 dark:hover:bg-slate-800')
                   }
                   onClick={() => onRangeChange?.(opt.value)}
                 >
@@ -64,7 +64,7 @@ export default function MetricChart({
         <div className="h-72 w-full">{children}</div>
       </div>
 
-      {footer ? <div className="border-t border-gray-200">{footer}</div> : null}
+      {footer ? <div className="border-t border-gray-200 dark:border-slate-800">{footer}</div> : null}
     </section>
   )
 }

@@ -24,8 +24,8 @@ import { GiChart } from 'react-icons/gi'
 const baseLink =
   'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-colors'
 
-const inactiveLink = 'text-gray-700 hover:bg-gray-100'
-const activeLink = 'bg-gray-100 text-gray-900'
+const inactiveLink = 'text-gray-700 hover:bg-gray-100 dark:text-slate-300 dark:hover:bg-slate-800'
+const activeLink = 'bg-gray-100 text-gray-900 dark:bg-slate-800 dark:text-slate-100'
 
 function SidebarItem({
   to,
@@ -64,9 +64,9 @@ function SidebarGroup({
   return (
     <details className="group">
       <summary className={[baseLink, inactiveLink, 'cursor-pointer list-none'].join(' ')}>
-        <span className="text-gray-500">{icon}</span>
+        <span className="text-gray-500 dark:text-slate-400">{icon}</span>
         <span className="truncate">{label}</span>
-        <span className="ml-auto text-xs text-gray-400 group-open:rotate-180">▾</span>
+        <span className="ml-auto text-xs text-gray-400 group-open:rotate-180 dark:text-slate-500">▾</span>
       </summary>
       <div className="mt-1 space-y-1 pl-10">{children}</div>
     </details>
@@ -75,19 +75,19 @@ function SidebarGroup({
 
 export default function DashboardSidebar() {
   return (
-    <aside className="hidden w-72 flex-none border-r border-gray-200 bg-white lg:block">
+    <aside className="hidden w-72 flex-none border-r border-gray-200 bg-white lg:block dark:border-slate-800 dark:bg-slate-900">
       <div className="flex h-screen flex-col">
         {/* Brand */}
-        <div className="border-b border-gray-200 px-4 py-4">
+        <div className="border-b border-gray-200 px-4 py-4 dark:border-slate-800">
           <NavLink to="/dashboard" className="flex items-center gap-3" end>
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white">
-              <GiChart className="h-6 w-6 text-indigo-600" />
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200 bg-white dark:border-slate-700 dark:bg-slate-950">
+              <GiChart className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
             </div>
             <div className="min-w-0">
-              <div className="truncate text-sm font-semibold text-gray-900">
+              <div className="truncate text-sm font-semibold text-gray-900 dark:text-slate-100">
                 SQDIS
               </div>
-              <div className="truncate text-xs text-gray-500">Code Intelligence</div>
+              <div className="truncate text-xs text-gray-500 dark:text-slate-400">Code Intelligence</div>
             </div>
           </NavLink>
         </div>
@@ -172,8 +172,8 @@ export default function DashboardSidebar() {
         </nav>
 
         {/* Bottom */}
-        <div className="border-t border-gray-200 px-3 py-3">
-          <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600">
+        <div className="border-t border-gray-200 px-3 py-3 dark:border-slate-800">
+          <div className="rounded-lg bg-gray-50 px-3 py-2 text-xs text-gray-600 dark:bg-slate-950 dark:text-slate-400">
             Logged in workspace
           </div>
         </div>
