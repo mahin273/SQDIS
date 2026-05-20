@@ -1468,6 +1468,845 @@
           "Audit Logs"
         ]
       }
+    },
+    "/alerts": {
+      "get": {
+        "operationId": "AlertsController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "severity",
+            "required": false,
+            "in": "query",
+            "description": "Filter by alert severity",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "LOW",
+                "MEDIUM",
+                "HIGH",
+                "CRITICAL"
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by alert status",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "OPEN",
+                "ACKNOWLEDGED",
+                "RESOLVED"
+              ]
+            }
+          },
+          {
+            "name": "type",
+            "required": false,
+            "in": "query",
+            "description": "Filter by alert type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "ANOMALY",
+                "THRESHOLD",
+                "SYSTEM",
+                "WEBHOOK_FAILURE"
+              ]
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date filter (ISO format)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date filter (ISO format)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of alerts with severity breakdown"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all alerts with pagination and filters",
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/alerts/preferences": {
+      "get": {
+        "operationId": "AlertsController_getPreferences",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "User notification preferences"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get notification preferences for current user",
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "patch": {
+        "operationId": "AlertsController_updatePreferences",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateNotificationPreferencesDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Notification preferences updated successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update notification preferences for current user",
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/alerts/thresholds": {
+      "get": {
+        "operationId": "AlertsController_getAllThresholdConfigs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of threshold configurations per alert type"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all threshold configurations for the organization",
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "post": {
+        "operationId": "AlertsController_upsertThresholdConfig",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAlertThresholdConfigDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Threshold configuration created/updated"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient permissions (requires ADMIN or OWNER)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create or update threshold configuration",
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "delete": {
+        "operationId": "AlertsController_resetAllThresholdConfigs",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All threshold configurations reset to defaults"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient permissions (requires ADMIN or OWNER)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reset all threshold configurations to defaults",
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/alerts/thresholds/{alertType}": {
+      "get": {
+        "operationId": "AlertsController_getThresholdConfig",
+        "parameters": [
+          {
+            "name": "alertType",
+            "required": true,
+            "in": "path",
+            "description": "Alert type (e.g., ANOMALY)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Threshold configuration for the alert type"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get threshold configuration for a specific alert type",
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "patch": {
+        "operationId": "AlertsController_updateThresholdConfig",
+        "parameters": [
+          {
+            "name": "alertType",
+            "required": true,
+            "in": "path",
+            "description": "Alert type (e.g., ANOMALY)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateAlertThresholdConfigDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Threshold configuration updated"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient permissions (requires ADMIN or OWNER)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update threshold configuration for a specific alert type",
+        "tags": [
+          "Alerts"
+        ]
+      },
+      "delete": {
+        "operationId": "AlertsController_resetThresholdConfig",
+        "parameters": [
+          {
+            "name": "alertType",
+            "required": true,
+            "in": "path",
+            "description": "Alert type to reset (e.g., ANOMALY)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Threshold configuration reset to defaults"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Insufficient permissions (requires ADMIN or OWNER)"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Reset threshold configuration for a specific alert type",
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/alerts/{id}": {
+      "get": {
+        "operationId": "AlertsController_findById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Alert ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Alert details with acknowledger and resolver info"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Alert not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a specific alert by ID",
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/alerts/{id}/acknowledge": {
+      "post": {
+        "operationId": "AlertsController_acknowledge",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Alert ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AcknowledgeAlertDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Alert acknowledged successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Alert not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Acknowledge an alert",
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/alerts/{id}/resolve": {
+      "post": {
+        "operationId": "AlertsController_resolve",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Alert ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveAlertDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Alert resolved successfully"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Alert not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Resolve an alert with resolution notes",
+        "tags": [
+          "Alerts"
+        ]
+      }
+    },
+    "/debt": {
+      "get": {
+        "operationId": "DebtController_findAll",
+        "parameters": [
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number",
+            "schema": {
+              "minimum": 1,
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "minimum": 1,
+              "default": 20,
+              "type": "number"
+            }
+          },
+          {
+            "name": "repositoryId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by repository ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "authorId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by author ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "markerType",
+            "required": false,
+            "in": "query",
+            "description": "Filter by marker type",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "TODO",
+                "FIXME",
+                "HACK",
+                "XXX"
+              ]
+            }
+          },
+          {
+            "name": "isResolved",
+            "required": false,
+            "in": "query",
+            "description": "Filter by resolution status",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date filter (ISO format)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date filter (ISO format)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "filePath",
+            "required": false,
+            "in": "query",
+            "description": "Filter by file path (contains)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of debt items"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all debt items with pagination and filters",
+        "tags": [
+          "Technical Debt"
+        ]
+      }
+    },
+    "/debt/hotspots": {
+      "get": {
+        "operationId": "DebtController_getHotSpots",
+        "parameters": [
+          {
+            "name": "repositoryId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by repository ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of hot spot files ranked by severity"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get code hot spots with high churn and bug correlation",
+        "tags": [
+          "Technical Debt"
+        ]
+      }
+    },
+    "/debt/trends": {
+      "get": {
+        "operationId": "DebtController_getTrends",
+        "parameters": [
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Number of days to look back (default: 30)",
+            "schema": {
+              "type": "number"
+            }
+          },
+          {
+            "name": "repositoryId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by repository ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "teamId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by team ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Debt trend data with velocity and accumulation status"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get debt trends over time",
+        "tags": [
+          "Technical Debt"
+        ]
+      }
+    },
+    "/debt/recommendations": {
+      "get": {
+        "operationId": "DebtController_getRecommendations",
+        "parameters": [
+          {
+            "name": "repositoryId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by repository ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of recommendations (default: 10)",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Prioritized list of debt remediation recommendations"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get prioritized debt recommendations",
+        "tags": [
+          "Technical Debt"
+        ]
+      }
+    },
+    "/debt/attribution": {
+      "get": {
+        "operationId": "DebtController_getAttribution",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Debt introduced and resolved per developer"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get debt attribution by developer",
+        "tags": [
+          "Technical Debt"
+        ]
+      }
+    },
+    "/debt/modules": {
+      "get": {
+        "operationId": "DebtController_getModuleScores",
+        "parameters": [
+          {
+            "name": "repositoryId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by repository ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "threshold",
+            "required": false,
+            "in": "query",
+            "description": "Score threshold for flagging (default: 10)",
+            "schema": {
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Debt scores per module with marker breakdowns"
+          },
+          "401": {
+            "description": "Unauthorized"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get module-level debt scores",
+        "tags": [
+          "Technical Debt"
+        ]
+      }
+    },
+    "/debt/{id}": {
+      "get": {
+        "operationId": "DebtController_findById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Debt item ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Debt item details with related data"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Debt item not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a debt item by ID",
+        "tags": [
+          "Technical Debt"
+        ]
+      }
+    },
+    "/metrics": {
+      "get": {
+        "operationId": "MetricsController_getMetrics",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "All collected metrics in Prometheus text format"
+          }
+        },
+        "summary": "Prometheus metrics endpoint",
+        "tags": [
+          "Metrics"
+        ]
+      }
     }
   },
   "info": {
@@ -1777,6 +2616,180 @@
         },
         "required": [
           "reportType"
+        ]
+      },
+      "UpdateNotificationPreferencesDto": {
+        "type": "object",
+        "properties": {
+          "emailEnabled": {
+            "type": "boolean",
+            "description": "Enable email notifications"
+          },
+          "slackEnabled": {
+            "type": "boolean",
+            "description": "Enable Slack notifications"
+          },
+          "inAppEnabled": {
+            "type": "boolean",
+            "description": "Enable in-app notifications"
+          },
+          "quietStart": {
+            "type": "string",
+            "description": "Quiet hours start time (HH:mm format)",
+            "example": "22:00"
+          },
+          "quietEnd": {
+            "type": "string",
+            "description": "Quiet hours end time (HH:mm format)",
+            "example": "07:00"
+          },
+          "digestMode": {
+            "type": "boolean",
+            "description": "Enable digest mode to batch notifications"
+          },
+          "digestFrequency": {
+            "type": "string",
+            "description": "Frequency of digest notifications",
+            "enum": [
+              "hourly",
+              "daily",
+              "weekly"
+            ]
+          },
+          "minSeverity": {
+            "type": "string",
+            "description": "Minimum severity level to trigger notifications",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ]
+          }
+        }
+      },
+      "CreateAlertThresholdConfigDto": {
+        "type": "object",
+        "properties": {
+          "alertType": {
+            "type": "string",
+            "description": "Type of alert",
+            "enum": [
+              "ANOMALY",
+              "THRESHOLD",
+              "SYSTEM",
+              "WEBHOOK_FAILURE"
+            ],
+            "default": "ANOMALY"
+          },
+          "lowThreshold": {
+            "type": "number",
+            "description": "Low severity threshold",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0
+          },
+          "mediumThreshold": {
+            "type": "number",
+            "description": "Medium severity threshold",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.5
+          },
+          "highThreshold": {
+            "type": "number",
+            "description": "High severity threshold",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.7
+          },
+          "criticalThreshold": {
+            "type": "number",
+            "description": "Critical severity threshold",
+            "minimum": 0,
+            "maximum": 1,
+            "default": 0.9
+          },
+          "minSeverity": {
+            "type": "string",
+            "description": "Minimum severity level to trigger alert",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ],
+            "default": "LOW"
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether this configuration is active",
+            "default": true
+          }
+        }
+      },
+      "UpdateAlertThresholdConfigDto": {
+        "type": "object",
+        "properties": {
+          "lowThreshold": {
+            "type": "number",
+            "description": "Low severity threshold",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "mediumThreshold": {
+            "type": "number",
+            "description": "Medium severity threshold",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "highThreshold": {
+            "type": "number",
+            "description": "High severity threshold",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "criticalThreshold": {
+            "type": "number",
+            "description": "Critical severity threshold",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "minSeverity": {
+            "type": "string",
+            "description": "Minimum severity level to trigger alert",
+            "enum": [
+              "LOW",
+              "MEDIUM",
+              "HIGH",
+              "CRITICAL"
+            ]
+          },
+          "isActive": {
+            "type": "boolean",
+            "description": "Whether this configuration is active"
+          }
+        }
+      },
+      "AcknowledgeAlertDto": {
+        "type": "object",
+        "properties": {
+          "notes": {
+            "type": "string",
+            "description": "Optional notes when acknowledging the alert"
+          }
+        }
+      },
+      "ResolveAlertDto": {
+        "type": "object",
+        "properties": {
+          "resolutionNotes": {
+            "type": "string",
+            "description": "Notes explaining how the alert was resolved"
+          }
+        },
+        "required": [
+          "resolutionNotes"
         ]
       }
     }
