@@ -5,5 +5,8 @@ export * from './webhook-log.service';
 export * from './idempotency.service';
 export * from './rate-limit.service';
 export * from './event-router.service';
+export * from './github-api.service';
+export * from './backfill.service';
+export * from './polling.service';
 export * from './pull-request-handler.service';
 export * from './webhook-monitoring.service';
