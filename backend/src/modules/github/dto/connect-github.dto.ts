@@ -16,5 +16,5 @@ export class ConnectGithubDto{
 @IsString()
 @IsNotEmpty()
 @MinLength(40,{message:"Invalid GitHub PAT format"})
-pat: string
+pat!: string
 }
