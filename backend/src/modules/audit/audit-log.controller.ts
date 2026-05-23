@@ -10,26 +10,29 @@ import {
   HttpStatus,
   Res,
   StreamableFile,
-  Inject,
+  UnauthorizedException,
+  NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiBearerAuth,
-  ApiParam,
-} from '@nestjs/swagger';
-import express from 'express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
-import * as getUserDecorator from '../auth/decorators/get-user.decorator';
+import { GetUser } from '../auth/decorators/get-user.decorator';
+import type { RequestUser } from '../auth/decorators/get-user.decorator';
 import { Role } from '@prisma/client';
 import { EnhancedAuditLogService } from './services/enhanced-audit-log.service';
 import { AuditExportService } from './services/audit-export.service';
 import { AuditRetentionService } from './services/audit-retention.service';
 import { AuditAnalyticsService } from './services/audit-analytics.service';
-import { QueryAuditLogsDto, ExportAuditLogsDto, UpdateRetentionPolicyDto, GenerateComplianceReportDto } from './dto';
+import { FileStorageService } from '../reports/services/file-storage.service';
+import {
+  QueryAuditLogsDto,
+  ExportAuditLogsDto,
+  UpdateRetentionPolicyDto,
+  GenerateComplianceReportDto,
+} from './dto';
 import { createReadStream } from 'fs';
 
 /**
@@ -45,12 +48,11 @@ export class AuditLogController {
     private readonly auditExportService: AuditExportService,
     private readonly auditRetentionService: AuditRetentionService,
     private readonly auditAnalyticsService: AuditAnalyticsService,
-    @Inject('FileStorageService') private readonly fileStorageService: any,
+    private readonly fileStorageService: FileStorageService,
   ) {}
 
   /**
    * Query audit logs with advanced filtering
-
    */
   @Get()
   @Roles(Role.ADMIN, Role.OWNER)
@@ -63,13 +65,10 @@ export class AuditLogController {
     status: HttpStatus.FORBIDDEN,
     description: 'User does not have permission to access audit logs',
   })
-  async queryLogs(
-    @Query() queryDto: QueryAuditLogsDto,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
-  ) {
+  async queryLogs(@Query() queryDto: QueryAuditLogsDto, @GetUser() user: RequestUser) {
     // Ensure organizationId is set from the authenticated user
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const filters = {
@@ -95,7 +94,6 @@ export class AuditLogController {
 
   /**
    * Get a single audit log entry by ID
-
    */
   @Get(':id')
   @Roles(Role.ADMIN, Role.OWNER)
@@ -113,12 +111,9 @@ export class AuditLogController {
     status: HttpStatus.FORBIDDEN,
     description: 'User does not have permission to access this audit log',
   })
-  async getLogById(
-    @Param('id') id: string,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
-  ) {
+  async getLogById(@Param('id') id: string, @GetUser() user: RequestUser) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     return this.enhancedAuditLogService.getLogById(id, user.organizationId);
@@ -138,12 +133,9 @@ export class AuditLogController {
     status: HttpStatus.FORBIDDEN,
     description: 'User does not have permission to export audit logs',
   })
-  async exportLogs(
-    @Body() exportDto: ExportAuditLogsDto,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
-  ) {
+  async exportLogs(@Body() exportDto: ExportAuditLogsDto, @GetUser() user: RequestUser) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const filters = {
@@ -212,8 +204,8 @@ export class AuditLogController {
   })
   async downloadExport(
     @Param('id') id: string,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
-    @Res({ passthrough: true }) res: express.Response,
+    @GetUser() user: RequestUser,
+    @Res({ passthrough: true }) res: Response,
   ) {
     // Get the download URL (validates access)
     await this.auditExportService.downloadExport(id, user.id);
@@ -222,7 +214,7 @@ export class AuditLogController {
     const exportStatus = await this.auditExportService.getExportStatus(id);
 
     if (!exportStatus.downloadUrl) {
-      throw new Error('Download URL not available');
+      throw new NotFoundException('Download URL not available');
     }
 
     // Get the export record from database to get file path
@@ -231,7 +223,7 @@ export class AuditLogController {
     });
 
     if (!exportRecord || !exportRecord.s3Key) {
-      throw new Error('Export file not found');
+      throw new NotFoundException('Export file not found');
     }
 
     // Get file path and stream it
@@ -239,7 +231,8 @@ export class AuditLogController {
     const fileStream = createReadStream(filePath);
 
     // Set response headers
-    const filename = exportRecord.filename || `audit-export-${id}.${exportRecord.format.toLowerCase()}`;
+    const filename =
+      exportRecord.filename || `audit-export-${id}.${exportRecord.format.toLowerCase()}`;
     res.set({
       'Content-Type': exportRecord.format === 'CSV' ? 'text/csv' : 'application/json',
       'Content-Disposition': `attachment; filename="${filename}"`,
@@ -262,9 +255,9 @@ export class AuditLogController {
     status: HttpStatus.FORBIDDEN,
     description: 'Only OWNER role can access retention policies',
   })
-  async getRetentionPolicy(@getUserDecorator.GetUser() user: getUserDecorator.RequestUser) {
+  async getRetentionPolicy(@GetUser() user: RequestUser) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     return this.auditRetentionService.getRetentionPolicy(user.organizationId);
@@ -290,16 +283,13 @@ export class AuditLogController {
   })
   async updateRetentionPolicy(
     @Body() updateDto: UpdateRetentionPolicyDto,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
+    @GetUser() user: RequestUser,
   ) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
-    return this.auditRetentionService.updateRetentionPolicy(
-      user.organizationId,
-      updateDto,
-    );
+    return this.auditRetentionService.updateRetentionPolicy(user.organizationId, updateDto);
   }
 
   /**
@@ -319,20 +309,16 @@ export class AuditLogController {
   async getActionCounts(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
+    @GetUser() user: RequestUser,
   ) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default: 30 days ago
     const end = endDate ? new Date(endDate) : new Date(); // Default: now
 
-    return this.auditAnalyticsService.getActionCountsByType(
-      user.organizationId,
-      start,
-      end,
-    );
+    return this.auditAnalyticsService.getActionCountsByType(user.organizationId, start, end);
   }
 
   /**
@@ -353,10 +339,10 @@ export class AuditLogController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query('limit') limit?: string,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser = {} as getUserDecorator.RequestUser,
+    @GetUser() user: RequestUser = {} as RequestUser,
   ) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -388,20 +374,16 @@ export class AuditLogController {
   async getFailedPermissions(
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
+    @GetUser() user: RequestUser,
   ) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     const end = endDate ? new Date(endDate) : new Date();
 
-    return this.auditAnalyticsService.getFailedPermissionChecks(
-      user.organizationId,
-      start,
-      end,
-    );
+    return this.auditAnalyticsService.getFailedPermissionChecks(user.organizationId, start, end);
   }
 
   /**
@@ -422,10 +404,10 @@ export class AuditLogController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query('granularity') granularity?: 'hour' | 'day' | 'week',
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser = {} as getUserDecorator.RequestUser,
+    @GetUser() user: RequestUser = {} as RequestUser,
   ) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -458,10 +440,10 @@ export class AuditLogController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate: string,
     @Query('limit') limit?: string,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser = {} as getUserDecorator.RequestUser,
+    @GetUser() user: RequestUser = {} as RequestUser,
   ) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -491,12 +473,9 @@ export class AuditLogController {
     status: HttpStatus.FORBIDDEN,
     description: 'Only OWNER role can access GDPR data',
   })
-  async getGdprDataAccess(
-    @Param('userId') userId: string,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
-  ) {
+  async getGdprDataAccess(@Param('userId') userId: string, @GetUser() user: RequestUser) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     // Query all audit logs for the specified user within the organization
@@ -520,7 +499,9 @@ export class AuditLogController {
    */
   @Post('gdpr/anonymize/:userId')
   @Roles(Role.OWNER)
-  @ApiOperation({ summary: 'Anonymize all audit entries for a specific user (GDPR right to be forgotten)' })
+  @ApiOperation({
+    summary: 'Anonymize all audit entries for a specific user (GDPR right to be forgotten)',
+  })
   @ApiParam({ name: 'userId', description: 'User ID to anonymize audit data for' })
   @ApiResponse({
     status: HttpStatus.OK,
@@ -530,12 +511,9 @@ export class AuditLogController {
     status: HttpStatus.FORBIDDEN,
     description: 'Only OWNER role can anonymize user data',
   })
-  async anonymizeGdprData(
-    @Param('userId') userId: string,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
-  ) {
+  async anonymizeGdprData(@Param('userId') userId: string, @GetUser() user: RequestUser) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const result = await this.enhancedAuditLogService.anonymizeUserData(
@@ -575,18 +553,16 @@ export class AuditLogController {
   })
   async generateComplianceReport(
     @Body() reportDto: GenerateComplianceReportDto,
-    @getUserDecorator.GetUser() user: getUserDecorator.RequestUser,
+    @GetUser() user: RequestUser,
   ) {
     if (!user.organizationId) {
-      throw new Error('User must belong to an organization');
+      throw new UnauthorizedException('User must belong to an organization');
     }
 
     const startDate = reportDto.startDate
       ? new Date(reportDto.startDate)
       : new Date(Date.now() - 365 * 24 * 60 * 60 * 1000); // Default: 1 year ago
-    const endDate = reportDto.endDate
-      ? new Date(reportDto.endDate)
-      : new Date(); // Default: now
+    const endDate = reportDto.endDate ? new Date(reportDto.endDate) : new Date(); // Default: now
 
     const report = await this.enhancedAuditLogService.generateComplianceReport(
       user.organizationId,
@@ -614,5 +590,4 @@ export class AuditLogController {
 
     return report;
   }
-
 }

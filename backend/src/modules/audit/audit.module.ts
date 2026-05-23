@@ -11,7 +11,6 @@ import { AuditRetentionService } from './services/audit-retention.service';
 import { AuditArchivalSchedulerService } from './services/audit-archival-scheduler.service';
 import { AuditAnalyticsService } from './services/audit-analytics.service';
 import { AuditMonitorService } from './services/audit-monitor.service';
-import { FileStorageService } from './services/file-storage.service';
 import { AuditWriteProcessor } from './processors/audit-write.processor';
 import { ArchivalProcessor } from './processors/archival.processor';
 import { ExportProcessor } from './processors/export.processor';
@@ -19,9 +18,16 @@ import { AuditLogInterceptor } from './interceptors/audit-log.interceptor';
 import { AuditLogController } from './audit-log.controller';
 import { AuditEventsGateway } from './audit-events.gateway';
 import { PrismaModule } from '../../prisma/prisma.module';
+import { ReportsModule } from '../reports/reports.module';
+import { AlertsModule } from '../alerts/alerts.module';
 import { CacheModule } from '../cache/cache.module';
+import { FileStorageService } from '../reports/services/file-storage.service';
 import { AuthModule } from '../auth/auth.module';
-import { ARCHIVAL_QUEUE, AUDIT_WRITE_QUEUE, EXPORT_QUEUE } from './audit.constants';
+
+/**
+ * Queue name for audit write operations
+ */
+import { ARCHIVAL_QUEUE, AUDIT_WRITE_QUEUE, EXPORT_QUEUE } from './constants';
 
 /**
  * AuditModule provides comprehensive audit logging functionality.
@@ -37,6 +43,8 @@ import { ARCHIVAL_QUEUE, AUDIT_WRITE_QUEUE, EXPORT_QUEUE } from './audit.constan
 @Module({
   imports: [
     PrismaModule,
+    ReportsModule,
+    AlertsModule,
     CacheModule,
     forwardRef(() => AuthModule),
     EventEmitterModule.forRoot(),
@@ -86,16 +94,16 @@ import { ARCHIVAL_QUEUE, AUDIT_WRITE_QUEUE, EXPORT_QUEUE } from './audit.constan
     HashService,
     EnhancedAuditLogService,
     AuditLogService,
+    {
+      provide: 'FileStorageService',
+      useFactory: (fileStorageService: FileStorageService) => fileStorageService,
+      inject: [FileStorageService],
+    },
     AuditExportService,
     AuditRetentionService,
     AuditArchivalSchedulerService,
     AuditAnalyticsService,
     AuditMonitorService,
-    FileStorageService,
-    {
-      provide: 'FileStorageService',
-      useExisting: FileStorageService,
-    },
     AuditLogInterceptor,
     AuditWriteProcessor,
     ArchivalProcessor,
@@ -103,6 +111,15 @@ import { ARCHIVAL_QUEUE, AUDIT_WRITE_QUEUE, EXPORT_QUEUE } from './audit.constan
     AuditEventsGateway,
   ],
   controllers: [AuditLogController],
-  exports: [HashService, EnhancedAuditLogService, AuditLogService, AuditExportService, AuditRetentionService, AuditAnalyticsService, AuditMonitorService, AuditLogInterceptor],
+  exports: [
+    HashService,
+    EnhancedAuditLogService,
+    AuditLogService,
+    AuditExportService,
+    AuditRetentionService,
+    AuditAnalyticsService,
+    AuditMonitorService,
+    AuditLogInterceptor,
+  ],
 })
 export class AuditModule {}
