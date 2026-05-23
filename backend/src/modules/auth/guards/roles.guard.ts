@@ -1,11 +1,10 @@
-/* eslint-disable */
 import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Role } from '@prisma/client';
 import { ROLES_KEY } from '../decorators/roles.decorator';
 import type { RequestUser } from '../decorators/get-user.decorator';
 import { PermissionCacheService } from '../services/permission-cache.service';
-
+import { AuditLogService } from '../../audit/services/audit-log.service';
 
 /**
  * Role hierarchy mapping roles to numeric levels
@@ -31,6 +30,7 @@ export class RolesGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private permissionCacheService: PermissionCacheService,
+    private auditLogService: AuditLogService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -70,13 +70,7 @@ export class RolesGuard implements CanActivate {
 
       if (cachedDecision !== null) {
         // Log cached permission check
-        await this.logPermissionCheck(
-          user,
-          requiredRoles,
-          cachedDecision,
-          className,
-          handler,
-        );
+        await this.logPermissionCheck(user, requiredRoles, cachedDecision, className, handler);
         return cachedDecision;
       }
     }
@@ -95,13 +89,7 @@ export class RolesGuard implements CanActivate {
     }
 
     // Log permission check
-    await this.logPermissionCheck(
-      user,
-      requiredRoles,
-      granted,
-      className,
-      handler,
-    );
+    await this.logPermissionCheck(user, requiredRoles, granted, className, handler);
 
     return granted;
   }
@@ -149,6 +137,14 @@ export class RolesGuard implements CanActivate {
       return ROLE_HIERARCHY[current] > ROLE_HIERARCHY[highest] ? current : highest;
     });
 
-
+    await this.auditLogService.logPermissionCheck({
+      userId: user.id,
+      organizationId: user.organizationId,
+      action: `${className}.${handler}`,
+      resourceType: className,
+      granted,
+      requiredRole,
+      userRole: (user.role as Role) || Role.DEVELOPER,
+    });
   }
 }
