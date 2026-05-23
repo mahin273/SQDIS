@@ -36,7 +36,7 @@ export class OnboardingController {
   @Post()
   @Roles('ADMIN', 'OWNER', 'TEAM_LEAD')
   async create(@GetUser() user: any, @Body() dto: CreateOnboardingDto) {
-    return this.onboardingService.create(user.organizationId, dto);
+    return  this.onboardingService.create(user.organizationId, dto);
   }
 
   @Get()

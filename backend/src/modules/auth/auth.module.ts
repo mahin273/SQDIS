@@ -3,7 +3,6 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
-import { ThrottlerModule } from '@nestjs/throttler';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtStrategy } from './strategies/jwt.strategy';
@@ -19,6 +18,7 @@ import { PermissionCacheService } from './services/permission-cache.service';
 import { DataFilterService } from './services/data-filter.service';
 import { PrismaModule } from '../../prisma';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { AuditModule } from '../audit/audit.module';
 import { CacheModule } from '../cache/cache.module';
 
 @Module({
@@ -36,19 +36,8 @@ import { CacheModule } from '../cache/cache.module';
       inject: [ConfigService],
     }),
     ConfigModule,
-    ThrottlerModule.forRoot([
-      {
-        name: 'auth',
-        ttl: 60000,
-        limit: 60,
-      },
-      {
-        name: 'passwordReset',
-        ttl: 3600000,
-        limit: 3,
-      },
-    ]),
     forwardRef(() => OrganizationsModule),
+    forwardRef(() => AuditModule),
     CacheModule,
   ],
   controllers: [AuthController],
@@ -66,6 +55,14 @@ import { CacheModule } from '../cache/cache.module';
     PermissionCacheService,
     DataFilterService,
   ],
-  exports: [AuthService, JwtModule, OrganizationGuard, OrganizationContextService, PermissionCacheService, DataFilterService],
+  exports: [
+    AuthService,
+    JwtModule,
+    OrganizationGuard,
+    OrganizationContextService,
+    PermissionCacheService,
+    DataFilterService,
+    AuditModule,
+  ],
 })
 export class AuthModule {}
