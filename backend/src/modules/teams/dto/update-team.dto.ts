@@ -1,0 +1,29 @@
+import { ApiPropertyOptional } from '@nestjs/swagger';
+import { IsString, IsOptional, MinLength, MaxLength } from 'class-validator';
+
+/**
+ * DTO for updating a team
+ */
+export class UpdateTeamDto {
+  @ApiPropertyOptional({
+    description: 'Team name',
+    example: 'Backend Team',
+    minLength: 1,
+    maxLength: 100,
+  })
+  @IsString()
+  @IsOptional()
+  @MinLength(1, { message: 'Team name must be at least 1 character long' })
+  @MaxLength(100, { message: 'Team name must not exceed 100 characters' })
+  name?: string;
+
+  @ApiPropertyOptional({
+    description: 'Team description',
+    example: 'Responsible for backend services and APIs',
+    maxLength: 500,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(500, { message: 'Description must not exceed 500 characters' })
+  description?: string;
+}
