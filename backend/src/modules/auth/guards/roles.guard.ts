@@ -25,6 +25,10 @@ export const ROLE_HIERARCHY: Record<Role, number> = {
  * Integrates permission caching to improve performance
  * Integrates audit logging for all permission checks
  */
+interface AuthenticatedRequest {
+  user?: RequestUser;
+}
+
 @Injectable()
 export class RolesGuard implements CanActivate {
   constructor(
@@ -46,7 +50,7 @@ export class RolesGuard implements CanActivate {
     }
 
     // Get user from request (attached by JwtAuthGuard)
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const user = request.user as RequestUser;
 
     // If no user or no role, deny access
