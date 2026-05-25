@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { PrismaService } from './prisma/prisma.service.js';
@@ -23,6 +24,18 @@ import { BullMQConfig } from './config/bullmq.config.js';
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ThrottlerModule.forRoot([
+      {
+        name: 'auth',
+        ttl: 60000,
+        limit: 60,
+      },
+      {
+        name: 'passwordReset',
+        ttl: 3600000,
+        limit: 3,
+      },
+    ]),
     BullMQConfig,
     AuthModule,
     OrganizationsModule,

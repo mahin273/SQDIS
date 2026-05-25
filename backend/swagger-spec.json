@@ -1469,6 +1469,208 @@
         ]
       }
     },
+    "/reports": {
+      "post": {
+        "operationId": "ReportsController_createReport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      },
+      "get": {
+        "operationId": "ReportsController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/pdf": {
+      "post": {
+        "operationId": "ReportsController_createPdfReport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePdfReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/csv": {
+      "post": {
+        "operationId": "ReportsController_createCsvReport",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateCsvReportDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/{id}": {
+      "get": {
+        "operationId": "ReportsController_findById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      },
+      "delete": {
+        "operationId": "ReportsController_deleteReport",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/{id}/download": {
+      "get": {
+        "operationId": "ReportsController_downloadReport",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/reports/{id}/retry": {
+      "post": {
+        "operationId": "ReportsController_retryReport",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Reports"
+        ]
+      }
+    },
+    "/leaderboard": {
+      "get": {
+        "operationId": "LeaderboardController_getLeaderboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Leaderboard"
+        ]
+      }
+    },
+    "/leaderboard/teams": {
+      "get": {
+        "operationId": "LeaderboardController_getTeamLeaderboard",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Leaderboard"
+        ]
+      }
+    },
     "/alerts": {
       "get": {
         "operationId": "AlertsController_findAll",
@@ -1951,6 +2153,1456 @@
         ]
       }
     },
+    "/scores/me": {
+      "get": {
+        "operationId": "ScoresController_getMyScore",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Scores"
+        ]
+      }
+    },
+    "/scores/dqs/{developerId}": {
+      "get": {
+        "operationId": "ScoresController_getDQS",
+        "parameters": [
+          {
+            "name": "developerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Scores"
+        ]
+      }
+    },
+    "/scores/dqs/{developerId}/history": {
+      "get": {
+        "operationId": "ScoresController_getDQSHistory",
+        "parameters": [
+          {
+            "name": "developerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Scores"
+        ]
+      }
+    },
+    "/scores/dqs/{developerId}/explain": {
+      "get": {
+        "operationId": "ScoresController_getDQSExplanation",
+        "parameters": [
+          {
+            "name": "developerId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Scores"
+        ]
+      }
+    },
+    "/scores/sqs/{projectId}": {
+      "get": {
+        "operationId": "ScoresController_getSQS",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Scores"
+        ]
+      }
+    },
+    "/scores/sqs/{projectId}/history": {
+      "get": {
+        "operationId": "ScoresController_getSQSHistory",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Scores"
+        ]
+      }
+    },
+    "/scores/sqs/{projectId}/risks": {
+      "get": {
+        "operationId": "ScoresController_getRiskyModules",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Scores"
+        ]
+      }
+    },
+    "/scores/recalculate": {
+      "post": {
+        "operationId": "ScoresController_recalculate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecalculateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Scores"
+        ]
+      }
+    },
+    "/commits": {
+      "get": {
+        "operationId": "CommitsController_findAll",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "description": "Organization ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repositoryId",
+            "required": false,
+            "in": "query",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "developerId",
+            "required": false,
+            "in": "query",
+            "description": "Developer ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "classification",
+            "required": false,
+            "in": "query",
+            "description": "Commit classification",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "BUGFIX",
+                "FEATURE",
+                "REFACTOR",
+                "TEST",
+                "DOCS"
+              ]
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for filtering commits",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for filtering commits",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "search",
+            "required": false,
+            "in": "query",
+            "description": "Search by commit message or author",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "anomalyOnly",
+            "required": false,
+            "in": "query",
+            "description": "Filter anomalous commits only",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "page",
+            "required": false,
+            "in": "query",
+            "description": "Page number",
+            "schema": {
+              "default": 1,
+              "type": "number"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Items per page",
+            "schema": {
+              "default": 20,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated list of commits"
+          },
+          "403": {
+            "description": "User does not have access to the requested organization"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all commits with pagination and filters",
+        "tags": [
+          "Commits"
+        ]
+      }
+    },
+    "/commits/stats": {
+      "get": {
+        "operationId": "CommitsController_getStats",
+        "parameters": [
+          {
+            "name": "organizationId",
+            "required": false,
+            "in": "query",
+            "description": "Organization ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "repositoryId",
+            "required": false,
+            "in": "query",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "developerId",
+            "required": false,
+            "in": "query",
+            "description": "Developer ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for statistics",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for statistics",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commit statistics"
+          },
+          "403": {
+            "description": "User does not have access to the requested organization"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get commit statistics",
+        "tags": [
+          "Commits"
+        ]
+      }
+    },
+    "/commits/heatmap": {
+      "get": {
+        "operationId": "CommitsController_getHeatmap",
+        "parameters": [
+          {
+            "name": "repositoryId",
+            "required": true,
+            "in": "query",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for heatmap data",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for heatmap data",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "required": false,
+            "in": "query",
+            "description": "Maximum number of files to return",
+            "schema": {
+              "default": 50,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Heatmap data with file churn information"
+          },
+          "403": {
+            "description": "User does not have access to the repository"
+          },
+          "404": {
+            "description": "Repository not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get churn heatmap data for a repository",
+        "tags": [
+          "Commits"
+        ]
+      }
+    },
+    "/commits/{id}": {
+      "get": {
+        "operationId": "CommitsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Commit ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Commit details with file changes"
+          },
+          "403": {
+            "description": "User does not have access to this commit"
+          },
+          "404": {
+            "description": "Commit not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get commit by ID",
+        "tags": [
+          "Commits"
+        ]
+      }
+    },
+    "/github/webhook": {
+      "post": {
+        "operationId": "GitHubController_receiveWebhook",
+        "parameters": [
+          {
+            "name": "x-hub-signature-256",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-github-event",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "x-github-delivery",
+            "required": true,
+            "in": "header",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-GitHub-Delivery",
+            "in": "header",
+            "description": "Unique delivery ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-GitHub-Event",
+            "in": "header",
+            "description": "GitHub event type",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "X-Hub-Signature-256",
+            "in": "header",
+            "description": "GitHub HMAC-SHA256 signature",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook processed successfully"
+          },
+          "401": {
+            "description": "Invalid webhook signature"
+          },
+          "404": {
+            "description": "Repository not found or not enabled"
+          },
+          "429": {
+            "description": "Rate limit exceeded"
+          }
+        },
+        "summary": "Receive GitHub webhook events",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/validate": {
+      "post": {
+        "operationId": "GitHubController_validatePAT",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectGithubDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "PAT validation result"
+          },
+          "403": {
+            "description": "Insufficient permissions"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Validate GitHub PAT without connecting",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/connect": {
+      "post": {
+        "operationId": "GitHubController_connect",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConnectGithubDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "GitHub PAT connected successfully"
+          },
+          "400": {
+            "description": "Invalid PAT or missing required scopes"
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Connect GitHub PAT to organization",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/disconnect": {
+      "delete": {
+        "operationId": "GitHubController_disconnect",
+        "parameters": [],
+        "responses": {
+          "204": {
+            "description": "GitHub disconnected successfully"
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          },
+          "404": {
+            "description": "No GitHub connection found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Disconnect GitHub from organization",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/repositories": {
+      "get": {
+        "operationId": "GitHubController_listRepositories",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of repositories"
+          },
+          "403": {
+            "description": "Missing organization context"
+          },
+          "404": {
+            "description": "No GitHub connection found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "List available GitHub repositories",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/repositories/{id}/enable": {
+      "post": {
+        "operationId": "GitHubController_enableRepository",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnableRepoDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Repository tracking enabled"
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          },
+          "404": {
+            "description": "Repository not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enable repository tracking",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/repositories/{id}/disable": {
+      "delete": {
+        "operationId": "GitHubController_disableRepository",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Repository tracking disabled"
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          },
+          "404": {
+            "description": "Repository not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Disable repository tracking",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/repositories/{id}/webhook-secret": {
+      "put": {
+        "operationId": "GitHubController_updateWebhookSecret",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookSecretDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook secret updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "repo-uuid-123"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "my-repo"
+                    },
+                    "fullName": {
+                      "type": "string",
+                      "example": "owner/my-repo"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Webhook secret updated successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid webhook secret format"
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          },
+          "404": {
+            "description": "Repository not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update webhook secret for repository",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/repositories/{id}/webhook-enabled": {
+      "put": {
+        "operationId": "GitHubController_updateWebhookEnabled",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateWebhookEnabledDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook processing status updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "example": "repo-uuid-123"
+                    },
+                    "name": {
+                      "type": "string",
+                      "example": "my-repo"
+                    },
+                    "fullName": {
+                      "type": "string",
+                      "example": "owner/my-repo"
+                    },
+                    "isEnabled": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Webhook processing enabled successfully"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          },
+          "404": {
+            "description": "Repository not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Enable or disable webhook processing for repository",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/status": {
+      "get": {
+        "operationId": "GitHubController_getStatus",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "GitHub connection status"
+          },
+          "403": {
+            "description": "Missing organization context"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get GitHub connection status",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/webhooks/refresh": {
+      "post": {
+        "operationId": "GitHubController_refreshWebhooks",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Webhooks refreshed successfully"
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Refresh webhooks for all enabled repositories",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/webhooks/test": {
+      "post": {
+        "operationId": "GitHubController_testWebSocket",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "Test event emitted"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Test WebSocket by emitting a fake commit event",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/webhooks/test-connectivity": {
+      "post": {
+        "description": "Sends a ping event to the GitHub webhook to test connectivity. The ping event will be delivered to your webhook endpoint.",
+        "operationId": "GitHubController_testWebhookConnectivity",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TestWebhookDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook ping sent successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Webhook ping sent successfully. Check webhook logs for delivery status."
+                    },
+                    "repositoryName": {
+                      "type": "string",
+                      "example": "owner/repo"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Repository does not have a webhook configured"
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          },
+          "404": {
+            "description": "Repository not found or webhook not found on GitHub"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Test webhook connectivity by sending a ping",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/repositories/{id}/backfill": {
+      "post": {
+        "operationId": "GitHubController_triggerBackfill",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Number of days to backfill (default: 90)",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Backfill started successfully"
+          },
+          "403": {
+            "description": "Insufficient permissions or missing organization context"
+          },
+          "404": {
+            "description": "Repository not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Trigger backfill for repository commits",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/repositories/{id}/backfill/status": {
+      "get": {
+        "operationId": "GitHubController_getBackfillStatus",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Repository ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Backfill status"
+          },
+          "403": {
+            "description": "Missing organization context"
+          },
+          "404": {
+            "description": "Repository not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get backfill status for repository",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/webhooks/logs": {
+      "get": {
+        "operationId": "GitHubController_getWebhookLogs",
+        "parameters": [
+          {
+            "name": "repositoryId",
+            "required": false,
+            "in": "query",
+            "description": "Repository ID to filter logs",
+            "schema": {
+              "example": "repo-uuid-123",
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date for date range filter (ISO 8601 format)",
+            "schema": {
+              "example": "2024-01-01T00:00:00Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date for date range filter (ISO 8601 format)",
+            "schema": {
+              "example": "2024-01-31T23:59:59Z",
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "required": false,
+            "in": "query",
+            "description": "Filter by processing status",
+            "schema": {
+              "example": "success",
+              "type": "string",
+              "enum": [
+                "success",
+                "failed"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook logs retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "id": {
+                        "type": "string",
+                        "example": "log-uuid-123"
+                      },
+                      "deliveryId": {
+                        "type": "string",
+                        "example": "delivery-uuid-456"
+                      },
+                      "eventType": {
+                        "type": "string",
+                        "example": "push"
+                      },
+                      "repositoryId": {
+                        "type": "string",
+                        "example": "repo-uuid-789"
+                      },
+                      "status": {
+                        "type": "string",
+                        "enum": [
+                          "PENDING",
+                          "SUCCESS",
+                          "FAILED"
+                        ],
+                        "example": "SUCCESS"
+                      },
+                      "responseTimeMs": {
+                        "type": "number",
+                        "nullable": true,
+                        "example": 150
+                      },
+                      "errorMessage": {
+                        "type": "string",
+                        "nullable": true,
+                        "example": null
+                      },
+                      "payloadSize": {
+                        "type": "number",
+                        "example": 2048
+                      },
+                      "createdAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-01-15T10:30:00Z"
+                      },
+                      "updatedAt": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-01-15T10:30:01Z"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters"
+          },
+          "403": {
+            "description": "Missing organization context or insufficient permissions"
+          },
+          "404": {
+            "description": "Repository not found or not accessible"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Query webhook delivery logs",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/webhooks/health": {
+      "get": {
+        "description": "Returns webhook health metrics including delivery counts, success rates, and average response times for all repositories in the organization",
+        "operationId": "GitHubController_getWebhookHealth",
+        "parameters": [
+          {
+            "name": "period",
+            "required": false,
+            "in": "query",
+            "description": "Time period for health metrics (default: 7d)",
+            "schema": {
+              "enum": [
+                "24h",
+                "7d",
+                "30d"
+              ],
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook health metrics retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "repositoryId": {
+                        "type": "string",
+                        "example": "repo-uuid-123"
+                      },
+                      "repositoryName": {
+                        "type": "string",
+                        "example": "owner/repo"
+                      },
+                      "totalDeliveries": {
+                        "type": "number",
+                        "example": 150
+                      },
+                      "successfulDeliveries": {
+                        "type": "number",
+                        "example": 145
+                      },
+                      "failedDeliveries": {
+                        "type": "number",
+                        "example": 5
+                      },
+                      "successRate": {
+                        "type": "number",
+                        "example": 96.67
+                      },
+                      "averageResponseTimeMs": {
+                        "type": "number",
+                        "example": 125.5
+                      },
+                      "eventTypeCounts": {
+                        "type": "object",
+                        "example": {
+                          "push": 100,
+                          "pull_request": 30,
+                          "issues": 20
+                        }
+                      },
+                      "period": {
+                        "type": "string",
+                        "example": "7d"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameters"
+          },
+          "403": {
+            "description": "Missing organization context or insufficient permissions"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get webhook health metrics for organization",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/webhooks/retry/{deliveryId}": {
+      "post": {
+        "description": "Fetches the original webhook payload from the log and reprocesses it through the webhook pipeline. Useful for recovering from transient failures.",
+        "operationId": "GitHubController_retryWebhook",
+        "parameters": [
+          {
+            "name": "deliveryId",
+            "required": true,
+            "in": "path",
+            "description": "The delivery ID of the webhook to retry (from X-GitHub-Delivery header)",
+            "schema": {
+              "example": "12345678-1234-1234-1234-123456789abc",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook retry processed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "eventType": {
+                      "type": "string",
+                      "example": "push"
+                    },
+                    "message": {
+                      "type": "string",
+                      "example": "Webhook retry processed successfully"
+                    },
+                    "commitsQueued": {
+                      "type": "number",
+                      "example": 3
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Webhook delivery does not have a stored payload or repository not configured"
+          },
+          "403": {
+            "description": "Insufficient permissions or webhook belongs to different organization"
+          },
+          "404": {
+            "description": "Webhook delivery not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Manually retry a failed webhook delivery",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
+    "/github/webhooks/rate-limit": {
+      "put": {
+        "description": "Updates the rate limit configuration for webhook requests. Rate limiting uses a sliding window algorithm to limit requests per minute per repository.",
+        "operationId": "GitHubController_updateRateLimit",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateRateLimitDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Rate limit configuration updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "requestsPerMinute": {
+                      "type": "number",
+                      "example": 100
+                    },
+                    "enabled": {
+                      "type": "boolean",
+                      "example": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid configuration values"
+          },
+          "403": {
+            "description": "Missing organization context or insufficient permissions"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update webhook rate limit configuration for organization",
+        "tags": [
+          "GitHub"
+        ]
+      }
+    },
     "/debt": {
       "get": {
         "operationId": "DebtController_findAll",
@@ -2293,6 +3945,1055 @@
         ]
       }
     },
+    "/onboarding": {
+      "post": {
+        "operationId": "OnboardingController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOnboardingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      },
+      "get": {
+        "operationId": "OnboardingController_findAll",
+        "parameters": [
+          {
+            "name": "status",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "mentorId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/dashboard/stats": {
+      "get": {
+        "operationId": "OnboardingController_getMilestoneTrackingStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/dashboard/at-risk": {
+      "get": {
+        "operationId": "OnboardingController_getAtRiskDevelopers",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/stats": {
+      "get": {
+        "operationId": "OnboardingController_getDashboardStats",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/velocity": {
+      "get": {
+        "operationId": "OnboardingController_getVelocityComparison",
+        "parameters": [
+          {
+            "name": "teamId",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": true,
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/velocity/{userId}": {
+      "get": {
+        "operationId": "OnboardingController_getDeveloperVelocity",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/templates": {
+      "get": {
+        "operationId": "OnboardingController_getTemplates",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      },
+      "post": {
+        "operationId": "OnboardingController_createTemplate",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/templates/{id}": {
+      "get": {
+        "operationId": "OnboardingController_getTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      },
+      "patch": {
+        "operationId": "OnboardingController_updateTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTemplateDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      },
+      "delete": {
+        "operationId": "OnboardingController_deleteTemplate",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/{userId}/progress": {
+      "get": {
+        "operationId": "OnboardingController_getDeveloperProgress",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/{userId}/timeline": {
+      "get": {
+        "operationId": "OnboardingController_getMilestoneTimeline",
+        "parameters": [
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/mentors/available": {
+      "get": {
+        "operationId": "OnboardingController_getAvailableMentors",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/mentors/{mentorId}/capacity": {
+      "get": {
+        "operationId": "OnboardingController_getMentorCapacity",
+        "parameters": [
+          {
+            "name": "mentorId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/{id}": {
+      "get": {
+        "operationId": "OnboardingController_findById",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/{id}/mentor": {
+      "patch": {
+        "operationId": "OnboardingController_assignMentor",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/{id}/extend": {
+      "patch": {
+        "operationId": "OnboardingController_extend",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExtendOnboardingDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/{id}/complete": {
+      "patch": {
+        "operationId": "OnboardingController_complete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/{id}/checklist": {
+      "get": {
+        "operationId": "OnboardingController_getChecklist",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/onboarding/{id}/checklist/{itemId}": {
+      "patch": {
+        "operationId": "OnboardingController_updateChecklistItem",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "itemId",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateChecklistItemDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Onboarding"
+        ]
+      }
+    },
+    "/notifications": {
+      "get": {
+        "operationId": "NotificationsController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/unread-count": {
+      "get": {
+        "operationId": "NotificationsController_getUnreadCount",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/{id}": {
+      "get": {
+        "operationId": "NotificationsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      },
+      "delete": {
+        "operationId": "NotificationsController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/{id}/read": {
+      "patch": {
+        "operationId": "NotificationsController_markAsRead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/notifications/read-all": {
+      "post": {
+        "operationId": "NotificationsController_markAllAsRead",
+        "parameters": [],
+        "responses": {
+          "201": {
+            "description": ""
+          }
+        },
+        "tags": [
+          "Notifications"
+        ]
+      }
+    },
+    "/teams": {
+      "post": {
+        "operationId": "TeamsController_create",
+        "parameters": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateTeamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Team created successfully"
+          },
+          "403": {
+            "description": "User does not have permission to create teams"
+          },
+          "409": {
+            "description": "Team with this name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new team",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "get": {
+        "operationId": "TeamsController_findAll",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "description": "List of teams"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all teams for the current organization",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/teams/leaderboard": {
+      "get": {
+        "operationId": "TeamsController_getLeaderboard",
+        "parameters": [
+          {
+            "name": "projectId",
+            "required": false,
+            "in": "query",
+            "description": "Filter by project ID",
+            "schema": {
+              "example": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Team leaderboard",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamLeaderboardResponseDto"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get team leaderboard ranked by DQS",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/teams/{id}": {
+      "get": {
+        "operationId": "TeamsController_findOne",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Team ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Team details"
+          },
+          "404": {
+            "description": "Team not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get team by ID",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "patch": {
+        "operationId": "TeamsController_update",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Team ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateTeamDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Team updated successfully"
+          },
+          "403": {
+            "description": "User does not have permission to update this team"
+          },
+          "404": {
+            "description": "Team not found"
+          },
+          "409": {
+            "description": "Team with this name already exists"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update team",
+        "tags": [
+          "Teams"
+        ]
+      },
+      "delete": {
+        "operationId": "TeamsController_delete",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Team ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Team deleted successfully"
+          },
+          "403": {
+            "description": "User does not have permission to delete this team"
+          },
+          "404": {
+            "description": "Team not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete team",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/teams/{id}/metrics": {
+      "get": {
+        "operationId": "TeamsController_getMetrics",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Team ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "startDate",
+            "required": false,
+            "in": "query",
+            "description": "Start date (ISO 8601)",
+            "schema": {
+              "example": "2024-01-01",
+              "type": "string"
+            }
+          },
+          {
+            "name": "endDate",
+            "required": false,
+            "in": "query",
+            "description": "End date (ISO 8601)",
+            "schema": {
+              "example": "2024-12-31",
+              "type": "string"
+            }
+          },
+          {
+            "name": "days",
+            "required": false,
+            "in": "query",
+            "description": "Number of days for rolling metrics (default: 30)",
+            "schema": {
+              "default": 30,
+              "example": 30,
+              "type": "number"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Team metrics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TeamMetricsResponseDto"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Team not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get aggregated team metrics",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/teams/{id}/members": {
+      "post": {
+        "operationId": "TeamsController_addMember",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Team ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddMemberDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Member added successfully"
+          },
+          "403": {
+            "description": "User does not have permission to add members"
+          },
+          "404": {
+            "description": "Team or user not found"
+          },
+          "409": {
+            "description": "User is already a member of this team"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Add member to team",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/teams/{id}/members/{userId}": {
+      "delete": {
+        "operationId": "TeamsController_removeMember",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Team ID",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "required": true,
+            "in": "path",
+            "description": "User ID of the member to remove",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Member removed successfully"
+          },
+          "400": {
+            "description": "Cannot remove team lead"
+          },
+          "403": {
+            "description": "User does not have permission to remove members"
+          },
+          "404": {
+            "description": "Team or membership not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Remove member from team",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
+    "/teams/{id}/lead": {
+      "patch": {
+        "operationId": "TeamsController_assignLead",
+        "parameters": [
+          {
+            "name": "id",
+            "required": true,
+            "in": "path",
+            "description": "Team ID",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignLeadDto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Team lead assigned successfully"
+          },
+          "400": {
+            "description": "User must be a team member to be assigned as lead"
+          },
+          "403": {
+            "description": "User does not have permission to assign team lead"
+          },
+          "404": {
+            "description": "Team not found"
+          }
+        },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Assign team lead",
+        "tags": [
+          "Teams"
+        ]
+      }
+    },
     "/metrics": {
       "get": {
         "operationId": "MetricsController_getMetrics",
@@ -2618,6 +5319,18 @@
           "reportType"
         ]
       },
+      "CreateReportDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreatePdfReportDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateCsvReportDto": {
+        "type": "object",
+        "properties": {}
+      },
       "UpdateNotificationPreferencesDto": {
         "type": "object",
         "properties": {
@@ -2790,6 +5503,375 @@
         },
         "required": [
           "resolutionNotes"
+        ]
+      },
+      "RecalculateDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ConnectGithubDto": {
+        "type": "object",
+        "properties": {
+          "pat": {
+            "type": "string",
+            "description": "GitHub Personal Access Token with required scopes (repo, read:org, admin:repo_hook)",
+            "example": "ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+            "minLength": 40
+          }
+        },
+        "required": [
+          "pat"
+        ]
+      },
+      "EnableRepoDto": {
+        "type": "object",
+        "properties": {
+          "githubId": {
+            "type": "number",
+            "description": "GitHub repository ID",
+            "example": 123456789
+          },
+          "name": {
+            "type": "string",
+            "description": "Repository name",
+            "example": "my-repo"
+          },
+          "fullName": {
+            "type": "string",
+            "description": "Full repository name (owner/repo)",
+            "example": "owner/my-repo"
+          },
+          "backfill": {
+            "type": "boolean",
+            "description": "Whether to backfill commits from the last 90 days",
+            "default": true
+          }
+        },
+        "required": [
+          "githubId",
+          "name",
+          "fullName"
+        ]
+      },
+      "UpdateWebhookSecretDto": {
+        "type": "object",
+        "properties": {
+          "webhookSecret": {
+            "type": "string",
+            "description": "New webhook secret for GitHub webhook signature validation",
+            "example": "my-secure-webhook-secret-123",
+            "minLength": 8,
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "webhookSecret"
+        ]
+      },
+      "UpdateWebhookEnabledDto": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether webhook processing should be enabled for this repository",
+            "example": true
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "TestWebhookDto": {
+        "type": "object",
+        "properties": {
+          "repositoryId": {
+            "type": "string",
+            "description": "Repository ID to test webhook connectivity",
+            "example": "repo-uuid-123"
+          }
+        },
+        "required": [
+          "repositoryId"
+        ]
+      },
+      "UpdateRateLimitDto": {
+        "type": "object",
+        "properties": {
+          "requestsPerMinute": {
+            "type": "number",
+            "description": "Maximum number of webhook requests allowed per minute",
+            "example": 100,
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether rate limiting is enabled for the organization",
+            "example": true
+          }
+        },
+        "required": [
+          "requestsPerMinute",
+          "enabled"
+        ]
+      },
+      "CreateOnboardingDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateTemplateDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateTemplateDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "ExtendOnboardingDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "UpdateChecklistItemDto": {
+        "type": "object",
+        "properties": {}
+      },
+      "CreateTeamDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Team name",
+            "example": "Backend Team",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "description": "Team description",
+            "example": "Responsible for backend services and APIs",
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "name"
+        ]
+      },
+      "TeamLeaderboardEntryDto": {
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string",
+            "description": "Team ID"
+          },
+          "name": {
+            "type": "string",
+            "description": "Team name"
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "Number of active team members",
+            "example": 5
+          },
+          "aggregatedDQS": {
+            "type": "object",
+            "description": "Aggregated team DQS (weighted average by commit count)",
+            "example": 75.5,
+            "nullable": true
+          },
+          "dqsTrend": {
+            "type": "object",
+            "description": "DQS trend indicator (positive = improving, negative = declining)",
+            "example": 2.5,
+            "nullable": true
+          },
+          "totalCommits": {
+            "type": "number",
+            "description": "Total commits in the last 30 days",
+            "example": 150
+          },
+          "status": {
+            "type": "string",
+            "description": "Status indicator",
+            "example": "Active",
+            "enum": [
+              "Active",
+              "No Activity"
+            ]
+          },
+          "rank": {
+            "type": "number",
+            "description": "Rank position in leaderboard",
+            "example": 1
+          }
+        },
+        "required": [
+          "teamId",
+          "name",
+          "memberCount",
+          "aggregatedDQS",
+          "dqsTrend",
+          "totalCommits",
+          "status",
+          "rank"
+        ]
+      },
+      "TeamLeaderboardResponseDto": {
+        "type": "object",
+        "properties": {
+          "teams": {
+            "description": "List of teams ranked by DQS",
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TeamLeaderboardEntryDto"
+            }
+          },
+          "totalTeams": {
+            "type": "number",
+            "description": "Total number of teams",
+            "example": 10
+          },
+          "projectFilter": {
+            "type": "string",
+            "description": "Project filter applied",
+            "example": "uuid"
+          }
+        },
+        "required": [
+          "teams",
+          "totalTeams"
+        ]
+      },
+      "TeamMetricsResponseDto": {
+        "type": "object",
+        "properties": {
+          "teamId": {
+            "type": "string",
+            "description": "Team ID"
+          },
+          "teamName": {
+            "type": "string",
+            "description": "Team name"
+          },
+          "aggregatedDQS": {
+            "type": "object",
+            "description": "Aggregated team DQS (weighted average by commit count)",
+            "example": 75.5,
+            "nullable": true
+          },
+          "totalCommits": {
+            "type": "number",
+            "description": "Total number of commits by team members",
+            "example": 150
+          },
+          "bugfixCommits": {
+            "type": "number",
+            "description": "Number of bugfix commits",
+            "example": 25
+          },
+          "featureCommits": {
+            "type": "number",
+            "description": "Number of feature commits",
+            "example": 80
+          },
+          "refactorCommits": {
+            "type": "number",
+            "description": "Number of refactor commits",
+            "example": 30
+          },
+          "testCommits": {
+            "type": "number",
+            "description": "Number of test commits",
+            "example": 10
+          },
+          "docsCommits": {
+            "type": "number",
+            "description": "Number of docs commits",
+            "example": 5
+          },
+          "averageCoverage": {
+            "type": "object",
+            "description": "Average code coverage percentage",
+            "example": 78.5,
+            "nullable": true
+          },
+          "memberCount": {
+            "type": "number",
+            "description": "Number of active team members",
+            "example": 5
+          },
+          "activeMemberCount": {
+            "type": "number",
+            "description": "Number of members with commits in the period",
+            "example": 4
+          },
+          "memberMetrics": {
+            "type": "array",
+            "description": "Individual member metrics"
+          },
+          "dateRange": {
+            "type": "object",
+            "description": "Date range for the metrics"
+          }
+        },
+        "required": [
+          "teamId",
+          "teamName",
+          "aggregatedDQS",
+          "totalCommits",
+          "bugfixCommits",
+          "featureCommits",
+          "refactorCommits",
+          "testCommits",
+          "docsCommits",
+          "averageCoverage",
+          "memberCount",
+          "activeMemberCount",
+          "memberMetrics",
+          "dateRange"
+        ]
+      },
+      "UpdateTeamDto": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Team name",
+            "example": "Backend Team",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "description": {
+            "type": "string",
+            "description": "Team description",
+            "example": "Responsible for backend services and APIs",
+            "maxLength": 500
+          }
+        }
+      },
+      "AddMemberDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "User ID of the member to add",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          }
+        },
+        "required": [
+          "userId"
+        ]
+      },
+      "AssignLeadDto": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "User ID of the member to assign as team lead",
+            "example": "123e4567-e89b-12d3-a456-426614174000"
+          }
+        },
+        "required": [
+          "userId"
         ]
       }
     }
