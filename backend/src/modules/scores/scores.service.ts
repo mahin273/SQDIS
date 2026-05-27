@@ -773,6 +773,7 @@ export class ScoresService {
         churnRatio: true,
         linesAdded: true,
         linesDeleted: true,
+        repositoryId: true,
       },
     });
 
@@ -792,11 +793,37 @@ export class ScoresService {
       thirtyDaysAgo,
     );
 
+    // Calculate developer's average coverage in the last 30 days
+    const committedRepoIds = [
+      ...new Set(commits.map((c) => c.repositoryId).filter((id): id is string => !!id)),
+    ];
+    let avgCoverage = 0;
+    if (committedRepoIds.length > 0) {
+      const coverages = await Promise.all(
+        committedRepoIds.map(async (repositoryId) => {
+          return this.prisma.coverageReport.findFirst({
+            where: {
+              repositoryId,
+              status: 'COMPLETED',
+            },
+            orderBy: { createdAt: 'desc' },
+            select: { coveragePercentage: true },
+          });
+        })
+      );
+      const validCoverages = coverages.filter((c) => c !== null);
+      if (validCoverages.length > 0) {
+        avgCoverage =
+          validCoverages.reduce((sum, c) => sum + (c.coveragePercentage || 0), 0) /
+          validCoverages.length;
+      }
+    }
+
     return {
       commit_count_30d: commitCount,
       bug_fix_ratio: bugFixRatio,
       code_churn: avgChurn,
-      coverage_avg: 0, // Will be populated when coverage module is implemented
+      coverage_avg: avgCoverage,
       review_count: reviewMetrics.reviewCount,
       review_turnaround_avg: reviewMetrics.avgTurnaroundHours,
     };
@@ -913,12 +940,16 @@ export class ScoresService {
     // Calculate average DQS of developers working on this project
     let avgDqs = 50; // Default
     if (uniqueDeveloperIds.length > 0) {
-      const developerScores = await this.prisma.dQSScore.findMany({
-        where: { developerId: { in: uniqueDeveloperIds } },
-        orderBy: { calculatedAt: 'desc' },
-        distinct: ['developerId'],
-        select: { score: true },
-      });
+      const scores = await Promise.all(
+        uniqueDeveloperIds.map(async (developerId) => {
+          return this.prisma.dQSScore.findFirst({
+            where: { developerId },
+            orderBy: { calculatedAt: 'desc' },
+            select: { score: true },
+          });
+        })
+      );
+      const developerScores = scores.filter((s) => s !== null);
 
       if (developerScores.length > 0) {
         avgDqs = developerScores.reduce((sum, s) => sum + s.score, 0) / developerScores.length;
@@ -938,15 +969,19 @@ export class ScoresService {
     });
 
     // Get average coverage from latest coverage reports
-    const latestCoverages = await this.prisma.coverageReport.findMany({
-      where: {
-        repositoryId: { in: repositoryIds },
-        status: 'COMPLETED',
-      },
-      orderBy: { createdAt: 'desc' },
-      distinct: ['repositoryId'],
-      select: { coveragePercentage: true },
-    });
+    const coverages = await Promise.all(
+      repositoryIds.map(async (repositoryId) => {
+        return this.prisma.coverageReport.findFirst({
+          where: {
+            repositoryId,
+            status: 'COMPLETED',
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { coveragePercentage: true },
+        });
+      })
+    );
+    const latestCoverages = coverages.filter((c) => c !== null);
 
     let avgCoverage = 0;
     if (latestCoverages.length > 0) {

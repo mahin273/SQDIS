@@ -121,17 +121,23 @@ export class JaCoCoParser implements CoverageParser {
     }
 
     // Extract LINE counter
-    const lineCounterMatch = block.match(
-      /<counter\s+type="LINE"\s+missed="(\d+)"\s+covered="(\d+)"\s*\/?>/i,
-    );
+    const lineCounterTagMatch = block.match(/<counter\s+[^>]*type="LINE"[^>]*\/?>/i);
 
-    if (!lineCounterMatch) {
+    if (!lineCounterTagMatch) {
       // No LINE counter found, skip this class
       return null;
     }
 
-    const linesMissed = parseInt(lineCounterMatch[1], 10) || 0;
-    const linesCovered = parseInt(lineCounterMatch[2], 10) || 0;
+    const tagContent = lineCounterTagMatch[0];
+    const missedMatch = tagContent.match(/missed="(\d+)"/i);
+    const coveredMatch = tagContent.match(/covered="(\d+)"/i);
+
+    if (!missedMatch || !coveredMatch) {
+      return null;
+    }
+
+    const linesMissed = parseInt(missedMatch[1], 10) || 0;
+    const linesCovered = parseInt(coveredMatch[1], 10) || 0;
     const linesTotal = linesMissed + linesCovered;
 
     if (linesTotal === 0) {

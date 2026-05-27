@@ -421,8 +421,50 @@ export class SprintsService {
     // Calculate average DQS for team members
     const avgDQS = await this.calculateAverageDQS(teamMemberIds);
 
-    // Coverage is not yet implemented, default to 0
-    const coveragePct = 0;
+    // Calculate sprint coverage based on team projects
+    const assignments = await this.prisma.teamProjectAssignment.findMany({
+      where: {
+        teamId: sprint.teamId,
+      },
+      select: { projectId: true },
+    });
+
+    const projectIds = assignments.map((a) => a.projectId);
+
+    let coveragePct = 0;
+    if (projectIds.length > 0) {
+      const projectRepos = await this.prisma.projectRepository.findMany({
+        where: { projectId: { in: projectIds } },
+        select: { repositoryId: true },
+      });
+
+      const repositoryIds = [...new Set(projectRepos.map((r) => r.repositoryId))];
+
+      if (repositoryIds.length > 0) {
+        const latestReports = await Promise.all(
+          repositoryIds.map((repositoryId) =>
+            this.prisma.coverageReport.findFirst({
+              where: {
+                repositoryId,
+                status: 'COMPLETED',
+                createdAt: { lte: sprint.endDate },
+              },
+              orderBy: { createdAt: 'desc' },
+              select: { coveragePercentage: true },
+            }),
+          ),
+        );
+
+        const validReports = latestReports.filter(
+          (r) => r !== null && r.coveragePercentage !== null,
+        );
+
+        if (validReports.length > 0) {
+          const sumCoverage = validReports.reduce((sum, r) => sum + (r?.coveragePercentage ?? 0), 0);
+          coveragePct = Math.round((sumCoverage / validReports.length) * 100) / 100;
+        }
+      }
+    }
 
     return {
       totalCommits: commits.length,
@@ -1285,10 +1327,8 @@ export class SprintsService {
     if (!sprint) return [];
 
     const report = sprint.reports[0];
-    const teamMemberIds = sprint.team.memberships.map((m) => m.userId);
 
-    return Promise.all(
-      goals.map(async (goal) => {
+    return goals.map((goal) => {
         let currentValue = goal.currentValue;
 
         // Calculate current value based on metric type
@@ -1328,8 +1368,7 @@ export class SprintsService {
           progress,
           status,
         };
-      }),
-    );
+      });
   }
 
   /**

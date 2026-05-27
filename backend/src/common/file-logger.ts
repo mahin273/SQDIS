@@ -35,7 +35,18 @@ export class FileLogger extends ConsoleLogger {
   private writeToFile(level: string, message: any, context?: string) {
     const timestamp = new Date().toISOString();
     const formattedContext = context ? ` [${context}]` : '';
-    const cleanMessage = typeof message === 'object' ? JSON.stringify(message) : message;
+    
+    let cleanMessage = message;
+    if (message instanceof Error) {
+      cleanMessage = `${message.message}\n${message.stack || ''}`;
+    } else if (typeof message === 'object' && message !== null) {
+      try {
+        cleanMessage = JSON.stringify(message);
+      } catch (err) {
+        cleanMessage = String(message);
+      }
+    }
+    
     const logLine = `${timestamp} [${level.toUpperCase()}]${formattedContext} ${cleanMessage}\n`;
     this.getLogStream().write(logLine);
   }
@@ -49,7 +60,7 @@ export class FileLogger extends ConsoleLogger {
     super.error(message, stack, context);
     // Handle overload error(message, context) where stack is omitted
     const actualContext = context || (typeof stack === 'string' && !stack.includes('\n') ? stack : undefined);
-    const actualStack = stack && stack.includes('\n') ? stack : undefined;
+    const actualStack = typeof stack === 'string' && stack.includes('\n') ? stack : undefined;
 
     this.writeToFile('error', message, actualContext);
     if (actualStack) {

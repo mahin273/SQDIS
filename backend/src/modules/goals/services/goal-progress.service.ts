@@ -200,10 +200,11 @@ export class GoalProgressService {
         // For "less than" goals, progress is inverse
         if (currentValue >= targetValue) return 0;
         return ((targetValue - currentValue) / targetValue) * 100;
-      case ComparisonOp.EQ:
+      case ComparisonOp.EQ: {
         // For "equal" goals, progress is how close we are
         const diff = Math.abs(currentValue - targetValue);
         return Math.max(0, 100 - (diff / targetValue) * 100);
+      }
       default:
         return (currentValue / targetValue) * 100;
     }
@@ -453,11 +454,15 @@ export class GoalProgressService {
       if (teamMembers.length === 0) return 0;
 
       const memberIds = teamMembers.map((m) => m.userId);
-      const latestScores = await this.prisma.dQSScore.findMany({
-        where: { developerId: { in: memberIds } },
-        orderBy: { calculatedAt: 'desc' },
-        distinct: ['developerId'],
-      });
+      const scores = await Promise.all(
+        memberIds.map(async (developerId) => {
+          return this.prisma.dQSScore.findFirst({
+            where: { developerId },
+            orderBy: { calculatedAt: 'desc' },
+          });
+        })
+      );
+      const latestScores = scores.filter((s) => s !== null);
 
       if (latestScores.length === 0) return 0;
 
@@ -481,9 +486,46 @@ export class GoalProgressService {
     projectId: string | null,
     organizationId: string,
   ): Promise<number> {
-    // Coverage module not yet implemented, return 0
-    // This will be updated when coverage module is available
-    return 0;
+    if (!projectId) {
+      return 0;
+    }
+
+    const projectRepos = await this.prisma.projectRepository.findMany({
+      where: { projectId },
+      select: { repositoryId: true },
+    });
+
+    if (projectRepos.length === 0) {
+      return 0;
+    }
+
+    const repositoryIds = projectRepos.map((r) => r.repositoryId);
+
+    const latestReports = await Promise.all(
+      repositoryIds.map((repositoryId) =>
+        this.prisma.coverageReport.findFirst({
+          where: {
+            repositoryId,
+            status: 'COMPLETED',
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { coveragePercentage: true },
+        }),
+      ),
+    );
+
+    const validReports = latestReports.filter(
+      (r) => r !== null && r.coveragePercentage !== null,
+    );
+
+    if (validReports.length === 0) {
+      return 0;
+    }
+
+    const sumCoverage = validReports.reduce((sum, r) => sum + (r?.coveragePercentage ?? 0), 0);
+    const avgCoverage = sumCoverage / validReports.length;
+
+    return Math.round(avgCoverage * 100) / 100;
   }
 
   /**

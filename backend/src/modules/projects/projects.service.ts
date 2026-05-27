@@ -131,12 +131,16 @@ export class ProjectsService {
       .sort((a, b) => a.date.localeCompare(b.date));
 
     // Average coverage
-    const latestCoverages = await this.prisma.coverageReport.findMany({
-      where: { repositoryId: { in: repoIds }, status: 'COMPLETED' },
-      orderBy: { createdAt: 'desc' },
-      distinct: ['repositoryId'],
-      select: { coveragePercentage: true },
-    });
+    const coverages = await Promise.all(
+      repoIds.map(async (repositoryId) => {
+        return this.prisma.coverageReport.findFirst({
+          where: { repositoryId, status: 'COMPLETED' },
+          orderBy: { createdAt: 'desc' },
+          select: { coveragePercentage: true },
+        });
+      })
+    );
+    const latestCoverages = coverages.filter((c) => c !== null);
 
     let avgCoverage = 0;
     if (latestCoverages.length > 0) {
@@ -328,7 +332,6 @@ export class ProjectsService {
     let totalCommits = 0;
     let bugsFixes = 0;
     let totalCoverage = 0;
-    let coverageCount = 0;
 
     if (repoIds.length > 0) {
       // Total commits
@@ -346,18 +349,20 @@ export class ProjectsService {
 
       // Average coverage (fetch latest report for each repo)
       // This is a bit expensive if many repos, but for MVP it's okay.
-      // Optimized way: select distinct on repositoryId order by createdAt desc
-      const latestCoverages = await this.prisma.coverageReport.findMany({
-        where: { repositoryId: { in: repoIds } },
-        orderBy: { createdAt: 'desc' },
-        distinct: ['repositoryId'],
-        select: { coveragePercentage: true },
-      });
+      const coverages = await Promise.all(
+        repoIds.map(async (repositoryId) => {
+          return this.prisma.coverageReport.findFirst({
+            where: { repositoryId, status: 'COMPLETED' },
+            orderBy: { createdAt: 'desc' },
+            select: { coveragePercentage: true },
+          });
+        })
+      );
+      const latestCoverages = coverages.filter((c) => c !== null);
 
       if (latestCoverages.length > 0) {
         const sum = latestCoverages.reduce((acc, curr) => acc + (curr.coveragePercentage || 0), 0);
         totalCoverage = sum / latestCoverages.length;
-        coverageCount = latestCoverages.length;
       }
     }
 

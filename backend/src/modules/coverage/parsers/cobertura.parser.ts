@@ -47,19 +47,18 @@ export class CoberturaParser implements CoverageParser {
     let totalLinesCovered = 0;
 
     // Parse coverage element attributes for overall stats
-    const coverageMatch = content.match(
-      /<coverage[^>]*\s+lines-covered="(\d+)"[^>]*\s+lines-valid="(\d+)"/i,
-    );
-    const coverageMatchAlt = content.match(
-      /<coverage[^>]*\s+lines-valid="(\d+)"[^>]*\s+lines-covered="(\d+)"/i,
-    );
+    const coverageTagMatch = content.match(/<coverage[^>]*>/i);
 
-    if (coverageMatch) {
-      totalLinesCovered = parseInt(coverageMatch[1], 10) || 0;
-      totalLinesValid = parseInt(coverageMatch[2], 10) || 0;
-    } else if (coverageMatchAlt) {
-      totalLinesValid = parseInt(coverageMatchAlt[1], 10) || 0;
-      totalLinesCovered = parseInt(coverageMatchAlt[2], 10) || 0;
+    if (coverageTagMatch) {
+      const tagContent = coverageTagMatch[0];
+      const coveredMatch = tagContent.match(/lines-covered="(\d+)"/i);
+      const validMatch = tagContent.match(/lines-valid="(\d+)"/i);
+      if (coveredMatch) {
+        totalLinesCovered = parseInt(coveredMatch[1], 10) || 0;
+      }
+      if (validMatch) {
+        totalLinesValid = parseInt(validMatch[1], 10) || 0;
+      }
     }
 
     // Parse individual class/file coverage
