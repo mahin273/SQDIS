@@ -27,10 +27,13 @@ import {
   UpdateGoalTemplateDto,
   GoalHistoryFiltersDto,
 } from './dto';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 
 /**
  * Controller for quality goals and OKRs management
  */
+@ApiTags('Goals')
+@ApiBearerAuth()
 @Controller('goals')
 @UseGuards(JwtAuthGuard, OrganizationGuard)
 export class GoalsController {
@@ -45,41 +48,42 @@ export class GoalsController {
 
   /**
    * Get goals dashboard with all active goals, progress bars, and at-risk highlighting
-   * GET /api/goals/dashboard
-   * display all active goals
-   * include progress bars for each goal
-   * support team, status, and metric filters
-   * highlight at-risk goals
    */
   @Get('dashboard')
+  @ApiOperation({ summary: 'Get goals dashboard data' })
+  @ApiResponse({ status: 200, description: 'Dashboard stats and active goals list retrieved successfully.' })
   async getDashboard(@Request() req: any, @Query() filters: GoalsDashboardFiltersDto) {
     return this.goalsService.getDashboard(req.user.organizationId, filters);
   }
 
   /**
    * Get all goals with filters
-   * GET /api/goals
    */
   @Get()
+  @ApiOperation({ summary: 'Get all goals with filters' })
+  @ApiResponse({ status: 200, description: 'Goals list retrieved successfully.' })
   async findAll(@Request() req: any, @Query() filters: GoalFiltersDto) {
     return this.goalsService.findAll(req.user.organizationId, filters);
   }
 
   /**
    * Get goal history
-   * GET /api/goals/history
    */
   @Get('history')
+  @ApiOperation({ summary: 'Get history of goals' })
+  @ApiResponse({ status: 200, description: 'Goals history retrieved successfully.' })
   async getHistory(@Request() req: any, @Query() filters: GoalFiltersDto) {
     return this.goalsService.getHistory(req.user.organizationId, filters);
   }
 
   /**
    * Get achievement history for the current user
-   * GET /api/goals/achievements
-   * show all past achievements
    */
   @Get('achievements')
+  @ApiOperation({ summary: 'Get user goal achievements' })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Achievement history retrieved successfully.' })
   async getAchievements(
     @Request() req: any,
     @Query('page') page?: number,
@@ -97,36 +101,42 @@ export class GoalsController {
 
   /**
    * Get all goal templates
-   * GET /api/goals/templates
    */
   @Get('templates')
+  @ApiOperation({ summary: 'Get all goal templates' })
+  @ApiResponse({ status: 200, description: 'Goal templates list retrieved successfully.' })
   async getTemplates(@Request() req: any) {
     return this.templatesService.findAll(req.user.organizationId);
   }
 
   /**
    * Create a goal template
-   * POST /api/goals/templates
    */
   @Post('templates')
+  @ApiOperation({ summary: 'Create a new goal template' })
+  @ApiResponse({ status: 201, description: 'Goal template created successfully.' })
   async createTemplate(@Request() req: any, @Body() dto: CreateGoalTemplateDto) {
     return this.templatesService.create(req.user.organizationId, dto);
   }
 
   /**
    * Get a specific goal template
-   * GET /api/goals/templates/:id
    */
   @Get('templates/:id')
+  @ApiOperation({ summary: 'Get goal template details by ID' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({ status: 200, description: 'Template details retrieved.' })
   async getTemplate(@Request() req: any, @Param('id') id: string) {
     return this.templatesService.findById(id, req.user.organizationId);
   }
 
   /**
    * Update a goal template
-   * PATCH /api/goals/templates/:id
    */
   @Patch('templates/:id')
+  @ApiOperation({ summary: 'Update goal template details by ID' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({ status: 200, description: 'Template updated successfully.' })
   async updateTemplate(
     @Request() req: any,
     @Param('id') id: string,
@@ -137,9 +147,11 @@ export class GoalsController {
 
   /**
    * Delete a goal template
-   * DELETE /api/goals/templates/:id
    */
   @Delete('templates/:id')
+  @ApiOperation({ summary: 'Delete a goal template' })
+  @ApiParam({ name: 'id', description: 'Template ID' })
+  @ApiResponse({ status: 200, description: 'Template deleted successfully.' })
   async deleteTemplate(@Request() req: any, @Param('id') id: string) {
     return this.templatesService.delete(id, req.user.organizationId);
   }
@@ -148,9 +160,10 @@ export class GoalsController {
 
   /**
    * Get goal snapshots (historical data)
-   * GET /api/goals/snapshots
    */
   @Get('snapshots')
+  @ApiOperation({ summary: 'Get historical goal snapshots' })
+  @ApiResponse({ status: 200, description: 'Snapshots list retrieved.' })
   async getSnapshots(@Request() req: any, @Query() filters: GoalHistoryFiltersDto) {
     return this.historyService.getGoalHistory(req.user.organizationId, {
       teamId: filters.teamId,
@@ -166,9 +179,12 @@ export class GoalsController {
 
   /**
    * Get achievement rate over time
-   * GET /api/goals/achievement-rate
    */
   @Get('achievement-rate')
+  @ApiOperation({ summary: 'Get goal achievement rate over time' })
+  @ApiQuery({ name: 'teamId', required: false })
+  @ApiQuery({ name: 'periodMonths', required: false, type: Number })
+  @ApiResponse({ status: 200, description: 'Achievement rate analytics retrieved.' })
   async getAchievementRate(
     @Request() req: any,
     @Query('teamId') teamId?: string,
@@ -183,10 +199,12 @@ export class GoalsController {
 
   /**
    * Get team achievement comparison
-   * GET /api/goals/team-comparison
-   * show team-by-team goal performance
    */
   @Get('team-comparison')
+  @ApiOperation({ summary: 'Get team achievement comparison data' })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  @ApiResponse({ status: 200, description: 'Team comparison statistics retrieved.' })
   async getTeamComparison(
     @Request() req: any,
     @Query('startDate') startDate?: string,
@@ -201,10 +219,14 @@ export class GoalsController {
 
   /**
    * Get goal history for reports
-   * GET /api/goals/reports/history
-   * include goal history in reports
    */
   @Get('reports/history')
+  @ApiOperation({ summary: 'Get goal history structured for reports' })
+  @ApiQuery({ name: 'teamId', required: false })
+  @ApiQuery({ name: 'startDate', required: false })
+  @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'includeTeamComparison', required: false })
+  @ApiResponse({ status: 200, description: 'Goal history report data retrieved.' })
   async getHistoryForReports(
     @Request() req: any,
     @Query('teamId') teamId?: string,
@@ -222,10 +244,11 @@ export class GoalsController {
 
   /**
    * Manually trigger snapshot for a goal
-   * POST /api/goals/:id/snapshot
-   * snapshot final state
    */
   @Post(':id/snapshot')
+  @ApiOperation({ summary: 'Trigger a snapshot record for a goal' })
+  @ApiParam({ name: 'id', description: 'Goal ID' })
+  @ApiResponse({ status: 201, description: 'Snapshot successfully created.' })
   async snapshotGoal(@Request() req: any, @Param('id') id: string) {
     // Verify goal belongs to organization
     await this.goalsService.findById(id, req.user.organizationId);
@@ -236,56 +259,65 @@ export class GoalsController {
 
   /**
    * Create a new goal
-   * POST /api/goals
    */
   @Post()
+  @ApiOperation({ summary: 'Create a new quality goal / OKR' })
+  @ApiResponse({ status: 201, description: 'Goal successfully created.' })
   async create(@Request() req: any, @Body() dto: CreateGoalDto) {
     return this.goalsService.create(req.user.organizationId, req.user.id, dto);
   }
 
   /**
    * Get a specific goal
-   * GET /api/goals/:id
    */
   @Get(':id')
+  @ApiOperation({ summary: 'Get goal details by ID' })
+  @ApiParam({ name: 'id', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'Goal details retrieved.' })
   async findById(@Request() req: any, @Param('id') id: string) {
     return this.goalsService.findById(id, req.user.organizationId);
   }
 
   /**
    * Update a goal
-   * PATCH /api/goals/:id
    */
   @Patch(':id')
+  @ApiOperation({ summary: 'Update goal details by ID' })
+  @ApiParam({ name: 'id', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'Goal updated successfully.' })
   async update(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateGoalDto) {
     return this.goalsService.update(id, req.user.organizationId, dto);
   }
 
   /**
    * Delete a goal
-   * DELETE /api/goals/:id
    */
   @Delete(':id')
+  @ApiOperation({ summary: 'Delete a goal' })
+  @ApiParam({ name: 'id', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'Goal deleted successfully.' })
   async delete(@Request() req: any, @Param('id') id: string) {
     return this.goalsService.delete(id, req.user.organizationId);
   }
 
   /**
    * Get goal progress
-   * GET /api/goals/:id/progress
    */
   @Get(':id/progress')
+  @ApiOperation({ summary: 'Get real-time goal progress' })
+  @ApiParam({ name: 'id', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'Current progress metrics retrieved.' })
   async getProgress(@Request() req: any, @Param('id') id: string) {
     return this.goalsService.getProgress(id, req.user.organizationId);
   }
 
   /**
    * Get OKR summary for a goal
-   * GET /api/goals/:id/okr-summary
-   * Returns a summary of the OKR including overall progress
-   * (weighted average) and individual key result progress.
    */
   @Get(':id/okr-summary')
+  @ApiOperation({ summary: 'Get OKR summary (weighted progress & key results)' })
+  @ApiParam({ name: 'id', description: 'Goal ID' })
+  @ApiResponse({ status: 200, description: 'OKR summary retrieved.' })
   async getOKRSummary(@Request() req: any, @Param('id') id: string) {
     return this.goalsService.getOKRSummary(id, req.user.organizationId);
   }
@@ -294,9 +326,11 @@ export class GoalsController {
 
   /**
    * Add a key result to a goal
-   * POST /api/goals/:id/key-results
    */
   @Post(':id/key-results')
+  @ApiOperation({ summary: 'Add a new key result to a goal' })
+  @ApiParam({ name: 'id', description: 'Goal ID' })
+  @ApiResponse({ status: 201, description: 'Key result successfully added.' })
   async addKeyResult(
     @Request() req: any,
     @Param('id') id: string,
@@ -307,9 +341,12 @@ export class GoalsController {
 
   /**
    * Update a key result
-   * PATCH /api/goals/:goalId/key-results/:keyResultId
    */
   @Patch(':goalId/key-results/:keyResultId')
+  @ApiOperation({ summary: 'Update a key result detail' })
+  @ApiParam({ name: 'goalId', description: 'Goal ID' })
+  @ApiParam({ name: 'keyResultId', description: 'Key Result ID' })
+  @ApiResponse({ status: 200, description: 'Key result updated successfully.' })
   async updateKeyResult(
     @Request() req: any,
     @Param('goalId') goalId: string,
@@ -321,9 +358,12 @@ export class GoalsController {
 
   /**
    * Delete a key result
-   * DELETE /api/goals/:goalId/key-results/:keyResultId
    */
   @Delete(':goalId/key-results/:keyResultId')
+  @ApiOperation({ summary: 'Delete a key result from a goal' })
+  @ApiParam({ name: 'goalId', description: 'Goal ID' })
+  @ApiParam({ name: 'keyResultId', description: 'Key Result ID' })
+  @ApiResponse({ status: 200, description: 'Key result deleted successfully.' })
   async deleteKeyResult(
     @Request() req: any,
     @Param('goalId') goalId: string,

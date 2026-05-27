@@ -14,6 +14,21 @@ import { DebtModule } from './modules/debt/debt.module.js';
 import { MetricsModule } from './modules/metrics/metrics.module.js';
 import { WebSocketModule } from './modules/websocket/websocket.module.js';
 import { BullMQConfig } from './config/bullmq.config.js';
+import { CommitsModule } from './modules/commits/commits.module.js';
+import { CoverageModule } from './modules/coverage/coverage.module.js';
+import { DashboardModule } from './modules/dashboard/dashboard.module.js';
+import { EmailAliasesModule } from './modules/email-aliases/email-aliases.module.js';
+import { GitHubModule } from './modules/github/github.module.js';
+import { GoalsModule } from './modules/goals/goals.module.js';
+import { NotificationsModule } from './modules/notifications/notifications.module.js';
+import { OnboardingModule } from './modules/onboarding/onboarding.module.js';
+import { ProjectsModule } from './modules/projects/projects.module.js';
+import { ReleasesModule } from './modules/releases/releases.module.js';
+import { ReportsModule } from './modules/reports/reports.module.js';
+import { ReviewsModule } from './modules/reviews/reviews.module.js';
+import { ScoresModule } from './modules/scores/scores.module.js';
+import { SprintsModule } from './modules/sprints/sprints.module.js';
+import { TeamsModule } from './modules/teams/teams.module.js';
 
 /**
  * Root Application Module
@@ -46,6 +61,21 @@ import { BullMQConfig } from './config/bullmq.config.js';
     DebtModule,
     MetricsModule,
     WebSocketModule,
+    CommitsModule,
+    CoverageModule,
+    DashboardModule,
+    EmailAliasesModule,
+    GitHubModule,
+    GoalsModule,
+    NotificationsModule,
+    OnboardingModule,
+    ProjectsModule,
+    ReleasesModule,
+    ReportsModule,
+    ReviewsModule,
+    ScoresModule,
+    SprintsModule,
+    TeamsModule,
   ],
   controllers: [AppController],
   providers: [AppService, PrismaService],

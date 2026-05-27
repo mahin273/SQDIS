@@ -7,9 +7,17 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Hello message retrieved successfully.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           }
         },
+        "summary": "Get hello message",
         "tags": [
           "App"
         ]
@@ -1485,9 +1493,15 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Report generation request received."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new report (PDF or CSV)",
         "tags": [
           "Reports"
         ]
@@ -1497,9 +1511,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Reports list retrieved successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all reports with filters",
         "tags": [
           "Reports"
         ]
@@ -1521,9 +1541,15 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "PDF report generation request received."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a PDF report asynchronously",
         "tags": [
           "Reports"
         ]
@@ -1545,9 +1571,15 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "CSV report generation request received."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a CSV report asynchronously",
         "tags": [
           "Reports"
         ]
@@ -1561,6 +1593,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Report ID",
             "schema": {
               "type": "string"
             }
@@ -1568,9 +1601,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Report details retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get report details by ID",
         "tags": [
           "Reports"
         ]
@@ -1582,6 +1621,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Report ID",
             "schema": {
               "type": "string"
             }
@@ -1589,9 +1629,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Report deleted successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a report",
         "tags": [
           "Reports"
         ]
@@ -1605,6 +1651,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Report ID",
             "schema": {
               "type": "string"
             }
@@ -1612,9 +1659,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "File stream returned."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Download generated report file by ID",
         "tags": [
           "Reports"
         ]
@@ -1628,6 +1681,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Report ID",
             "schema": {
               "type": "string"
             }
@@ -1635,9 +1689,15 @@
         ],
         "responses": {
           "201": {
-            "description": ""
+            "description": "Retrying report generation."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Retry generating a failed report",
         "tags": [
           "Reports"
         ]
@@ -1649,9 +1709,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Developer leaderboard retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get developer leaderboard ranked by DQS",
         "tags": [
           "Leaderboard"
         ]
@@ -1663,9 +1729,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Team leaderboard retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get team leaderboard ranked by average DQS",
         "tags": [
           "Leaderboard"
         ]
@@ -2159,9 +2231,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "User DQS score retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get current user's DQS score detail",
         "tags": [
           "Scores"
         ]
@@ -2175,6 +2253,7 @@
             "name": "developerId",
             "required": true,
             "in": "path",
+            "description": "Developer User ID",
             "schema": {
               "type": "string"
             }
@@ -2182,9 +2261,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Developer DQS score details retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a specific developer DQS score by ID",
         "tags": [
           "Scores"
         ]
@@ -2198,6 +2283,7 @@
             "name": "developerId",
             "required": true,
             "in": "path",
+            "description": "Developer User ID",
             "schema": {
               "type": "string"
             }
@@ -2205,9 +2291,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "DQS score history list retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get DQS score history for a developer",
         "tags": [
           "Scores"
         ]
@@ -2221,6 +2313,7 @@
             "name": "developerId",
             "required": true,
             "in": "path",
+            "description": "Developer User ID",
             "schema": {
               "type": "string"
             }
@@ -2228,9 +2321,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "SHAP explanation details retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get SHAP explanations for developer DQS score",
         "tags": [
           "Scores"
         ]
@@ -2244,6 +2343,7 @@
             "name": "projectId",
             "required": true,
             "in": "path",
+            "description": "Project ID",
             "schema": {
               "type": "string"
             }
@@ -2251,9 +2351,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Project SQS details retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get SQS score for a project",
         "tags": [
           "Scores"
         ]
@@ -2267,6 +2373,7 @@
             "name": "projectId",
             "required": true,
             "in": "path",
+            "description": "Project ID",
             "schema": {
               "type": "string"
             }
@@ -2274,9 +2381,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Project SQS history list retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get SQS score history for a project",
         "tags": [
           "Scores"
         ]
@@ -2290,6 +2403,7 @@
             "name": "projectId",
             "required": true,
             "in": "path",
+            "description": "Project ID",
             "schema": {
               "type": "string"
             }
@@ -2297,9 +2411,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Risky modules list retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get risky modules identification for a project",
         "tags": [
           "Scores"
         ]
@@ -2321,9 +2441,15 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Recalculation successfully triggered."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Trigger score recalculation manually",
         "tags": [
           "Scores"
         ]
@@ -3961,9 +4087,15 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Onboarding process created successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new onboarding process",
         "tags": [
           "Onboarding"
         ]
@@ -3973,15 +4105,20 @@
         "parameters": [
           {
             "name": "status",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
+              "enum": [
+                "ACTIVE",
+                "COMPLETED",
+                "EXTENDED"
+              ],
               "type": "string"
             }
           },
           {
             "name": "mentorId",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -3990,9 +4127,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Onboardings list retrieved successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get all onboarding processes with optional status/mentor filters",
         "tags": [
           "Onboarding"
         ]
@@ -4004,9 +4147,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Dashboard stats retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get milestone tracking statistics for dashboard",
         "tags": [
           "Onboarding"
         ]
@@ -4018,9 +4167,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "At-risk developers list retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get list of developers at risk during onboarding",
         "tags": [
           "Onboarding"
         ]
@@ -4032,9 +4187,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Stats retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get general onboarding dashboard stats",
         "tags": [
           "Onboarding"
         ]
@@ -4046,7 +4207,7 @@
         "parameters": [
           {
             "name": "teamId",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -4054,7 +4215,7 @@
           },
           {
             "name": "startDate",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -4062,7 +4223,7 @@
           },
           {
             "name": "endDate",
-            "required": true,
+            "required": false,
             "in": "query",
             "schema": {
               "type": "string"
@@ -4071,9 +4232,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Velocity comparison stats retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get onboarding velocity comparison across teams",
         "tags": [
           "Onboarding"
         ]
@@ -4087,6 +4254,7 @@
             "name": "userId",
             "required": true,
             "in": "path",
+            "description": "Developer User ID",
             "schema": {
               "type": "string"
             }
@@ -4094,9 +4262,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Developer velocity stats retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get onboarding velocity metrics for an individual developer",
         "tags": [
           "Onboarding"
         ]
@@ -4108,9 +4282,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Templates list retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get onboarding checklists templates",
         "tags": [
           "Onboarding"
         ]
@@ -4130,9 +4310,15 @@
         },
         "responses": {
           "201": {
-            "description": ""
+            "description": "Checklist template created successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Create a new onboarding checklist template",
         "tags": [
           "Onboarding"
         ]
@@ -4146,6 +4332,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Template ID",
             "schema": {
               "type": "string"
             }
@@ -4153,9 +4340,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Template details retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get onboarding template details by ID",
         "tags": [
           "Onboarding"
         ]
@@ -4167,6 +4360,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Template ID",
             "schema": {
               "type": "string"
             }
@@ -4184,9 +4378,15 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Template updated successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update template details by ID",
         "tags": [
           "Onboarding"
         ]
@@ -4198,6 +4398,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Template ID",
             "schema": {
               "type": "string"
             }
@@ -4205,9 +4406,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Template successfully deleted."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a template by ID",
         "tags": [
           "Onboarding"
         ]
@@ -4221,6 +4428,7 @@
             "name": "userId",
             "required": true,
             "in": "path",
+            "description": "Developer User ID",
             "schema": {
               "type": "string"
             }
@@ -4228,9 +4436,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Developer progress data retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get individual developer progress metrics",
         "tags": [
           "Onboarding"
         ]
@@ -4244,6 +4458,7 @@
             "name": "userId",
             "required": true,
             "in": "path",
+            "description": "Developer User ID",
             "schema": {
               "type": "string"
             }
@@ -4251,9 +4466,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Milestone timeline entries retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get individual milestone timeline",
         "tags": [
           "Onboarding"
         ]
@@ -4265,9 +4486,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Available mentors list retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get list of available mentors for assignment",
         "tags": [
           "Onboarding"
         ]
@@ -4281,6 +4508,7 @@
             "name": "mentorId",
             "required": true,
             "in": "path",
+            "description": "Mentor User ID",
             "schema": {
               "type": "string"
             }
@@ -4288,9 +4516,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Mentor capacity information retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get capacity status for a mentor",
         "tags": [
           "Onboarding"
         ]
@@ -4304,6 +4538,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Onboarding ID",
             "schema": {
               "type": "string"
             }
@@ -4311,9 +4546,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Onboarding details retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get onboarding process details by ID",
         "tags": [
           "Onboarding"
         ]
@@ -4327,6 +4568,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Onboarding ID",
             "schema": {
               "type": "string"
             }
@@ -4334,9 +4576,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Mentor successfully assigned."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Assign a mentor to an onboarding process",
         "tags": [
           "Onboarding"
         ]
@@ -4350,6 +4598,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Onboarding ID",
             "schema": {
               "type": "string"
             }
@@ -4367,9 +4616,15 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Onboarding extended successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Extend onboarding duration",
         "tags": [
           "Onboarding"
         ]
@@ -4383,6 +4638,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Onboarding ID",
             "schema": {
               "type": "string"
             }
@@ -4390,9 +4646,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Onboarding marked as complete."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark onboarding process as complete",
         "tags": [
           "Onboarding"
         ]
@@ -4406,6 +4668,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Onboarding ID",
             "schema": {
               "type": "string"
             }
@@ -4413,9 +4676,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Checklist items status list retrieved."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get onboarding checklist items status",
         "tags": [
           "Onboarding"
         ]
@@ -4429,6 +4698,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Onboarding ID",
             "schema": {
               "type": "string"
             }
@@ -4437,6 +4707,7 @@
             "name": "itemId",
             "required": true,
             "in": "path",
+            "description": "Checklist Item ID",
             "schema": {
               "type": "string"
             }
@@ -4454,9 +4725,15 @@
         },
         "responses": {
           "200": {
-            "description": ""
+            "description": "Checklist item updated successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Update status of a specific checklist item",
         "tags": [
           "Onboarding"
         ]
@@ -4468,9 +4745,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Notifications list retrieved successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get user notifications with filters",
         "tags": [
           "Notifications"
         ]
@@ -4482,9 +4765,15 @@
         "parameters": [],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Unread count retrieved successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get count of unread user notifications",
         "tags": [
           "Notifications"
         ]
@@ -4498,6 +4787,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Notification UUID",
             "schema": {
               "type": "string"
             }
@@ -4505,9 +4795,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Notification details retrieved successfully."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Get a single notification detail by ID",
         "tags": [
           "Notifications"
         ]
@@ -4519,6 +4815,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Notification UUID",
             "schema": {
               "type": "string"
             }
@@ -4526,9 +4823,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Notification successfully deleted."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Delete a notification by ID",
         "tags": [
           "Notifications"
         ]
@@ -4542,6 +4845,7 @@
             "name": "id",
             "required": true,
             "in": "path",
+            "description": "Notification UUID",
             "schema": {
               "type": "string"
             }
@@ -4549,9 +4853,15 @@
         ],
         "responses": {
           "200": {
-            "description": ""
+            "description": "Notification marked as read."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark a notification as read",
         "tags": [
           "Notifications"
         ]
@@ -4563,9 +4873,15 @@
         "parameters": [],
         "responses": {
           "201": {
-            "description": ""
+            "description": "All notifications successfully marked as read."
           }
         },
+        "security": [
+          {
+            "bearer": []
+          }
+        ],
+        "summary": "Mark all notifications as read for current user",
         "tags": [
           "Notifications"
         ]
