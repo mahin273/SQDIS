@@ -13,10 +13,13 @@ import { NotificationsService } from './notifications.service';
 import { NotificationFiltersDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 
 /**
  * Controller for managing user notifications
  */
+@ApiTags('Notifications')
+@ApiBearerAuth()
 @Controller('notifications')
 @UseGuards(JwtAuthGuard)
 export class NotificationsController {
@@ -24,9 +27,10 @@ export class NotificationsController {
 
   /**
    * Get notifications for the current user
-   * GET /api/notifications
    */
   @Get()
+  @ApiOperation({ summary: 'Get user notifications with filters' })
+  @ApiResponse({ status: 200, description: 'Notifications list retrieved successfully.' })
   async findAll(
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
@@ -37,9 +41,10 @@ export class NotificationsController {
 
   /**
    * Get unread notification count
-   * GET /api/notifications/unread-count
    */
   @Get('unread-count')
+  @ApiOperation({ summary: 'Get count of unread user notifications' })
+  @ApiResponse({ status: 200, description: 'Unread count retrieved successfully.' })
   async getUnreadCount(
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
@@ -49,27 +54,32 @@ export class NotificationsController {
 
   /**
    * Get a single notification
-   * GET /api/notifications/:id
    */
   @Get(':id')
+  @ApiOperation({ summary: 'Get a single notification detail by ID' })
+  @ApiParam({ name: 'id', description: 'Notification UUID' })
+  @ApiResponse({ status: 200, description: 'Notification details retrieved successfully.' })
   async findOne(@Param('id', ParseUUIDPipe) id: string, @GetUser('id') userId: string) {
     return this.notificationsService.findOne(id, userId);
   }
 
   /**
    * Mark a notification as read
-   * PATCH /api/notifications/:id/read
    */
   @Patch(':id/read')
+  @ApiOperation({ summary: 'Mark a notification as read' })
+  @ApiParam({ name: 'id', description: 'Notification UUID' })
+  @ApiResponse({ status: 200, description: 'Notification marked as read.' })
   async markAsRead(@Param('id', ParseUUIDPipe) id: string, @GetUser('id') userId: string) {
     return this.notificationsService.markAsRead(id, userId);
   }
 
   /**
    * Mark all notifications as read
-   * POST /api/notifications/read-all
    */
   @Post('read-all')
+  @ApiOperation({ summary: 'Mark all notifications as read for current user' })
+  @ApiResponse({ status: 201, description: 'All notifications successfully marked as read.' })
   async markAllAsRead(
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
@@ -79,9 +89,11 @@ export class NotificationsController {
 
   /**
    * Delete a notification
-   * DELETE /api/notifications/:id
    */
   @Delete(':id')
+  @ApiOperation({ summary: 'Delete a notification by ID' })
+  @ApiParam({ name: 'id', description: 'Notification UUID' })
+  @ApiResponse({ status: 200, description: 'Notification successfully deleted.' })
   async delete(@Param('id', ParseUUIDPipe) id: string, @GetUser('id') userId: string) {
     return this.notificationsService.delete(id, userId);
   }
