@@ -154,7 +154,9 @@ export class PollingService {
         isEnabled: true,
         organization: {
           githubConnections: {
-            some: {},
+            some: {
+              id: { not: '' },
+            },
           },
         },
       },

@@ -130,7 +130,7 @@ export class TeamsService {
 
         let commits = 0;
         let avgDqs = 0;
-        let trend = 0;
+        const trend = 0;
 
         if (memberIds.length > 0) {
           // Get total commits for team members from all organization repositories
@@ -142,18 +142,16 @@ export class TeamsService {
           });
 
           // Get latest DQS scores
-          const dqsScores = await this.prisma.dQSScore.findMany({
-            where: {
-              developerId: { in: memberIds },
-            },
-            orderBy: {
-              calculatedAt: 'desc',
-            },
-            distinct: ['developerId'],
-            select: {
-              score: true,
-            },
-          });
+          const scores = await Promise.all(
+            memberIds.map(async (developerId) => {
+              return this.prisma.dQSScore.findFirst({
+                where: { developerId },
+                orderBy: { calculatedAt: 'desc' },
+                select: { score: true },
+              });
+            })
+          );
+          const dqsScores = scores.filter((s) => s !== null);
 
           if (dqsScores.length > 0) {
             const totalScore = dqsScores.reduce((sum, s) => sum + s.score, 0);
@@ -641,19 +639,19 @@ export class TeamsService {
     });
 
     // Get latest DQS scores for all members
-    const dqsScores = await this.prisma.dQSScore.findMany({
-      where: {
-        developerId: { in: memberIds },
-      },
-      orderBy: {
-        calculatedAt: 'desc',
-      },
-      distinct: ['developerId'],
-      select: {
-        developerId: true,
-        score: true,
-      },
-    });
+    const scores = await Promise.all(
+      memberIds.map(async (developerId) => {
+        return this.prisma.dQSScore.findFirst({
+          where: { developerId },
+          orderBy: { calculatedAt: 'desc' },
+          select: {
+            developerId: true,
+            score: true,
+          },
+        });
+      })
+    );
+    const dqsScores = scores.filter((s) => s !== null);
 
     const dqsScoreByMember = new Map<string, number>();
     dqsScores.forEach((score) => {
@@ -667,7 +665,52 @@ export class TeamsService {
       dqsScoreByMember,
     );
 
-    // Count active members (those with commits in the period)
+    // Calculate average coverage based on team projects
+    const assignments = await this.prisma.teamProjectAssignment.findMany({
+      where: {
+        teamId,
+        endDate: null,
+      },
+      select: { projectId: true },
+    });
+
+    const projectIds = assignments.map((a) => a.projectId);
+
+    let averageCoverage: number | null = null;
+    if (projectIds.length > 0) {
+      const projectRepos = await this.prisma.projectRepository.findMany({
+        where: { projectId: { in: projectIds } },
+        select: { repositoryId: true },
+      });
+
+      const repositoryIds = [...new Set(projectRepos.map((r) => r.repositoryId))];
+
+      if (repositoryIds.length > 0) {
+        const latestReports = await Promise.all(
+          repositoryIds.map((repositoryId) =>
+            this.prisma.coverageReport.findFirst({
+              where: {
+                repositoryId,
+                status: 'COMPLETED',
+                createdAt: { lte: endDate },
+              },
+              orderBy: { createdAt: 'desc' },
+              select: { coveragePercentage: true },
+            })
+          )
+        );
+
+        const validReports = latestReports.filter(
+          (r) => r !== null && r.coveragePercentage !== null
+        );
+
+        if (validReports.length > 0) {
+          const sumCoverage = validReports.reduce((sum, r) => sum + (r?.coveragePercentage ?? 0), 0);
+          averageCoverage = Math.round((sumCoverage / validReports.length) * 100) / 100;
+        }
+      }
+    }
+
     const activeMemberCount = commitCountByMember.size;
 
     return {
@@ -680,7 +723,7 @@ export class TeamsService {
       refactorCommits: classificationCounts.refactor,
       testCommits: classificationCounts.test,
       docsCommits: classificationCounts.docs,
-      averageCoverage: null, // Will be populated when coverage module is implemented
+      averageCoverage,
       memberCount: team.memberships.length,
       activeMemberCount,
       memberMetrics,
@@ -874,19 +917,19 @@ export class TeamsService {
         });
 
         // Get latest DQS scores
-        const dqsScores = await this.prisma.dQSScore.findMany({
-          where: {
-            developerId: { in: memberIds },
-          },
-          orderBy: {
-            calculatedAt: 'desc',
-          },
-          distinct: ['developerId'],
-          select: {
-            developerId: true,
-            score: true,
-          },
-        });
+        const scores = await Promise.all(
+          memberIds.map(async (developerId) => {
+            return this.prisma.dQSScore.findFirst({
+              where: { developerId },
+              orderBy: { calculatedAt: 'desc' },
+              select: {
+                developerId: true,
+                score: true,
+              },
+            });
+          })
+        );
+        const dqsScores = scores.filter((s) => s !== null);
 
         const dqsScoreByMember = new Map<string, number>();
         dqsScores.forEach((score) => {

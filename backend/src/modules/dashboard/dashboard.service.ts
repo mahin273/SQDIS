@@ -29,12 +29,21 @@ export class DashboardService {
     });
 
     // Get average coverage from latest reports
-    const latestCoverages = await this.prisma.coverageReport.findMany({
-      where: { repository: { organizationId } },
-      orderBy: { createdAt: 'desc' },
-      distinct: ['repositoryId'],
-      select: { coveragePercentage: true },
+    const repos = await this.prisma.repository.findMany({
+      where: { organizationId, isEnabled: true },
+      select: { id: true },
     });
+    const repoIds = repos.map((r) => r.id);
+    const coverages = await Promise.all(
+      repoIds.map(async (repositoryId) => {
+        return this.prisma.coverageReport.findFirst({
+          where: { repositoryId, status: 'COMPLETED' },
+          orderBy: { createdAt: 'desc' },
+          select: { coveragePercentage: true },
+        });
+      })
+    );
+    const latestCoverages = coverages.filter((c) => c !== null);
 
     const avgCoverage =
       latestCoverages.length > 0
@@ -52,12 +61,16 @@ export class DashboardService {
 
     let avgSQS = 0;
     if (projectIds.length > 0) {
-      const projectScores = await this.prisma.sQSScore.findMany({
-        where: { projectId: { in: projectIds } },
-        orderBy: { calculatedAt: 'desc' },
-        distinct: ['projectId'],
-        select: { score: true },
-      });
+      const scores = await Promise.all(
+        projectIds.map(async (projectId) => {
+          return this.prisma.sQSScore.findFirst({
+            where: { projectId },
+            orderBy: { calculatedAt: 'desc' },
+            select: { score: true },
+          });
+        })
+      );
+      const projectScores = scores.filter((s) => s !== null);
 
       avgSQS =
         projectScores.length > 0
@@ -293,12 +306,16 @@ export class DashboardService {
           };
         }
 
-        const scores = await this.prisma.dQSScore.findMany({
-          where: { developerId: { in: memberIds } },
-          orderBy: { calculatedAt: 'desc' },
-          distinct: ['developerId'],
-          select: { score: true },
-        });
+        const memberScores = await Promise.all(
+          memberIds.map(async (developerId) => {
+            return this.prisma.dQSScore.findFirst({
+              where: { developerId },
+              orderBy: { calculatedAt: 'desc' },
+              select: { score: true },
+            });
+          })
+        );
+        const scores = memberScores.filter((s) => s !== null);
 
         const avgDqs =
           scores.length > 0

@@ -59,7 +59,7 @@ export class GitHubApiService {
           (file): GitHubFileChange => ({
             sha: file.sha || '',
             filename: file.filename,
-            status: file.status as GitHubFileChange['status'],
+            status: file.status,
             additions: file.additions,
             deletions: file.deletions,
             changes: file.changes,

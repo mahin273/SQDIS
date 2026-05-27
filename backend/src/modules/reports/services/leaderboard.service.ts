@@ -153,6 +153,7 @@ export class LeaderboardService {
             classification: true,
             churnRatio: true,
             committedAt: true,
+            repositoryId: true,
           },
           orderBy: { committedAt: 'desc' },
         });
@@ -240,6 +241,33 @@ export class LeaderboardService {
             Math.round((totalMinutes / reviewsWithTurnaround.length / 60) * 10) / 10;
         }
 
+        const committedRepoIds = [
+          ...new Set(commits.map((c) => c.repositoryId).filter((id): id is string => !!id)),
+        ];
+
+        let devCoverage = 0;
+        if (committedRepoIds.length > 0) {
+          const coverages = await Promise.all(
+            committedRepoIds.map(async (repositoryId) => {
+              return this.prisma.coverageReport.findFirst({
+                where: {
+                  repositoryId,
+                  status: 'COMPLETED',
+                  createdAt: { lte: endDate },
+                },
+                orderBy: { createdAt: 'desc' },
+                select: { coveragePercentage: true },
+              });
+            })
+          );
+          const validCoverages = coverages.filter((c) => c !== null);
+          if (validCoverages.length > 0) {
+            devCoverage =
+              validCoverages.reduce((sum, c) => sum + (c.coveragePercentage || 0), 0) /
+              validCoverages.length;
+          }
+        }
+
         const teamIds = user.teamMemberships.map((tm) => tm.team.id);
         const teamNames = user.teamMemberships.map((tm) => tm.team.name);
 
@@ -257,7 +285,7 @@ export class LeaderboardService {
           testCount,
           docsCount,
           churn: Math.round(avgChurn * 10000) / 10000,
-          coverage: 0,
+          coverage: Math.round(devCoverage * 100) / 100,
           reviewsGiven,
           reviewsReceived,
           prMergeRate,
@@ -360,12 +388,16 @@ export class LeaderboardService {
           },
         });
 
-        const dqsScores = await this.prisma.dQSScore.findMany({
-          where: { developerId: { in: memberIds } },
-          orderBy: { calculatedAt: 'desc' },
-          distinct: ['developerId'],
-          select: { score: true },
-        });
+        const scores = await Promise.all(
+          memberIds.map(async (developerId) => {
+            return this.prisma.dQSScore.findFirst({
+              where: { developerId },
+              orderBy: { calculatedAt: 'desc' },
+              select: { score: true },
+            });
+          })
+        );
+        const dqsScores = scores.filter((s) => s !== null);
 
         const avgDqs =
           dqsScores.length > 0
@@ -373,15 +405,19 @@ export class LeaderboardService {
               10
             : null;
 
-        const previousDqsScores = await this.prisma.dQSScore.findMany({
-          where: {
-            developerId: { in: memberIds },
-            calculatedAt: { lt: startDate, gte: previousStartDate },
-          },
-          orderBy: { calculatedAt: 'desc' },
-          distinct: ['developerId'],
-          select: { score: true },
-        });
+        const prevScores = await Promise.all(
+          memberIds.map(async (developerId) => {
+            return this.prisma.dQSScore.findFirst({
+              where: {
+                developerId,
+                calculatedAt: { lt: startDate, gte: previousStartDate },
+              },
+              orderBy: { calculatedAt: 'desc' },
+              select: { score: true },
+            });
+          })
+        );
+        const previousDqsScores = prevScores.filter((s) => s !== null);
 
         const previousAvgDqs =
           previousDqsScores.length > 0
