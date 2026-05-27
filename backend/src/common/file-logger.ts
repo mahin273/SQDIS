@@ -3,17 +3,33 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 
 export class FileLogger extends ConsoleLogger {
-  private logStream: fs.WriteStream;
+  private logStream: fs.WriteStream | null = null;
+  private currentLogDate = '';
 
   constructor() {
     super();
-    // Ensure the log directory exists in the backend root
-    const logDir = path.join(process.cwd(), 'log');
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
+  }
+
+  private getLogStream(): fs.WriteStream {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+
+    if (this.currentLogDate !== dateStr || !this.logStream) {
+      if (this.logStream) {
+        this.logStream.end();
+      }
+      this.currentLogDate = dateStr;
+      const logDir = path.join(process.cwd(), 'log');
+      if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+      }
+      const logPath = path.join(logDir, `${dateStr}_log.txt`);
+      this.logStream = fs.createWriteStream(logPath, { flags: 'a' });
     }
-    const logPath = path.join(logDir, 'log.txt');
-    this.logStream = fs.createWriteStream(logPath, { flags: 'a' });
+    return this.logStream;
   }
 
   private writeToFile(level: string, message: any, context?: string) {
@@ -21,7 +37,7 @@ export class FileLogger extends ConsoleLogger {
     const formattedContext = context ? ` [${context}]` : '';
     const cleanMessage = typeof message === 'object' ? JSON.stringify(message) : message;
     const logLine = `${timestamp} [${level.toUpperCase()}]${formattedContext} ${cleanMessage}\n`;
-    this.logStream.write(logLine);
+    this.getLogStream().write(logLine);
   }
 
   log(message: any, context?: string) {
