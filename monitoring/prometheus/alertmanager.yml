@@ -1,0 +1,44 @@
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'job', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 12h
+  receiver: 'default-receiver'
+
+receivers:
+  - name: 'default-receiver'
+    # By default, we set up a mock/empty webhook receiver.
+    # Replace this with your actual webhook endpoint, Slack, or Email configuration.
+    webhook_configs:
+      - url: 'http://localhost:5001/alerts'
+        send_resolved: true
+
+# ==========================================
+# EXAMPLES FOR INTEGRATIONS (Uncomment to use)
+# ==========================================
+#
+#   - name: 'slack-notifications'
+#     slack_configs:
+#       - api_url: 'https://hooks.slack.com/services/YOUR_WORKSPACE_ID/YOUR_CHANNEL_ID/YOUR_TOKEN'
+#         channel: '#alerts'
+#         send_resolved: true
+#         icon_emoji: ':fire_engine:'
+#         title: '[[.Status | toUpper]] [[.CommonLabels.alertname]]'
+#         text: >-
+#           [[ range .Alerts ]]
+#             *Alert:* [[ .Annotations.summary ]]
+#             *Description:* [[ .Annotations.description ]]
+#             *Severity:* [[ .Labels.severity ]]
+#           [[ end ]]
+#
+#   - name: 'email-notifications'
+#     email_configs:
+#       - to: 'admin@example.com'
+#         from: 'alertmanager@example.com'
+#         smarthost: 'smtp.example.com:587'
+#         auth_username: 'alertmanager'
+#         auth_password: 'smtp_password'
+#         send_resolved: true

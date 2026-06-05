@@ -1,0 +1,56 @@
+groups:
+  - name: sqdis-alerts
+    rules:
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Service down: {{ $labels.job }}"
+          description: "The service {{ $labels.job }} (instance {{ $labels.instance }}) has been down for more than 1 minute."
+
+      - alert: HighHttpErrorRate
+        expr: (sum(rate(sqdis_http_requests_total{status_code=~"5.."}[5m])) / sum(rate(sqdis_http_requests_total[5m]))) * 100 > 5
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High HTTP 5xx error rate"
+          description: "HTTP error rate is {{ $value | printf \"%.2f\" }}% over the last 5 minutes on path {{ $labels.path }}."
+
+      - alert: SlowDatabaseQueries
+        expr: histogram_quantile(0.95, sum(rate(sqdis_db_query_duration_seconds_bucket[5m])) by (le, operation)) > 1.0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow database queries detected"
+          description: "95th percentile database query latency is {{ $value | printf \"%.3f\" }}s for operation {{ $labels.operation }}."
+
+      - alert: RedisDisconnected
+        expr: sqdis_redis_connection_status == 0
+        for: 30s
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis cache disconnected"
+          description: "The backend service has lost connection to the Redis server."
+
+      - alert: HighBullMqQueueBacklog
+        expr: sum(sqdis_bullmq_jobs_waiting) by (queue) > 100
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High BullMQ queue backlog: {{ $labels.queue }}"
+          description: "Queue {{ $labels.queue }} has {{ $value }} waiting jobs for over 3 minutes."
+
+      - alert: MlPredictionErrors
+        expr: sum(rate(sqdis_ml_prediction_errors_total[5m])) by (model_type, error_type) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "ML service prediction errors"
+          description: "ML model {{ $labels.model_type }} is encountering errors of type {{ $labels.error_type }}."
