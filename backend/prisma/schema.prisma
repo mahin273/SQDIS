@@ -206,9 +206,25 @@ model Repository {
   issues              Issue[]
   githubReleases      GitHubRelease[]
   commitComments      CommitComment[]
+  fileASTMetrics      FileASTMetric[]
 
   @@unique([organizationId, githubId])
   @@map("repositories")
+}
+
+model FileASTMetric {
+  id                   String   @id @default(uuid())
+  repositoryId         String
+  filePath             String
+  cyclomaticComplexity Int
+  cognitiveComplexity  Int
+  maintainabilityIndex Float
+  updatedAt            DateTime @updatedAt
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@unique([repositoryId, filePath])
+  @@map("file_ast_metrics")
 }
 
 // ==================== WEBHOOK PROCESSING ====================

@@ -18,9 +18,9 @@ class CommitClassifier:
     """
 
     def __init__(self):
-        """Initialize the classifier with pattern definitions."""
+        """Initialize the classifier with pattern definitions and attempt to load ML pipeline."""
 
-        # Message patterns for each commit type
+        # Message patterns for each commit type (retained as fallback)
         self.patterns: Dict[CommitType, List[str]] = {
             CommitType.BUGFIX: [
                 r'\b(fix|bugfix|hotfix|patch)\b',
@@ -73,6 +73,25 @@ class CommitClassifier:
             ],
         }
 
+        # Load ML Pipeline settings and file
+        import os
+        import pickle
+        from app.config import get_settings
+
+        self.pipeline = None
+        self.version = get_settings().classification_model_version
+        self.model_path = get_settings().classification_model_path
+
+        if os.path.exists(self.model_path):
+            try:
+                with open(self.model_path, "rb") as f:
+                    data = pickle.load(f)
+                    self.pipeline = data.get("pipeline")
+                    self.version = data.get("version", self.version)
+                logger.info(f"Successfully loaded Commit Classification model from {self.model_path}")
+            except Exception as e:
+                logger.error(f"Failed to load Commit Classification model: {e}")
+
     def _score_message(self, message: str) -> Dict[CommitType, float]:
         """
         Score the commit message against all patterns.
@@ -99,7 +118,6 @@ class CommitClassifier:
             for commit_type, patterns in self.file_patterns.items():
                 for pattern in patterns:
                     if re.search(pattern, file_path, re.IGNORECASE):
-                        # File patterns give 0.5 score each
                         scores[commit_type] += 0.5
 
         return scores
@@ -115,14 +133,12 @@ class CommitClassifier:
         """
         total = sum(scores.values())
 
-        # No patterns matched at all — low confidence
         if total == 0:
             return 0.3
 
         winner_score = scores[winner]
         confidence = winner_score / total
 
-        # Boost confidence if winner score is high enough
         if winner_score >= 2:
             confidence = min(confidence + 0.1, 1.0)
 
@@ -140,41 +156,58 @@ class CommitClassifier:
         Args:
             commit_message: The commit message to classify
             files_changed: Optional list of changed file paths
-            diff_stats: Optional diff statistics (not used in rule-based)
+            diff_stats: Optional diff statistics
 
         Returns:
             ClassificationResult with classification, confidence, and method
         """
         logger.info(f"Classifying commit: {commit_message[:50]}...")
 
-        # Score based on commit message
+        # 1. Try predicting using the ML Pipeline
+        if self.pipeline is not None:
+            try:
+                prediction_str = self.pipeline.predict([commit_message])[0]
+                
+                # Calculate probability confidence
+                probs = self.pipeline.predict_proba([commit_message])[0]
+                classes = list(self.pipeline.classes_)
+                winner_idx = classes.index(prediction_str)
+                confidence = float(probs[winner_idx])
+
+                winner = CommitType(prediction_str)
+                logger.info(f"ML classification result: {winner} (confidence: {confidence})")
+                return ClassificationResult(
+                    classification=winner,
+                    confidence=round(confidence, 2),
+                    method=f"tfidf-logistic-regression-{self.version}"
+                )
+            except Exception as e:
+                logger.error(f"ML classification failed: {e}. Falling back to rules.")
+
+        # 2. Fallback to Rule-based classification
         scores = self._score_message(commit_message)
 
-        # Add file-based scores if files are provided
         if files_changed:
             file_scores = self._score_files(files_changed)
             for commit_type in CommitType:
                 scores[commit_type] += file_scores[commit_type]
 
-        # Find the commit type with the highest score
         winner = max(scores, key=lambda ct: scores[ct])
 
-        # Default to FEATURE if no patterns matched
         if scores[winner] == 0:
             winner = CommitType.FEATURE
             confidence = 0.3
         else:
             confidence = self._calculate_confidence(scores, winner)
 
-        logger.info(f"Classification result: {winner} (confidence: {confidence})")
+        logger.info(f"Fallback classification result: {winner} (confidence: {confidence})")
 
         return ClassificationResult(
             classification=winner,
             confidence=confidence,
-            method="rule-based"
+            method="rule-based-fallback"
         )
 
 
 # Create a single shared instance of the classifier
-# This avoids re-creating it on every request (efficient!)
-classifier = CommitClassifier()
+classifier = CommitClassifier()
