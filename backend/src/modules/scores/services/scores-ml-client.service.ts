@@ -349,4 +349,105 @@ export class ScoresMlClientService {
       return null;
     }
   }
+
+  /**
+   * Run deep Code Quality and Security Analysis on files via the AST static analyzer.
+   *
+   * @param payload - Payload containing files, optional git history and coverage
+   * @returns Code quality static analysis results
+   */
+  async analyzeCodeQuality(
+    payload: {
+      files: Array<{ path: string; content: string }>;
+      git_history?: Array<{
+        sha: string;
+        author_email: string;
+        message?: string;
+        files_changed: Array<{ path: string; lines_added: number; lines_removed: number }>;
+      }>;
+      coverage_metadata?: Record<string, number>;
+      repository_id?: string;
+    }
+  ): Promise<{
+    complexity: Array<{
+      path: string;
+      cyclomatic_complexity: number;
+      cognitive_complexity: number;
+      maintainability_index: number;
+      duplicate_blocks: Array<{
+        matching_file: string;
+        start_line: number;
+        line_count: number;
+        snippet: string;
+      }>;
+    }>;
+    security: Array<{
+      path: string;
+      type: string;
+      severity: string;
+      message: string;
+      line_number?: number;
+    }>;
+    code_smells: Array<{
+      file_path: string;
+      smell_type: string;
+      location: string;
+      description: string;
+      severity: string;
+    }>;
+    dependency_cycles: Array<{
+      files: string[];
+      description: string;
+    }>;
+    semantic_clones: Array<{
+      file_a: string;
+      file_b: string;
+      similarity_score: number;
+      description: string;
+    }>;
+    taint_issues: Array<{
+      path: string;
+      source: string;
+      sink: string;
+      line_number: number;
+      variable_name: string;
+      message: string;
+      severity: string;
+    }>;
+  } | null> {
+    try {
+      const response = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        this.logger.warn(`ML service code quality analysis failed with status ${response.status}`);
+        return null;
+      }
+
+      return await response.json();
+    } catch (error) {
+      this.logger.warn(`Failed to analyze code quality: ${error}`);
+      return null;
+    }
+  }
+
+  /**
+   * Clear AST analysis cache for a specific repository.
+   */
+  async clearCodeQualityCache(repositoryId: string): Promise<boolean> {
+    try {
+      const response = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/cache/${repositoryId}`, {
+        method: 'DELETE',
+      });
+      return response.ok;
+    } catch (error) {
+      this.logger.warn(`Failed to clear ML service code quality cache: ${error}`);
+      return false;
+    }
+  }
 }

@@ -7,12 +7,13 @@ import { ScoresCacheService } from './services/scores-cache.service';
 import { ScoreProcessor } from './processors';
 import { PrismaModule } from '../../prisma';
 import { ScoreQueueModule } from '../../config';
+import { GitHubModule } from '../github/github.module';
 
 /**
  * Scores module for DQS and SQS score management
  */
 @Module({
-  imports: [PrismaModule, EventEmitterModule.forRoot(), ScoreQueueModule],
+  imports: [PrismaModule, EventEmitterModule.forRoot(), ScoreQueueModule, GitHubModule],
   controllers: [ScoresController],
   providers: [ScoresService, ScoresMlClientService, ScoresCacheService, ScoreProcessor],
   exports: [ScoresService, ScoresMlClientService, ScoresCacheService],

@@ -140,6 +140,20 @@ export class CommitsService {
       },
     });
 
+    // Run incremental AST cache update on FastAPI asynchronously
+    this.scoresService
+      .handleIncrementalASTUpdate(repositoryId, organizationId, {
+        sha: commit.sha,
+        files: commitDetail.files.map((f) => ({
+          filename: f.filename,
+          status: f.status,
+          previous_filename: f.previous_filename,
+        })),
+      })
+      .catch((err) => {
+        this.logger.warn(`Failed to run incremental AST cache update: ${err}`);
+      });
+
     // Create alert on anomaly detection
     if (anomalyResult?.is_anomaly) {
       this.logger.warn(

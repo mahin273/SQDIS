@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Queue } from 'bullmq';
@@ -8,11 +8,14 @@ import {
   ScoresMlClientService,
   DQSFeatures,
   SQSFeatures,
+  ModuleMetrics,
 } from './services/scores-ml-client.service';
 import { ScoresCacheService, CACHE_KEYS, CACHE_TTL } from './services/scores-cache.service';
 import { DQSHistoryQueryDto, SQSHistoryQueryDto, ScoreType } from './dto';
 import { ScoreJobData, ScoreJobType } from './types';
 import { SCORE_QUEUE } from '../../config';
+import { GitHubService } from '../github/github.service';
+import { GitHubApiService } from '../github/services/github-api.service';
 
 /**
  * Service for DQS and SQS score management
@@ -27,6 +30,10 @@ export class ScoresService {
     private readonly mlClient: ScoresMlClientService,
     private readonly cacheService: ScoresCacheService,
     @InjectQueue(SCORE_QUEUE) private readonly scoreQueue: Queue<ScoreJobData>,
+    @Inject(forwardRef(() => GitHubService))
+    private readonly githubService: GitHubService,
+    @Inject(forwardRef(() => GitHubApiService))
+    private readonly githubApiService: GitHubApiService,
   ) {}
 
   /**
@@ -528,7 +535,7 @@ export class ScoresService {
    * @returns The enqueued job
    */
   async enqueueScoreCalculation(data: ScoreJobData) {
-    const jobId = `${data.type}-${data.entityId}-${Date.now()}`;
+    const jobId = `${data.type}-${data.entityId}`;
 
     this.logger.debug(
       `Enqueuing ${data.type.toUpperCase()} score calculation for ${data.entityId}`,
@@ -536,10 +543,6 @@ export class ScoresService {
 
     return this.scoreQueue.add(data.type, data, {
       jobId,
-      // Deduplicate jobs for the same entity within 5 minutes
-      deduplication: {
-        id: `${data.type}-${data.entityId}`,
-      },
     });
   }
 
@@ -680,6 +683,248 @@ export class ScoresService {
   }
 
   /**
+   * Extract file-level module metrics for project repositories
+   */
+  private async extractModuleMetrics(
+    projectId: string,
+    organizationId: string,
+  ): Promise<ModuleMetrics[]> {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Find all repositories assigned to project
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        repositories: {
+          select: { repositoryId: true },
+        },
+      },
+    });
+
+    let repositoryIds: string[] = [];
+    if (project) {
+      repositoryIds = project.repositories.map((pr) => pr.repositoryId);
+    } else {
+      repositoryIds = [projectId];
+    }
+
+    if (repositoryIds.length === 0) {
+      return [];
+    }
+
+    // 1. Get aggregated file changes in the last 30 days grouped by file path
+    const aggregations = await this.prisma.fileChange.groupBy({
+      by: ['filePath'],
+      where: {
+        commit: {
+          repositoryId: { in: repositoryIds },
+          committedAt: { gte: thirtyDaysAgo },
+        },
+      },
+      _sum: {
+        additions: true,
+        deletions: true,
+        churnRatio: true,
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    // 2. Get bugfix counts grouped by file path
+    const bugfixAggregations = await this.prisma.fileChange.groupBy({
+      by: ['filePath'],
+      where: {
+        commit: {
+          repositoryId: { in: repositoryIds },
+          committedAt: { gte: thirtyDaysAgo },
+          classification: 'BUGFIX',
+        },
+      },
+      _count: {
+        id: true,
+      },
+    });
+
+    const fileMap = new Map<string, { additions: number; deletions: number; count: number; bugCount: number; churnSum: number }>();
+    for (const agg of aggregations) {
+      fileMap.set(agg.filePath, {
+        additions: agg._sum.additions || 0,
+        deletions: agg._sum.deletions || 0,
+        count: agg._count.id || 0,
+        bugCount: 0,
+        churnSum: Number(agg._sum.churnRatio) || 0,
+      });
+    }
+
+    for (const bugAgg of bugfixAggregations) {
+      const existing = fileMap.get(bugAgg.filePath);
+      if (existing) {
+        existing.bugCount = bugAgg._count.id || 0;
+      }
+    }
+
+    // 2. Get unresolved debt items
+    const debtItems = await this.prisma.debtItem.findMany({
+      where: {
+        repositoryId: { in: repositoryIds },
+        isResolved: false,
+      },
+      select: {
+        filePath: true,
+      },
+    });
+
+    const debtMap = new Map<string, number>();
+    for (const item of debtItems) {
+      debtMap.set(item.filePath, (debtMap.get(item.filePath) || 0) + 1);
+    }
+
+    // 3. Get file-level coverage metrics
+    const coverageMap = new Map<string, number>();
+    for (const repositoryId of repositoryIds) {
+      const latestReport = await this.prisma.coverageReport.findFirst({
+        where: {
+          repositoryId,
+          status: 'COMPLETED',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { id: true },
+      });
+
+      if (latestReport) {
+        const coverageModules = await this.prisma.coverageModule.findMany({
+          where: { reportId: latestReport.id },
+          select: { modulePath: true, coveragePercentage: true },
+        });
+        for (const m of coverageModules) {
+          coverageMap.set(m.modulePath, m.coveragePercentage);
+        }
+      }
+    }
+
+    // 4. Assemble metrics array
+    const modules: ModuleMetrics[] = [];
+    for (const [path, stats] of fileMap.entries()) {
+      const churnRate = stats.count > 0 ? stats.churnSum / stats.count : 0;
+      const coverage = coverageMap.get(path) ?? 100.0;
+      const bugCount = stats.bugCount;
+      const debtCount = debtMap.get(path) ?? 0;
+      const loc = stats.additions + stats.deletions;
+
+      modules.push({
+        path,
+        churn_rate: churnRate,
+        coverage,
+        bug_count: bugCount,
+        debt_count: debtCount,
+        lines_of_code: loc,
+      });
+    }
+
+    return modules;
+  }
+
+  /**
+   * Incrementally update the AST cache on the ML service for a specific commit's file changes.
+   */
+  async handleIncrementalASTUpdate(
+    repositoryId: string,
+    organizationId: string,
+    commitDetail: {
+      sha: string;
+      files: Array<{
+        filename: string;
+        status: string;
+        previous_filename?: string;
+      }>;
+    },
+  ): Promise<void> {
+    this.logger.debug(`Updating incremental AST cache for repository ${repositoryId} at commit ${commitDetail.sha}`);
+    try {
+      const repository = await this.prisma.repository.findUnique({
+        where: { id: repositoryId },
+        select: { fullName: true },
+      });
+      if (!repository) {
+        this.logger.warn(`Repository ${repositoryId} not found for incremental AST update`);
+        return;
+      }
+
+      const [owner, repo] = repository.fullName.split('/');
+      const octokit = await this.githubService.getOctokitForOrganization(organizationId);
+
+      const filesPayload: Array<{ path: string; content: string }> = [];
+
+      for (const file of commitDetail.files) {
+        if (file.status === 'removed') {
+          filesPayload.push({
+            path: file.filename,
+            content: '',
+          });
+        } else if (file.status === 'renamed') {
+          // Delete old filename path from cache
+          if (file.previous_filename) {
+            filesPayload.push({
+              path: file.previous_filename,
+              content: '',
+            });
+          }
+          // Fetch content for the new filename
+          try {
+            const { data } = await octokit.rest.repos.getContent({
+              owner,
+              repo,
+              path: file.filename,
+              ref: commitDetail.sha,
+            });
+
+            if (data && 'content' in data && typeof data.content === 'string') {
+              const content = Buffer.from(data.content, 'base64').toString('utf8');
+              filesPayload.push({
+                path: file.filename,
+                content,
+              });
+            }
+          } catch (fileErr) {
+            this.logger.warn(`Failed to fetch file content for renamed ${file.filename} at ${commitDetail.sha}: ${fileErr}`);
+          }
+        } else if (file.status === 'added' || file.status === 'modified') {
+          try {
+            const { data } = await octokit.rest.repos.getContent({
+              owner,
+              repo,
+              path: file.filename,
+              ref: commitDetail.sha,
+            });
+
+            if (data && 'content' in data && typeof data.content === 'string') {
+              const content = Buffer.from(data.content, 'base64').toString('utf8');
+              filesPayload.push({
+                path: file.filename,
+                content,
+              });
+            }
+          } catch (fileErr) {
+            this.logger.warn(`Failed to fetch file content for ${file.filename} at ${commitDetail.sha}: ${fileErr}`);
+          }
+        }
+      }
+
+      if (filesPayload.length > 0) {
+        await this.mlClient.analyzeCodeQuality({
+          repository_id: repositoryId,
+          files: filesPayload,
+        });
+        this.logger.debug(`Successfully uploaded ${filesPayload.length} changed files to AST cache for repo ${repositoryId}`);
+      }
+    } catch (error) {
+      this.logger.warn(`Failed to run incremental AST update: ${error}`);
+    }
+  }
+
+  /**
    * Calculate and store SQS score for a project
    *
    * @param projectId - Project ID
@@ -699,8 +944,145 @@ export class ScoresService {
     // Extract features for SQS calculation
     const features = await this.extractSQSFeatures(projectId, organizationId);
 
+    // Extract module-level metrics for risk identification
+    const modules = await this.extractModuleMetrics(projectId, organizationId);
+
+    // Retrieve repository IDs to run AST Code Quality static analysis
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        repositories: {
+          select: { repositoryId: true },
+        },
+      },
+    });
+
+    let repositoryIds: string[] = [];
+    if (project) {
+      repositoryIds = project.repositories.map((pr) => pr.repositoryId);
+    } else {
+      repositoryIds = [projectId];
+    }
+
+    let totalSecurityIssues = 0;
+    let totalDependencyCycles = 0;
+    let totalCodeSmells = 0;
+    const astRecommendations: string[] = [];
+
+    for (const repoId of repositoryIds) {
+      try {
+        // 1. Try to analyze with current warm filesystem cache (files: [])
+        let qualityResult = await this.mlClient.analyzeCodeQuality({
+          repository_id: repoId,
+          files: [],
+        });
+
+        // 2. If result is null or has 0 files analyzed, cache is cold. Warm it up!
+        if (!qualityResult || qualityResult.complexity.length === 0) {
+          this.logger.log(`AST cache for repository ${repoId} is cold. Running full initial warm-up...`);
+          
+          const repository = await this.prisma.repository.findUnique({
+            where: { id: repoId },
+            select: { fullName: true }
+          });
+          
+          if (repository) {
+            const [owner, repoName] = repository.fullName.split('/');
+            const octokit = await this.githubService.getOctokitForOrganization(organizationId);
+            
+            // Download up to 200 files for complete repository mapping
+            const initialFiles = await this.githubApiService.fetchRepositoryCodeFiles(octokit, owner, repoName, 200);
+            
+            if (initialFiles.length > 0) {
+              // Upload in chunks of 40 to avoid payload size/timeout limits
+              const chunkSize = 40;
+              for (let i = 0; i < initialFiles.length; i += chunkSize) {
+                const chunk = initialFiles.slice(i, i + chunkSize);
+                await this.mlClient.analyzeCodeQuality({
+                  repository_id: repoId,
+                  files: chunk,
+                });
+              }
+              // Final query to get full integrated analysis
+              qualityResult = await this.mlClient.analyzeCodeQuality({
+                repository_id: repoId,
+                files: [],
+              });
+            }
+          }
+        }
+
+        // 3. Process and persist the AST analysis results
+        if (qualityResult) {
+          totalSecurityIssues += qualityResult.security.length;
+          totalDependencyCycles += qualityResult.dependency_cycles.length;
+          totalCodeSmells += qualityResult.code_smells.length;
+
+          // Save file AST complexity metrics to PostgreSQL database using upsert
+          if (qualityResult.complexity) {
+            for (const comp of qualityResult.complexity) {
+              try {
+                await this.prisma.fileASTMetric.upsert({
+                  where: {
+                    repositoryId_filePath: {
+                      repositoryId: repoId,
+                      filePath: comp.path,
+                    },
+                  },
+                  update: {
+                    cyclomaticComplexity: comp.cyclomatic_complexity,
+                    cognitiveComplexity: comp.cognitive_complexity,
+                    maintainabilityIndex: comp.maintainability_index,
+                  },
+                  create: {
+                    repositoryId: repoId,
+                    filePath: comp.path,
+                    cyclomaticComplexity: comp.cyclomatic_complexity,
+                    cognitiveComplexity: comp.cognitive_complexity,
+                    maintainabilityIndex: comp.maintainability_index,
+                  },
+                });
+              } catch (dbErr) {
+                this.logger.warn(`Failed to save AST metrics for file ${comp.path}: ${dbErr}`);
+              }
+            }
+          }
+
+          // Append security warnings to recommendations
+          for (const issue of qualityResult.security) {
+            const path = issue.path;
+            const msg = issue.message;
+            const severity = issue.severity;
+            astRecommendations.push(`[${severity} SECURITY] in ${path}: ${msg}`);
+          }
+
+          // Append dependency cycles warnings
+          for (const cycle of qualityResult.dependency_cycles) {
+            astRecommendations.push(`[CIRCULAR DEPENDENCY] Cycle detected: ${cycle.files.join(' -> ')}`);
+          }
+
+          // Append taint tracking issues
+          if (qualityResult.taint_issues) {
+            for (const taint of qualityResult.taint_issues) {
+              astRecommendations.push(
+                `[CRITICAL TAINT] Variable '${taint.variable_name}' from source '${taint.source}' reaches dangerous sink '${taint.sink}' at line ${taint.line_number} in ${taint.path}`,
+              );
+            }
+          }
+        }
+      } catch (err) {
+        this.logger.warn(`AST analysis failed for repository ${repoId}: ${err}`);
+      }
+    }
+
+    // Adjust features dynamically based on static code analysis debt
+    // Security issue = 2 units, Dependency Cycle = 3 units, Code Smell = 1 unit
+    const astDebtImpact = totalSecurityIssues * 2 + totalDependencyCycles * 3 + totalCodeSmells;
+    features.debt_count += astDebtImpact;
+    this.logger.log(`Adjusted SQS debt_count feature by adding +${astDebtImpact} AST findings`);
+
     // Call ML service for SQS prediction
-    const mlResult = await this.mlClient.predictSQS(projectId, features);
+    const mlResult = await this.mlClient.predictSQS(projectId, features, modules);
 
     if (!mlResult) {
       this.logger.warn(`ML service unavailable for SQS calculation`);
@@ -710,6 +1092,11 @@ export class ScoresService {
         message: 'ML service unavailable',
         features,
       };
+    }
+
+    // Prepend AST recommendations to the SQS model recommendations
+    if (astRecommendations.length > 0) {
+      mlResult.recommendations = [...astRecommendations, ...mlResult.recommendations];
     }
 
     // Store the score

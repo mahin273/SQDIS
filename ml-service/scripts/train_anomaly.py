@@ -11,19 +11,31 @@ from app.models.anomaly import AnomalyDetector
 def generate_normal_commits(n_samples: int = 900) -> np.ndarray:
     """
     Generate synthetic normal commit data for training.
-
-    Normal commits have:
-    - lines_changed: 10 to 500
-    - files_changed: 1 to 20
-    - time_of_day: 8 to 18 (working hours)
-    - churn_ratio: 0.1 to 0.5
+    Normal commits follow realistic development distributions:
+    - lines_changed: log-normal (mostly small, occasionally up to 2000 lines)
+    - files_changed: log-normal (mostly 1-10, occasionally up to 40)
+    - time_of_day: mostly active hours (7 AM to 11 PM), rare late-night commits
+    - churn_ratio: broad range (0.0 to 1.0)
     """
     np.random.seed(42)
 
-    lines_changed = np.random.randint(10, 500, n_samples).astype(float)
-    files_changed = np.random.randint(1, 20, n_samples).astype(float)
-    time_of_day = np.random.randint(8, 18, n_samples).astype(float)
-    churn_ratio = np.random.uniform(0.1, 0.5, n_samples)
+    # Log-normal distribution: exp(mean + std * N)
+    lines_changed = np.random.lognormal(mean=4.2, sigma=1.1, size=n_samples) + 1.0
+    lines_changed = np.clip(lines_changed, 1.0, 2000.0)
+
+    files_changed = np.random.lognormal(mean=1.1, sigma=0.7, size=n_samples) + 1.0
+    files_changed = np.clip(files_changed, 1.0, 40.0)
+
+    # Time of day: 90% chance of 7-23, 10% chance of 0-6
+    time_of_day = []
+    for _ in range(n_samples):
+        if np.random.rand() < 0.90:
+            time_of_day.append(float(np.random.randint(7, 23)))
+        else:
+            time_of_day.append(float(np.random.randint(0, 7)))
+    time_of_day = np.array(time_of_day)
+
+    churn_ratio = np.random.uniform(0.0, 1.0, n_samples)
 
     return np.column_stack([
         lines_changed,
@@ -36,19 +48,18 @@ def generate_normal_commits(n_samples: int = 900) -> np.ndarray:
 def generate_anomalous_commits(n_samples: int = 100) -> np.ndarray:
     """
     Generate synthetic anomalous commit data for validation.
-
-    Anomalous commits have:
-    - lines_changed: 2000 to 10000 (massive changes)
-    - files_changed: 50 to 200 (too many files)
-    - time_of_day: 0 to 5 (late night)
-    - churn_ratio: 0.7 to 1.0 (high churn)
+    Anomalous commits represent extreme outliers:
+    - lines_changed: extreme massive bulk changes (5,000 to 50,000 lines)
+    - files_changed: massive file spread (200 to 1000 files)
+    - time_of_day: strictly dead of night (2 AM to 5 AM)
+    - churn_ratio: extremely high or static (0.95 to 1.0)
     """
     np.random.seed(99)
 
-    lines_changed = np.random.randint(2000, 10000, n_samples).astype(float)
-    files_changed = np.random.randint(50, 200, n_samples).astype(float)
-    time_of_day = np.random.randint(0, 5, n_samples).astype(float)
-    churn_ratio = np.random.uniform(0.7, 1.0, n_samples)
+    lines_changed = np.random.randint(5000, 50000, n_samples).astype(float)
+    files_changed = np.random.randint(200, 1000, n_samples).astype(float)
+    time_of_day = np.random.randint(2, 5, n_samples).astype(float)
+    churn_ratio = np.random.uniform(0.95, 1.0, n_samples)
 
     return np.column_stack([
         lines_changed,
@@ -56,6 +67,7 @@ def generate_anomalous_commits(n_samples: int = 100) -> np.ndarray:
         time_of_day,
         churn_ratio
     ])
+
 
 
 def main():

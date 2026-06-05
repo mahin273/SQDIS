@@ -61,7 +61,7 @@ class SQSModel:
         # Negative impacts
         score -= features.churn_rate * 15.0
         score -= min((features.debt_count / 10.0) * 10.0, 10.0)
-        score -= min(features.bug_density * 2.0, 20.0)
+        score -= min(features.bug_density * 20.0, 20.0)
 
         return round(max(0.0, min(100.0, score)), 2)
 
@@ -183,12 +183,28 @@ class SQSModel:
         risky_modules = self._detect_risky_modules(modules)
         recommendations = self._generate_recommendations(features, score)
 
-        return SQSPredictionResult(
+        res = SQSPredictionResult(
             score=score,
             model_version=f"{self.version}-{method}",
             risky_modules=risky_modules,
             recommendations=recommendations
         )
+
+        try:
+            from app.utils.telemetry import log_prediction_telemetry
+            log_prediction_telemetry(
+                "sqs",
+                {
+                    "project_id": project_id,
+                    "features": features.model_dump(),
+                    "modules": [m.model_dump() for m in modules] if modules else None
+                },
+                res.model_dump()
+            )
+        except Exception as tel_err:
+            logger.error(f"Telemetry logging failed: {tel_err}")
+
+        return res
 
 
 # Shared instance of the model

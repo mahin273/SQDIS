@@ -31,6 +31,7 @@ class CodeAnalysisRequest(BaseModel):
     files: List[FileInput] = Field(..., description="List of source code files to scan")
     git_history: Optional[List[CommitInfo]] = Field(default=None, description="Optional commit history for ownership and hotspot analysis")
     coverage_metadata: Optional[Dict[str, float]] = Field(default=None, description="Optional map of file path to test coverage percentage")
+    repository_id: Optional[str] = Field(default=None, description="Optional repository ID for caching and delta analysis")
 
 
 # ==================== Response Schemas ====================

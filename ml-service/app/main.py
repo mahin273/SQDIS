@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
-from app.routers import health, classification, anomaly, sentiment, sqs, dqs, code_quality
+from app.routers import health, classification, anomaly, sentiment, sqs, dqs, code_quality, telemetry
 
 # Load settings once at startup
 settings = get_settings()
@@ -32,6 +32,7 @@ app.include_router(sentiment.router)
 app.include_router(sqs.router)
 app.include_router(dqs.router)
 app.include_router(code_quality.router)
+app.include_router(telemetry.router)
 
 
 if __name__ == "__main__":

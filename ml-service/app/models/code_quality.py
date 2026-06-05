@@ -1,9 +1,18 @@
 import ast
+import asyncio
 import re
 import math
 import hashlib
 import logging
 from typing import List, Dict, Tuple, Optional
+
+# Global lock registry to prevent race conditions on filesystem cache writes per repository
+_repo_locks = {}
+
+def get_repo_lock(repo_id: str) -> asyncio.Lock:
+    if repo_id not in _repo_locks:
+        _repo_locks[repo_id] = asyncio.Lock()
+    return _repo_locks[repo_id]
 from app.schemas.code_quality import (
     CodeAnalysisRequest, CodeAnalysisResult, ComplexityResult,
     DuplicateBlock, SecurityIssue, OwnershipResult, HotspotResult,
@@ -898,6 +907,208 @@ class CodeQualityAnalyzer:
 
         return cycles
 
+    def _calculate_jsts_lcom4_cbo(self, content: str) -> List[Dict]:
+        """
+        Parse JS/TS classes lexically and calculate LCOM4 and CBO values.
+        Returns a list of dicts: [{"name": class_name, "lcom4": lcom4_val, "cbo": cbo_val, "lineno": start_line}]
+        """
+        # JS/TS builtin globals to ignore in CBO calculation
+        jsts_builtins = {
+            'Object', 'Array', 'String', 'Number', 'Boolean', 'Symbol', 'Date', 'RegExp',
+            'Error', 'Promise', 'Map', 'Set', 'WeakMap', 'WeakSet', 'JSON', 'Math',
+            'Console', 'console', 'Response', 'Request', 'Headers', 'URL', 'URLSearchParams',
+            'Blob', 'File', 'FormData', 'Buffer', 'ArrayBuffer', 'DataView', 'Proxy',
+            'Reflect', 'Intl', 'WebAssembly', 'process', 'global', 'window', 'document',
+            'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'undefined', 'null',
+            'any', 'string', 'number', 'boolean', 'void', 'never', 'unknown', 'true', 'false'
+        }
+
+        class_regex = re.compile(r'\bclass\s+([A-Za-z0-9_$]+)(?:\s+extends\s+([A-Za-z0-9_$]+))?')
+        classes = []
+
+        for match in class_regex.finditer(content):
+            class_name = match.group(1)
+            base_class = match.group(2)
+
+            # Find matching brace for the class body
+            start_index = content.find('{', match.end())
+            if start_index == -1:
+                continue
+
+            brace_count = 1
+            i = start_index + 1
+            n = len(content)
+            while i < n and brace_count > 0:
+                char = content[i]
+                if char == '/' and i + 1 < n and content[i+1] == '/':
+                    # Single-line comment
+                    i = content.find('\n', i)
+                    if i == -1:
+                        i = n
+                    continue
+                elif char == '/' and i + 1 < n and content[i+1] == '*':
+                    # Multi-line comment
+                    end_comment = content.find('*/', i + 2)
+                    if end_comment == -1:
+                        i = n
+                    else:
+                        i = end_comment + 2
+                    continue
+                elif char in ('"', "'", '`'):
+                    # String literal
+                    quote = char
+                    i += 1
+                    while i < n:
+                        if content[i] == '\\':
+                            i += 2
+                        elif content[i] == quote:
+                            i += 1
+                            break
+                        else:
+                            i += 1
+                    continue
+                elif char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                i += 1
+
+            if brace_count == 0:
+                class_body = content[start_index + 1 : i - 1]
+                class_start_line = content[:match.start()].count('\n') + 1
+
+                # Parse methods in class_body
+                method_regex = re.compile(
+                    r'(?:^|\n)\s*(?:public|private|protected|async|static|get|set|\*)*\s*\b(constructor|[A-Za-z0-9_$]+)\s*\(([^;]*?)\)(?:\s*:\s*[A-Za-z0-9_$<>[\]{}|&\s*,]+)?\s*\{',
+                    re.DOTALL
+                )
+
+                methods = []
+                method_details = {}
+
+                # Find method bounds within the class_body
+                for m_match in method_regex.finditer(class_body):
+                    m_name = m_match.group(1)
+                    m_start = class_body.find('{', m_match.end() - 2)
+                    if m_start == -1:
+                        continue
+
+                    m_brace_count = 1
+                    m_idx = m_start + 1
+                    m_len = len(class_body)
+                    while m_idx < m_len and m_brace_count > 0:
+                        m_char = class_body[m_idx]
+                        if m_char == '/' and m_idx + 1 < m_len and class_body[m_idx+1] == '/':
+                            m_idx = class_body.find('\n', m_idx)
+                            if m_idx == -1:
+                                m_idx = m_len
+                            continue
+                        elif m_char == '/' and m_idx + 1 < m_len and class_body[m_idx+1] == '*':
+                            m_end_comment = class_body.find('*/', m_idx + 2)
+                            if m_end_comment == -1:
+                                m_idx = m_len
+                            else:
+                                m_idx = m_end_comment + 2
+                            continue
+                        elif m_char in ('"', "'", '`'):
+                            m_quote = m_char
+                            m_idx += 1
+                            while m_idx < m_len:
+                                if class_body[m_idx] == '\\':
+                                    m_idx += 2
+                                elif class_body[m_idx] == m_quote:
+                                    m_idx += 1
+                                    break
+                                else:
+                                    m_idx += 1
+                            continue
+                        elif m_char == '{':
+                            m_brace_count += 1
+                        elif m_char == '}':
+                            m_brace_count -= 1
+                        m_idx += 1
+
+                    if m_brace_count == 0:
+                        m_body = class_body[m_start + 1 : m_idx - 1]
+                        methods.append(m_name)
+                        method_details[m_name] = m_body
+
+                # Calculate LCOM4 components
+                method_attributes = {}
+                method_calls = {}
+
+                for m_name, m_body in method_details.items():
+                    accessed_attrs = set()
+                    called_methods = set()
+
+                    # Find all `this.name` and optional calling bracket `(`
+                    this_pattern = r'\bthis\.([A-Za-z0-9_$]+)(\s*\()?'
+                    for t_match in re.finditer(this_pattern, m_body):
+                        name = t_match.group(1)
+                        is_call = bool(t_match.group(2))
+                        if is_call:
+                            called_methods.add(name)
+                        else:
+                            accessed_attrs.add(name)
+
+                    method_attributes[m_name] = accessed_attrs
+                    method_calls[m_name] = called_methods
+
+                # Adjacency list
+                adj = {m: set() for m in methods}
+                for m1 in methods:
+                    for m2 in methods:
+                        if m1 == m2:
+                            continue
+                        # Connected if they share attributes
+                        shared = method_attributes[m1].intersection(method_attributes[m2])
+                        if shared:
+                            adj[m1].add(m2)
+                            adj[m2].add(m1)
+                        # Connected if m1 calls m2 or m2 calls m1
+                        if m2 in method_calls[m1] or m1 in method_calls[m2]:
+                            adj[m1].add(m2)
+                            adj[m2].add(m1)
+
+                # Connected components via BFS
+                visited = set()
+                components = 0
+                for m in methods:
+                    if m not in visited:
+                        components += 1
+                        queue = [m]
+                        visited.add(m)
+                        while queue:
+                            curr = queue.pop(0)
+                            for neighbor in adj[curr]:
+                                if neighbor not in visited:
+                                    visited.add(neighbor)
+                                    queue.append(neighbor)
+
+                lcom4_val = components if methods else 1
+
+                # Calculate CBO (Coupling Between Objects)
+                cbo_pattern = r'\b([A-Z][A-Za-z0-9_$]*)\b'
+                referenced_names = set()
+                for c_match in re.finditer(cbo_pattern, class_body):
+                    referenced_names.add(c_match.group(1))
+
+                # Filter out standard built-ins, current class name, and base class name
+                referenced_classes = {
+                    name for name in referenced_names
+                    if name not in jsts_builtins and name != class_name and name != base_class
+                }
+                cbo_val = len(referenced_classes)
+
+                classes.append({
+                    "name": class_name,
+                    "lcom4": lcom4_val,
+                    "cbo": cbo_val,
+                    "lineno": class_start_line
+                })
+
+        return classes
+
     def _scan_code_smells(self, files: List[FileInput]) -> List[CodeSmell]:
         """Scan code files for architecture/structural smells using AST and lexical rules."""
         smells = []
@@ -959,6 +1170,36 @@ class CodeQualityAnalyzer:
                         description=f"File is very large (LOC={loc}). Consider splitting it into smaller, more modular files.",
                         severity="WARNING"
                     ))
+
+                # LCOM4 & CBO for JS/TS
+                if f.path.endswith((".js", ".ts", ".jsx", ".tsx")):
+                    try:
+                        classes_metrics = self._calculate_jsts_lcom4_cbo(f.content)
+                        for cls in classes_metrics:
+                            class_name = cls["name"]
+                            lcom4_val = cls["lcom4"]
+                            cbo_val = cls["cbo"]
+                            lineno = cls["lineno"]
+
+                            if lcom4_val > 1:
+                                smells.append(CodeSmell(
+                                    file_path=f.path,
+                                    smell_type="Lack of Cohesion (LCOM4)",
+                                    location=f"Class {class_name} (Line {lineno})",
+                                    description=f"Class '{class_name}' has an LCOM4 value of {lcom4_val}. It contains {lcom4_val} disjoint method sets, suggesting it should be split to respect Single Responsibility.",
+                                    severity="WARNING"
+                                ))
+
+                            if cbo_val > 6:
+                                smells.append(CodeSmell(
+                                    file_path=f.path,
+                                    smell_type="High Coupling (CBO)",
+                                    location=f"Class {class_name} (Line {lineno})",
+                                    description=f"Class '{class_name}' has a CBO score of {cbo_val}. It is coupled to {cbo_val} other classes/modules. Consider introducing interfaces to reduce coupling.",
+                                    severity="WARNING"
+                                ))
+                    except Exception as e:
+                        logger.warning(f"JS/TS LCOM4/CBO lexical scan failed for {f.path}: {e}")
         return smells
 
     def _run_taint_analysis(self, files: List[FileInput]) -> List[TaintIssue]:
@@ -1127,13 +1368,61 @@ class CodeQualityAnalyzer:
 
         return decay_list
 
+    def _merge_and_cache_files(self, repository_id: str, incoming_files: List[FileInput]) -> List[FileInput]:
+        import json
+        import os
+        
+        # Base cache directory
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        cache_dir = os.path.join(base_dir, "data", "ast_cache", repository_id)
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        # 1. Update/write incoming files to cache
+        for f in incoming_files:
+            file_hash = hashlib.sha256(f.path.encode('utf-8')).hexdigest()
+            cache_file = os.path.join(cache_dir, f"{file_hash}.json")
+            if f.content == "" or f.content is None:
+                # Deleted file
+                if os.path.exists(cache_file):
+                    try:
+                        os.remove(cache_file)
+                        logger.info(f"Removed file from AST cache: {f.path}")
+                    except Exception as e:
+                        logger.error(f"Failed to delete cache file for {f.path}: {e}")
+            else:
+                # Write to cache
+                try:
+                    with open(cache_file, "w", encoding="utf-8") as out:
+                        json.dump({"path": f.path, "content": f.content}, out, ensure_ascii=False)
+                except Exception as e:
+                    logger.error(f"Failed to write cache file for {f.path}: {e}")
+                    
+        # 2. Read all files from cache to form the complete set
+        all_files = []
+        for filename in os.listdir(cache_dir):
+            if filename.endswith(".json"):
+                cache_file = os.path.join(cache_dir, filename)
+                try:
+                    with open(cache_file, "r", encoding="utf-8") as inp:
+                        data = json.load(inp)
+                        all_files.append(FileInput(path=data["path"], content=data["content"]))
+                except Exception as e:
+                    logger.error(f"Failed to read cache file {filename}: {e}")
+                    
+        return all_files
+
     def analyze(self, request: CodeAnalysisRequest) -> CodeAnalysisResult:
         """Run all code quality checks: Complexity, SAST, Duplication, Ownership, Hotspots, and advanced design/social metrics."""
-        logger.info(f"Starting code quality scan for {len(request.files)} files...")
+        files_to_scan = request.files
+        if request.repository_id:
+            logger.info(f"Using AST cache for repository: {request.repository_id}")
+            files_to_scan = self._merge_and_cache_files(request.repository_id, request.files)
+            
+        logger.info(f"Starting code quality scan for {len(files_to_scan)} files...")
 
         # 1. Complexity & Code metrics
         complexity_results = []
-        for f in request.files:
+        for f in files_to_scan:
             if f.path.endswith(".py"):
                 comp = self._calculate_python_complexity(f.content, f.path)
             else:
@@ -1141,15 +1430,15 @@ class CodeQualityAnalyzer:
             complexity_results.append(comp)
 
         # 2. Scanning duplication
-        duplication_map = self._scan_duplicates(request.files)
+        duplication_map = self._scan_duplicates(files_to_scan)
         for comp in complexity_results:
             comp.duplicate_blocks = duplication_map.get(comp.path, [])
 
         # 3. Security issues
-        security_issues = self._scan_security(request.files)
+        security_issues = self._scan_security(files_to_scan)
 
         # 4. Ownership metrics
-        ownership_results = self._analyze_ownership(request.files, request.git_history)
+        ownership_results = self._analyze_ownership(files_to_scan, request.git_history)
 
         # 5. Hotspots detection
         hotspots = self._detect_hotspots(
@@ -1161,22 +1450,22 @@ class CodeQualityAnalyzer:
 
         # Advanced Metrics Execution
         # 6. Code smells scan (LCOM4, CBO, God Class, Long Params, Nesting)
-        code_smells = self._scan_code_smells(request.files)
+        code_smells = self._scan_code_smells(files_to_scan)
 
         # 7. Circular dependencies detection
-        dependency_cycles = self._detect_dependency_cycles(request.files)
+        dependency_cycles = self._detect_dependency_cycles(files_to_scan)
 
         # 8. Semantic clones detection (TF-IDF + Cosine)
-        semantic_clones = self._detect_semantic_clones(request.files)
+        semantic_clones = self._detect_semantic_clones(files_to_scan)
 
         # 9. Taint analysis
-        taint_issues = self._run_taint_analysis(request.files)
+        taint_issues = self._run_taint_analysis(files_to_scan)
 
         # 10. JIT Commit risk assessments
         jit_commit_risks = self._analyze_jit_commit_risk(request.git_history)
 
         # 11. Knowledge decay and silo mapping
-        knowledge_decay = self._analyze_knowledge_decay(request.files, request.git_history, ownership_results)
+        knowledge_decay = self._analyze_knowledge_decay(files_to_scan, request.git_history, ownership_results)
 
         logger.info(
             f"Scan complete: found {len(security_issues)} security issues, {len(hotspots)} hotspots, "

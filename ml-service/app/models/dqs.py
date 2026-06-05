@@ -173,11 +173,23 @@ class DQSModel:
                 shap_values = self._explain_heuristic(features)
                 method = "heuristic-recovery"
 
-        return DQSPredictionResult(
+        res = DQSPredictionResult(
             score=score,
             model_version=f"{self.version}-{method}",
             shap_values=shap_values
         )
+
+        try:
+            from app.utils.telemetry import log_prediction_telemetry
+            log_prediction_telemetry(
+                "dqs",
+                {"developer_id": developer_id, "features": features.model_dump()},
+                res.model_dump()
+            )
+        except Exception as tel_err:
+            logger.error(f"Telemetry logging failed: {tel_err}")
+
+        return res
 
     def explain(self, developer_id: str, features: DQSFeatures) -> DQSExplainResult:
         """

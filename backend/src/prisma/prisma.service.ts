@@ -7,6 +7,7 @@ import { MetricsService } from '../modules/metrics';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   private pool: Pool;
+  private poolMetricsInterval?: NodeJS.Timeout;
 
   constructor(
     @Optional() @Inject(MetricsService) private readonly metricsService?: MetricsService,
@@ -26,6 +27,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleDestroy() {
+    if (this.poolMetricsInterval) {
+      clearInterval(this.poolMetricsInterval);
+    }
     await this.$disconnect();
     await this.pool.end();
   }
@@ -37,7 +41,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     if (!this.metricsService) return;
 
     // Update pool metrics every 10 seconds
-    setInterval(() => {
+    this.poolMetricsInterval = setInterval(() => {
       if (this.metricsService) {
         this.metricsService.dbConnectionPoolSize.set(this.pool.totalCount);
         this.metricsService.dbConnectionPoolActive.set(this.pool.totalCount - this.pool.idleCount);
