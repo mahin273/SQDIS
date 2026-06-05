@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../../../prisma';
 import { WebhookSignatureService } from './webhook-signature.service';
+import { CacheService } from '../../cache/cache.service';
 import { IdempotencyService } from './idempotency.service';
 import { WebhookLogService } from './webhook-log.service';
 import { RateLimitService } from './rate-limit.service';
@@ -70,6 +71,7 @@ export class WebhookService {
     private readonly webhookLogService: WebhookLogService,
     private readonly rateLimitService: RateLimitService,
     private readonly eventRouter: EventRouter,
+    private readonly cacheService: CacheService,
   ) {}
 
   /**
@@ -173,22 +175,52 @@ export class WebhookService {
       throw new UnauthorizedException('Invalid JSON payload');
     }
 
-    // Get repository from database to retrieve webhook secret
-    const repository = await this.prisma.repository.findFirst({
-      where: {
-        githubId: parsedPayload.repository.id,
-        isEnabled: true,
-      },
-    });
+    // Get repository from cache first to avoid DB starvation DOS
+    const githubId = parsedPayload.repository.id;
+    const cacheKey = `github:repository:secret:${githubId}`;
 
-    if (!repository) {
-      throw new NotFoundException(
-        `Repository not found or not enabled: ${parsedPayload.repository.full_name}`,
-      );
+    let cachedRepository = await this.cacheService.get<{
+      id: string;
+      organizationId: string;
+      fullName: string;
+      webhookSecret: string | null;
+    } | 'NOT_FOUND'>(cacheKey);
+
+    let repository: {
+      id: string;
+      organizationId: string;
+      fullName: string;
+      webhookSecret: string | null;
+    } | null = null;
+
+    if (cachedRepository === 'NOT_FOUND') {
+      throw new UnauthorizedException('Invalid webhook signature');
+    } else if (cachedRepository) {
+      repository = cachedRepository;
+    } else {
+      const dbRepository = await this.prisma.repository.findFirst({
+        where: {
+          githubId,
+          isEnabled: true,
+        },
+      });
+
+      if (dbRepository) {
+        repository = {
+          id: dbRepository.id,
+          organizationId: dbRepository.organizationId,
+          fullName: dbRepository.fullName,
+          webhookSecret: dbRepository.webhookSecret,
+        };
+        await this.cacheService.set(cacheKey, repository, 3600); // 1 hour TTL
+      } else {
+        await this.cacheService.set(cacheKey, 'NOT_FOUND', 300); // 5 minutes negative caching
+        throw new UnauthorizedException('Invalid webhook signature');
+      }
     }
 
     if (!repository.webhookSecret) {
-      throw new UnauthorizedException('Webhook secret not configured for repository');
+      throw new UnauthorizedException('Invalid webhook signature');
     }
 
     // Check rate limit before processing

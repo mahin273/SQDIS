@@ -69,7 +69,7 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         return;
       }
 
-      const payload = this.jwtService.verify<JwtPayload>(token);
+      const payload = this.jwtService.verify<JwtPayload & { exp?: number }>(token);
 
       // Create authenticated socket context
       const authSocket: AuthenticatedSocket = {
@@ -81,6 +81,29 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         role: payload.role,
         subscribedChannels: new Set(),
       };
+
+      // Enforce token lifetime limits to prevent session hijacking
+      if (payload.exp) {
+        const expirationTimeMs = payload.exp * 1000;
+        const timeToExpiration = expirationTimeMs - Date.now();
+
+        if (timeToExpiration <= 0) {
+          this.logger.warn(`Connection rejected: Token already expired (${client.id})`);
+          client.emit('error', { message: 'Token expired', code: 'AUTH_EXPIRED' });
+          client.disconnect();
+          return;
+        }
+
+        // Schedule automatic disconnection
+        const timeout = setTimeout(() => {
+          this.logger.warn(`Disconnecting client: Token expired (${client.id})`);
+          client.emit('error', { message: 'Token expired', code: 'AUTH_EXPIRED' });
+          client.disconnect();
+        }, timeToExpiration);
+
+        // Store timeout reference on the socket object
+        (client as any).authTimeout = timeout;
+      }
 
       // Store client context
       this.connectedClients.set(client.id, authSocket);
@@ -97,6 +120,12 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
    * Handle client disconnection
    */
   handleDisconnect(client: Socket) {
+    // Clear the token expiration timeout if it exists
+    const authTimeout = (client as any).authTimeout;
+    if (authTimeout) {
+      clearTimeout(authTimeout);
+    }
+
     const authSocket = this.connectedClients.get(client.id);
 
     if (authSocket) {

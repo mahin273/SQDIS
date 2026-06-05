@@ -16,6 +16,7 @@ import {
   Logger,
   Res,
   HttpException,
+  NotFoundException,
 } from '@nestjs/common';
 import type { RawBodyRequest } from '@nestjs/common';
 import type { Response } from 'express';
@@ -583,7 +584,28 @@ export class GitHubController {
   })
   async triggerBackfill(@Param('id') repoId: string, @Query('days') days?: string) {
     const daysNum = days ? parseInt(days, 10) : 90;
-    return this.backfillService.backfillRepository(repoId, daysNum);
+
+    const repository = await this.githubService.getRepository(repoId);
+    if (!repository) {
+      throw new NotFoundException(`Repository ${repoId} not found`);
+    }
+
+    // Run backfill asynchronously in the background to avoid blocking the HTTP handler
+    this.backfillService
+      .backfillRepository(repoId, daysNum)
+      .then((result) => {
+        this.logger.log(
+          `Manual backfill completed for repository ${repoId}: ${result.commitsQueued} commits queued`,
+        );
+      })
+      .catch((error) => {
+        this.logger.error(`Manual backfill failed for repository ${repoId}: ${error}`);
+      });
+
+    return {
+      success: true,
+      message: 'Backfill process initiated in the background.',
+    };
   }
 
   /**

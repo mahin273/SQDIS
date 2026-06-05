@@ -59,7 +59,7 @@ def generate_sqs_data(n_samples=500):
     coverage = np.random.uniform(10.0, 100.0, n_samples)
     churn_rate = np.random.uniform(0.05, 0.7, n_samples)
     debt_count = np.random.randint(0, 50, n_samples)
-    bug_density = np.random.uniform(0.0, 12.0, n_samples)
+    bug_density = np.random.uniform(0.0, 1.0, n_samples)
 
     # Base SQS formula
     base = 45.0
@@ -70,7 +70,7 @@ def generate_sqs_data(n_samples=500):
     # Negative factors
     base -= churn_rate * 18.0
     base -= np.minimum((debt_count / 15.0) * 12.0, 12.0)
-    base -= np.minimum(bug_density * 2.2, 22.0)
+    base -= np.minimum(bug_density * 22.0, 22.0)
 
     # Add Gaussian noise
     noise = np.random.normal(0, 2, n_samples)
