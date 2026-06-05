@@ -141,8 +141,10 @@ export class ScoresMlClientService {
       });
 
       if (!response.ok) {
-        this.logger.warn(`ML service DQS prediction failed with status ${response.status}`);
-        return null;
+        this.logger.warn(
+          `ML service DQS prediction failed with status ${response.status}. Falling back to local heuristic.`,
+        );
+        return this.predictDQSHeuristic(features, developerId);
       }
 
       const result = await response.json();
@@ -156,10 +158,81 @@ export class ScoresMlClientService {
         model_version: result.model_version,
         shap_values: result.shap_values || [],
       };
-    } catch (error) {
-      this.logger.warn(`Failed to predict DQS: ${error}`);
-      return null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to predict DQS: ${error?.message || error}. Falling back to local heuristic.`,
+      );
+      return this.predictDQSHeuristic(features, developerId);
     }
+  }
+
+  /**
+   * Calculate DQS locally using a rule-based fallback heuristic.
+   */
+  private predictDQSHeuristic(features: DQSFeatures, developerId: string): DQSPredictionResult {
+    // Base score
+    let score = 70.0;
+
+    // Positive impacts
+    score += Math.min((features.commit_count_30d / 30.0) * 10.0, 10.0);
+    score += (features.coverage_avg / 100.0) * 15.0;
+    score += Math.min((features.review_count / 10.0) * 10.0, 10.0);
+
+    // Negative impacts
+    score -= features.bug_fix_ratio * 20.0;
+    score -= features.code_churn * 15.0;
+    score -= Math.min((features.review_turnaround_avg / 24.0) * 10.0, 10.0);
+
+    const finalScore = Math.round(Math.max(0.0, Math.min(100.0, score)) * 100) / 100;
+
+    // Simulated SHAP values
+    const baselines = {
+      commit_count_30d: 15,
+      coverage_avg: 50.0,
+      review_count: 5,
+      bug_fix_ratio: 0.2,
+      code_churn: 0.3,
+      review_turnaround_avg: 12.0,
+    };
+
+    const shap_values = [
+      {
+        feature: 'commit_count_30d',
+        value: features.commit_count_30d,
+        impact: Math.round(Math.max(-5.0, Math.min((features.commit_count_30d - baselines.commit_count_30d) * 0.33, 5.0)) * 100) / 100,
+      },
+      {
+        feature: 'coverage_avg',
+        value: features.coverage_avg,
+        impact: Math.round((features.coverage_avg - baselines.coverage_avg) * 0.15 * 100) / 100,
+      },
+      {
+        feature: 'review_count',
+        value: features.review_count,
+        impact: Math.round(Math.max(-5.0, Math.min((features.review_count - baselines.review_count) * 1.0, 5.0)) * 100) / 100,
+      },
+      {
+        feature: 'bug_fix_ratio',
+        value: features.bug_fix_ratio,
+        impact: Math.round(-(features.bug_fix_ratio - baselines.bug_fix_ratio) * 20.0 * 100) / 100,
+      },
+      {
+        feature: 'code_churn',
+        value: features.code_churn,
+        impact: Math.round(-(features.code_churn - baselines.code_churn) * 15.0 * 100) / 100,
+      },
+      {
+        feature: 'review_turnaround_avg',
+        value: features.review_turnaround_avg,
+        impact: Math.round(Math.max(-10.0, Math.min(-(features.review_turnaround_avg - baselines.review_turnaround_avg) * 0.42, 5.0)) * 100) / 100,
+      },
+    ];
+
+    return {
+      score: finalScore,
+      model_version: '1.0.0-client-heuristic-fallback',
+      shap_values,
+    };
   }
 
   /**
@@ -210,8 +283,10 @@ export class ScoresMlClientService {
       });
 
       if (!response.ok) {
-        this.logger.warn(`ML service SQS prediction failed with status ${response.status}`);
-        return null;
+        this.logger.warn(
+          `ML service SQS prediction failed with status ${response.status}. Falling back to local heuristic.`,
+        );
+        return this.predictSQSHeuristic(features, projectId, modules);
       }
 
       const result = await response.json();
@@ -226,10 +301,122 @@ export class ScoresMlClientService {
         risky_modules: result.risky_modules || [],
         recommendations: result.recommendations || [],
       };
-    } catch (error) {
-      this.logger.warn(`Failed to predict SQS: ${error}`);
-      return null;
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to predict SQS: ${error?.message || error}. Falling back to local heuristic.`,
+      );
+      return this.predictSQSHeuristic(features, projectId, modules);
     }
+  }
+
+  /**
+   * Calculate SQS locally using a rule-based fallback heuristic.
+   */
+  private predictSQSHeuristic(
+    features: SQSFeatures,
+    projectId: string,
+    modules?: ModuleMetrics[],
+  ): SQSPredictionResult {
+    let score = 50.0;
+
+    // Positive impacts
+    score += (features.avg_dqs / 100.0) * 30.0;
+    score += (features.coverage / 100.0) * 25.0;
+
+    // Negative impacts
+    score -= features.churn_rate * 15.0;
+    score -= Math.min((features.debt_count / 10.0) * 10.0, 10.0);
+    score -= Math.min(features.bug_density * 20.0, 20.0);
+
+    const finalScore = Math.round(Math.max(0.0, Math.min(100.0, score)) * 100) / 100;
+
+    // Detect risky modules
+    const risky_modules: RiskyModule[] = [];
+    if (modules) {
+      for (const m of modules) {
+        let risk_score = 0.0;
+        const reasons: string[] = [];
+
+        if (m.churn_rate > 0.4) {
+          risk_score += 0.3;
+          reasons.push(`High code churn rate (${(m.churn_rate * 100).toFixed(0)}%) indicates unstable logic`);
+        }
+        if (m.coverage < 50.0) {
+          risk_score += 0.3;
+          reasons.push(`Low test coverage (${m.coverage.toFixed(1)}%) lacks regression protection`);
+        }
+        if (m.bug_count > 5) {
+          risk_score += 0.2;
+          reasons.push(`High bug fix activity (${m.bug_count} fixes) indicates post-release instability`);
+        }
+        if (m.debt_count > 5) {
+          risk_score += 0.2;
+          reasons.push(`High debt markers count (${m.debt_count} TODOs/FIXMEs)`);
+        }
+
+        risk_score = Math.min(risk_score, 1.0);
+        let level: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' = 'LOW';
+        if (risk_score >= 0.7) level = 'CRITICAL';
+        else if (risk_score >= 0.5) level = 'HIGH';
+        else if (risk_score >= 0.3) level = 'MEDIUM';
+
+        if (risk_score > 0.0) {
+          risky_modules.push({
+            path: m.path,
+            risk_level: level,
+            reason: reasons.join(' & '),
+            churn_rate: m.churn_rate,
+            coverage: m.coverage,
+            bug_count: m.bug_count,
+          });
+        }
+      }
+    }
+
+    // Generate recommendations
+    const recommendations: string[] = [];
+    if (features.coverage < 70.0) {
+      recommendations.push(
+        'Increase automated test coverage. Focus on writing unit tests for modules with low coverage (<50%).',
+      );
+    }
+    if (features.churn_rate > 0.3) {
+      recommendations.push(
+        'Implement robust software design reviews. High code churn indicates frequent refactoring and requirement changes.',
+      );
+    }
+    if (features.bug_density > 0.3) {
+      recommendations.push(
+        'Establish strict pull request guidelines and pre-merge validation tests to reduce bug density.',
+      );
+    }
+    if (features.debt_count > 15) {
+      recommendations.push(
+        'Schedule a technical debt refactoring sprint. Debt items (TODOs/FIXMEs) are beginning to accumulate.',
+      );
+    }
+    if (features.avg_dqs < 70.0) {
+      recommendations.push(
+        'Introduce developer mentorship programs. Focus on improving conventional commit quality and testing practices.',
+      );
+    }
+    if (finalScore < 45.0) {
+      recommendations.push(
+        'CRITICAL: Codebase health is severely degraded. Hold a post-mortem review and prioritize stability over features.',
+      );
+    }
+    if (recommendations.length === 0) {
+      recommendations.push(
+        'Project health is stable. Continue maintaining current testing practices and code reviews.',
+      );
+    }
+
+    return {
+      score: finalScore,
+      model_version: '1.0.0-client-heuristic-fallback',
+      risky_modules,
+      recommendations,
+    };
   }
 
   /**

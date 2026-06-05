@@ -12,6 +12,7 @@ import { PrismaService } from '../../prisma';
 import { DataFilterService } from '../auth/services/data-filter.service';
 import { EncryptionService } from './services/encryption.service';
 import { EnableRepoDto } from './dto';
+import { CacheService } from '../cache/cache.service';
 import { randomBytes } from 'crypto';
 import { Role } from '@prisma/client';
 
@@ -90,7 +91,21 @@ export class GitHubService {
     private readonly prisma: PrismaService,
     private readonly encryptionService: EncryptionService,
     private readonly dataFilterService: DataFilterService,
+    private readonly cacheService: CacheService,
   ) {}
+
+  /**
+   * Clear cached webhook secret for a repository
+   */
+  private async clearRepositorySecretCache(githubId: number): Promise<void> {
+    try {
+      const cacheKey = `github:repository:secret:${githubId}`;
+      await this.cacheService.delete(cacheKey);
+      this.logger.debug(`Cleared repository secret cache for GitHub ID: ${githubId}`);
+    } catch (error) {
+      this.logger.warn(`Failed to clear repository secret cache: ${error}`);
+    }
+  }
 
   /**
    * Set the backfill service (called by module to avoid circular dependency)
@@ -365,6 +380,9 @@ export class GitHubService {
       });
     }
 
+    // Clear cached webhook secret
+    await this.clearRepositorySecretCache(repository.githubId);
+
     // Trigger backfill for last 90 days of commits asynchronously
     this.triggerBackfill(repository.id);
 
@@ -495,6 +513,9 @@ export class GitHubService {
       where: { id: repository.id },
       data: { isEnabled: false, webhookId: null, webhookSecret: null },
     });
+
+    // Clear cached webhook secret
+    await this.clearRepositorySecretCache(repository.githubId);
   }
 
   /**
@@ -515,10 +536,13 @@ export class GitHubService {
     }
 
     // Update the webhook secret in the database
-    await this.prisma.repository.update({
+    const updated = await this.prisma.repository.update({
       where: { id: repository.id },
       data: { webhookSecret },
     });
+
+    // Clear cached webhook secret
+    await this.clearRepositorySecretCache(updated.githubId);
 
     // If the repository has a webhook configured on GitHub, update it there too
     if (repository.webhookId && repository.isEnabled) {
@@ -679,6 +703,9 @@ export class GitHubService {
           data: { webhookId, webhookSecret },
         });
 
+        // Clear cached webhook secret
+        await this.clearRepositorySecretCache(repo.githubId);
+
         this.logger.log(`Updated webhook for ${repo.fullName}`);
         updated++;
       } catch (error) {
@@ -757,6 +784,9 @@ export class GitHubService {
       where: { id: repository.id },
       data: { isEnabled: enabled },
     });
+
+    // Clear cached webhook secret
+    await this.clearRepositorySecretCache(updatedRepository.githubId);
 
     return {
       id: updatedRepository.id,

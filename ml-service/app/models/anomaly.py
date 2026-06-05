@@ -128,6 +128,50 @@ class AnomalyDetector:
         self.model.fit(X)
         logger.info("Model training complete!")
 
+    def _detect_heuristic(self, features: dict) -> Dict:
+        """
+        Rule-based heuristic fallback for anomaly detection if the model is not trained/fitted.
+        """
+        lines = float(features.get('lines_changed', 0))
+        files = float(features.get('files_changed', 0))
+        time = float(features.get('time_of_day', 0))
+        churn = float(features.get('churn_ratio', 0))
+
+        is_anomaly = False
+        anomaly_score = 0.1
+        reasons = []
+
+        if lines > 5000:
+            anomaly_score += 0.4
+            reasons.append("Extreme lines changed")
+        elif lines > 1000:
+            anomaly_score += 0.2
+
+        if files > 100:
+            anomaly_score += 0.3
+            reasons.append("Extreme files changed")
+        elif files > 30:
+            anomaly_score += 0.15
+
+        if time >= 2 and time <= 5:
+            anomaly_score += 0.2
+            reasons.append("Dead of night commit")
+
+        if churn > 0.95:
+            anomaly_score += 0.1
+
+        anomaly_score = min(anomaly_score, 1.0)
+        is_anomaly = anomaly_score >= 0.6
+
+        severity = self._map_severity(anomaly_score)
+
+        return {
+            "is_anomaly": bool(is_anomaly),
+            "anomaly_score": round(anomaly_score, 2),
+            "severity": severity,
+            "model_version": "1.0.0-heuristic-fallback"
+        }
+
     def detect(self, features: dict) -> Dict:
         """
         Detect if a commit is anomalous based on its features.
@@ -138,6 +182,12 @@ class AnomalyDetector:
         Returns:
             Dictionary with is_anomaly, anomaly_score, and severity
         """
+        # Check if the model is fitted (Isolation Forest has estimators_ after fit)
+        is_fitted = hasattr(self.model, 'estimators_')
+        if not is_fitted:
+            logger.warning("Isolation Forest model is not fitted. Operating in fallback mode.")
+            return self._detect_heuristic(features)
+
         # Extract features in correct order
         X = self._extract_features(features)
 

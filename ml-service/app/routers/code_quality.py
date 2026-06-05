@@ -47,15 +47,27 @@ async def clear_code_quality_cache(repository_id: str):
         import shutil
         import os
         
+        # Resolve target directory securely to prevent path traversal / arbitrary directory deletion
+        base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        ast_cache_base = os.path.abspath(os.path.join(base_dir, "data", "ast_cache"))
+        cache_dir = os.path.abspath(os.path.join(ast_cache_base, repository_id))
+        
+        if not cache_dir.startswith(ast_cache_base):
+            logger.error(f"Path traversal check failed for cache clearing: {repository_id}")
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid repository_id (path traversal detected): {repository_id}"
+            )
+            
         async with get_repo_lock(repository_id):
-            base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            cache_dir = os.path.join(base_dir, "data", "ast_cache", repository_id)
             if os.path.exists(cache_dir):
                 shutil.rmtree(cache_dir)
                 logger.info(f"Successfully cleared AST cache for repository: {repository_id}")
                 return {"status": "success", "message": f"Cache cleared for repository {repository_id}"}
             else:
                 return {"status": "success", "message": "Cache was already empty"}
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Failed to clear cache: {e}")
         raise HTTPException(

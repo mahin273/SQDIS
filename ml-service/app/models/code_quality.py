@@ -1374,7 +1374,16 @@ class CodeQualityAnalyzer:
         
         # Base cache directory
         base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        cache_dir = os.path.join(base_dir, "data", "ast_cache", repository_id)
+        ast_cache_base = os.path.abspath(os.path.join(base_dir, "data", "ast_cache"))
+        
+        # Resolve target directory securely
+        cache_dir = os.path.abspath(os.path.join(ast_cache_base, repository_id))
+        
+        # Prevent Path Traversal
+        if not cache_dir.startswith(ast_cache_base):
+            logger.error(f"Path traversal attempt blocked: {repository_id}")
+            raise ValueError(f"Invalid repository_id (path traversal detected): {repository_id}")
+            
         os.makedirs(cache_dir, exist_ok=True)
         
         # 1. Update/write incoming files to cache
