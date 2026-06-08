@@ -87,10 +87,10 @@ export class LcovParser implements CoverageParser {
    * Normalize file path for consistent storage
    */
   private normalizePath(filePath: string): string {
-    // Remove leading ./ or /
-    let normalized = filePath.replace(/^\.?\//, '');
     // Convert backslashes to forward slashes
-    normalized = normalized.replace(/\\/g, '/');
+    let normalized = filePath.replace(/\\/g, '/');
+    // Remove leading ./ or /
+    normalized = normalized.replace(/^\.?\//, '');
     return normalized;
   }
 }
