@@ -1,4 +1,3 @@
-stream_over_grpc_enabled: true
 server:
   http_listen_port: 3200
 

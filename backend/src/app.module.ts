@@ -38,6 +38,7 @@ import { TeamsModule } from './modules/teams/teams.module.js';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: ['.env', '../.env'],
     }),
     ThrottlerModule.forRoot([
       {

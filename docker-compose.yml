@@ -1,0 +1,222 @@
+version: '3.8'
+
+services:
+  # Primary Database
+  db:
+    image: postgres:15-alpine
+    container_name: sqdis-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "5435:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sqdis-network
+
+  # Cache & Job Queue Redis
+  redis:
+    image: redis:7-alpine
+    container_name: sqdis-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sqdis-network
+
+  # ML Service (FastAPI)
+  ml-service:
+    build:
+      context: ./ml-service
+    container_name: sqdis-ml-service
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:80
+    env_file:
+      - .env
+    networks:
+      - sqdis-network
+
+  # Backend API Server (NestJS)
+  backend:
+    build:
+      context: ./backend
+    container_name: sqdis-backend
+    restart: always
+    ports:
+      - "3000:3000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - ML_SERVICE_URL=http://ml-service:8000
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - sqdis-network
+
+  # Frontend Web Client (React + Nginx)
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://localhost:3000/api}
+    container_name: sqdis-frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - sqdis-network
+
+  # Prometheus Metrics Ingestion
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: sqdis-prometheus
+    restart: always
+    volumes:
+      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    depends_on:
+      - backend
+      - ml-service
+    networks:
+      - sqdis-network
+
+  # Grafana Dashboard UI
+  grafana:
+    image: grafana/grafana:latest
+    container_name: sqdis-grafana
+    restart: always
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+    ports:
+      - "3001:3000"
+    depends_on:
+      - prometheus
+    networks:
+      - sqdis-network
+
+  # Loki Log Aggregator
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: sqdis-loki
+    restart: always
+    volumes:
+      - ./monitoring/loki/loki-config.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    networks:
+      - sqdis-network
+
+  # Promtail Log Shipper
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: sqdis-promtail
+    restart: always
+    volumes:
+      - ./monitoring/promtail/promtail-config.yml:/etc/promtail/config.yml
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - sqdis-network
+
+  # Tempo Distributed Tracing
+  tempo:
+    image: grafana/tempo:2.4.1
+    container_name: sqdis-tempo
+    restart: always
+    volumes:
+      - ./monitoring/tempo/tempo.yml:/etc/tempo.yaml
+    command:
+      - '--config.file=/etc/tempo.yaml'
+    ports:
+      - "3200:3200"
+      - "4317:4317"
+      - "4318:4318"
+    networks:
+      - sqdis-network
+
+  # Node Exporter for OS Metrics
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: sqdis-node-exporter
+    restart: always
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.rootfs=/rootfs'
+      - '--path.sysfs=/host/sys'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    ports:
+      - "9100:9100"
+    networks:
+      - sqdis-network
+
+  # cAdvisor for Container Metrics
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    container_name: sqdis-cadvisor
+    restart: always
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - sqdis-network
+
+networks:
+  sqdis-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
