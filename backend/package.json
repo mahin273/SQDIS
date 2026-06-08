@@ -24,6 +24,22 @@
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
   },
+  "jest": {
+    "moduleFileExtensions": [
+      "js",
+      "json",
+      "ts"
+    ],
+    "rootDir": ".",
+    "testEnvironment": "node",
+    "testRegex": ".*\\.spec\\.ts$",
+    "moduleNameMapper": {
+      "^(\\.{1,2}/.*)\\.js$": "$1"
+    },
+    "transform": {
+      "^.+\\.(t|j)s$": "ts-jest"
+    }
+  },
   "dependencies": {
     "@bull-board/api": "^6.16.2",
     "@bull-board/express": "^6.16.2",
@@ -92,6 +108,7 @@
     "fast-check": "^4.4.0",
     "globals": "^16.0.0",
     "jest": "^29.7.0",
+    "jest-util": "^29.7.0",
     "prettier": "^3.4.2",
     "prisma": "^7.1.0",
     "source-map-support": "^0.5.21",
