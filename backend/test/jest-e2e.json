@@ -3,6 +3,10 @@
   "rootDir": ".",
   "testEnvironment": "node",
   "testRegex": ".e2e-spec.ts$",
+  "moduleNameMapper": {
+    "^(\\.{1,2}/.*)\\.js$": "$1",
+    "^@octokit/rest$": "<rootDir>/__mocks__/octokit-rest.ts"
+  },
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   }
