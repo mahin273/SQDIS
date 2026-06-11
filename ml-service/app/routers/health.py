@@ -48,9 +48,10 @@ async def health_check(settings: Settings = Depends(get_settings)):
             version=settings.sqs_model_version
         ),
     }
+    status = "healthy" if all(model.loaded for model in models.values()) else "degraded"
 
     return HealthResponse(
-        status="healthy",
+        status=status,
         app_name=settings.app_name,
         version=settings.app_version,
         debug=settings.debug,

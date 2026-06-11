@@ -648,11 +648,23 @@ export class ProjectsService {
   /**
    * Verify user has access to project
    */
-  async verifyProjectAccess(projectId: string, organizationId: string) {
+  async verifyProjectAccess(
+    projectId: string,
+    organizationId: string,
+    userId: string,
+    userRole: Role,
+  ) {
+    const filter = await this.dataFilterService.createProjectFilter(
+      userId,
+      userRole,
+      organizationId,
+    );
+
     const project = await this.prisma.project.findFirst({
       where: {
+        ...filter,
         id: projectId,
-        organizationId,
+        isActive: true,
       },
     });
 

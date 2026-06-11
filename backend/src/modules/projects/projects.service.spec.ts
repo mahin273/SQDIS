@@ -131,6 +131,43 @@ describe('ProjectsService', () => {
     );
   });
 
+  it('verifies project access using the same role-based filter as project listing', async () => {
+    dataFilterService.createProjectFilter.mockResolvedValue({
+      organizationId: 'org-1',
+      teamAssignments: {
+        some: {
+          teamId: {
+            in: ['team-1'],
+          },
+        },
+      },
+    });
+    prisma.project.findFirst.mockResolvedValue(project);
+
+    await expect(
+      service.verifyProjectAccess('project-1', 'org-1', 'user-1', Role.DEVELOPER),
+    ).resolves.toEqual(project);
+    expect(dataFilterService.createProjectFilter).toHaveBeenCalledWith(
+      'user-1',
+      Role.DEVELOPER,
+      'org-1',
+    );
+    expect(prisma.project.findFirst).toHaveBeenCalledWith({
+      where: {
+        organizationId: 'org-1',
+        teamAssignments: {
+          some: {
+            teamId: {
+              in: ['team-1'],
+            },
+          },
+        },
+        id: 'project-1',
+        isActive: true,
+      },
+    });
+  });
+
   it('updates a project and rejects duplicate renamed names', async () => {
     prisma.project.findUnique.mockResolvedValueOnce(project);
     prisma.project.findFirst.mockResolvedValueOnce({ id: 'project-2', name: 'API' });
