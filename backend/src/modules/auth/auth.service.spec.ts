@@ -5,6 +5,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { createHash } from 'crypto';
 import { JwtService } from '@nestjs/jwt';
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma';
@@ -161,13 +162,15 @@ describe('AuthService', () => {
       },
     });
     expect(result.refreshToken).toHaveLength(64);
+    const refreshTokenHash = createHash('sha256').update(result.refreshToken).digest('hex');
     expect(prisma.refreshToken.create).toHaveBeenCalledWith({
       data: expect.objectContaining({
         userId: user.id,
-        token: result.refreshToken,
+        token: refreshTokenHash,
         expiresAt: expect.any(Date),
       }),
     });
+    expect(refreshTokenHash).not.toBe(result.refreshToken);
   });
 
   it('rejects duplicate registration emails', async () => {
@@ -212,6 +215,12 @@ describe('AuthService', () => {
     await expect(service.refreshToken('old-refresh')).resolves.toMatchObject({
       accessToken: 'access-token',
       user: { id: user.id },
+    });
+    expect(prisma.refreshToken.findUnique).toHaveBeenCalledWith({
+      where: {
+        token: createHash('sha256').update('old-refresh').digest('hex'),
+      },
+      include: { user: true },
     });
     expect(prisma.refreshToken.update).toHaveBeenCalledWith({
       where: { id: 'refresh-1' },

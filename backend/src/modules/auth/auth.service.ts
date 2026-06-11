@@ -25,6 +25,10 @@ export class AuthService {
   private readonly accessTokenExpiresIn: number;
   private readonly refreshTokenExpiresIn: number;
 
+  private hashRefreshToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly jwtService: JwtService,
@@ -107,9 +111,11 @@ export class AuthService {
    * Refresh access token using refresh token
    */
   async refreshToken(token: string): Promise<AuthResponse> {
+    const tokenHash = this.hashRefreshToken(token);
+
     // Find the refresh token in database
     const refreshToken = await this.prisma.refreshToken.findUnique({
-      where: { token },
+      where: { token: tokenHash },
       include: { user: true },
     });
 
@@ -141,9 +147,11 @@ export class AuthService {
    * Logout by revoking refresh token
    */
   async logout(token: string): Promise<void> {
+    const tokenHash = this.hashRefreshToken(token);
+
     // Find and revoke the refresh token
     const refreshToken = await this.prisma.refreshToken.findUnique({
-      where: { token },
+      where: { token: tokenHash },
     });
 
     if (refreshToken && !refreshToken.revokedAt) {
@@ -220,13 +228,14 @@ export class AuthService {
 
     // Generate refresh token (random string stored in DB)
     const refreshTokenValue = randomBytes(32).toString('hex');
+    const refreshTokenHash = this.hashRefreshToken(refreshTokenValue);
     const refreshTokenExpiry = new Date(Date.now() + this.refreshTokenExpiresIn * 1000);
 
     // Store refresh token in database
     await this.prisma.refreshToken.create({
       data: {
         userId: user.id,
-        token: refreshTokenValue,
+        token: refreshTokenHash,
         expiresAt: refreshTokenExpiry,
       },
     });

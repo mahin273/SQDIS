@@ -2,7 +2,7 @@ import axios, { AxiosError } from 'axios';
 import type { AxiosInstance } from 'axios';
 import type { ApiError } from '../types/api.types';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000/api';
 
 // Token storage keys
 const ACCESS_TOKEN_KEY = 'accessToken';
@@ -60,14 +60,29 @@ const createApiClient = (): AxiosInstance => {
 
   // Response interceptor - handle 401 and refresh token with single-flight refresh
   let isRefreshing = false;
-  let refreshSubscribers: Array<(token: string) => void> = [];
+  let refreshSubscribers: Array<{
+    resolve: (token: string) => void;
+    reject: (error: unknown) => void;
+  }> = [];
 
-  const subscribeTokenRefresh = (cb: (token: string) => void) => {
-    refreshSubscribers.push(cb);
+  const redirectToSignIn = () => {
+    window.location.href = '/signin';
+  };
+
+  const subscribeTokenRefresh = (
+    resolve: (token: string) => void,
+    reject: (error: unknown) => void
+  ) => {
+    refreshSubscribers.push({ resolve, reject });
   };
 
   const onRefreshed = (token: string) => {
-    refreshSubscribers.forEach((cb) => cb(token));
+    refreshSubscribers.forEach(({ resolve }) => resolve(token));
+    refreshSubscribers = [];
+  };
+
+  const onRefreshFailed = (error: unknown) => {
+    refreshSubscribers.forEach(({ reject }) => reject(error));
     refreshSubscribers = [];
   };
 
@@ -82,18 +97,18 @@ const createApiClient = (): AxiosInstance => {
         const refreshToken = tokenManager.getRefreshToken();
         if (!refreshToken) {
           tokenManager.clearTokens();
-          window.location.href = '/auth/login';
+          redirectToSignIn();
           return Promise.reject(error);
         }
 
         if (isRefreshing) {
           // Queue the request until token is refreshed
-          return new Promise((resolve) => {
+          return new Promise((resolve, reject) => {
             subscribeTokenRefresh((token: string) => {
               originalRequest.headers = originalRequest.headers || {};
               originalRequest.headers.Authorization = `Bearer ${token}`;
               resolve(client(originalRequest));
-            });
+            }, reject);
           });
         }
 
@@ -116,8 +131,9 @@ const createApiClient = (): AxiosInstance => {
           return client(originalRequest);
         } catch (refreshError) {
           isRefreshing = false;
+          onRefreshFailed(refreshError);
           tokenManager.clearTokens();
-          window.location.href = '/auth/login';
+          redirectToSignIn();
           return Promise.reject(refreshError);
         }
       }

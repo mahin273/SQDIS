@@ -69,18 +69,31 @@ describe('ProjectsController', () => {
     projectsServiceMock.verifyProjectAccess.mockResolvedValue({ id: 'project-1' });
     projectsServiceMock.findById.mockResolvedValue({ id: 'project-1', name: 'Platform' });
 
-    await expect(controller.findOne('project-1', 'org-1')).resolves.toMatchObject({
+    await expect(
+      controller.findOne('project-1', 'org-1', { id: 'user-1', role: Role.DEVELOPER }),
+    ).resolves.toMatchObject({
       name: 'Platform',
     });
-    expect(projectsServiceMock.verifyProjectAccess).toHaveBeenCalledWith('project-1', 'org-1');
+    expect(projectsServiceMock.verifyProjectAccess).toHaveBeenCalledWith(
+      'project-1',
+      'org-1',
+      'user-1',
+      Role.DEVELOPER,
+    );
   });
 
   it('verifies access before returning project metrics', async () => {
     projectsServiceMock.verifyProjectAccess.mockResolvedValue({ id: 'project-1' });
     projectsServiceMock.getProjectMetrics.mockResolvedValue({ totalCommits: 5 });
 
-    await expect(controller.getMetrics('project-1', 'org-1')).resolves.toEqual({
-      totalCommits: 5,
-    });
+    await expect(
+      controller.getMetrics('project-1', 'org-1', { id: 'user-1', role: Role.TEAM_LEAD }),
+    ).resolves.toEqual({ totalCommits: 5 });
+    expect(projectsServiceMock.verifyProjectAccess).toHaveBeenCalledWith(
+      'project-1',
+      'org-1',
+      'user-1',
+      Role.TEAM_LEAD,
+    );
   });
 });

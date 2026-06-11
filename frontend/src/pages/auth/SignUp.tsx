@@ -7,7 +7,7 @@ import { useApi } from '../../hooks/useApi'
 export default function SignUp() {
   const navigate = useNavigate()
   const backendBaseUrl = useMemo(
-    () => import.meta.env.VITE_API_URL || 'http://localhost:3000',
+    () => import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
     []
   )
 

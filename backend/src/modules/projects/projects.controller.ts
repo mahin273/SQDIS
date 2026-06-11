@@ -102,8 +102,12 @@ export class ProjectsController {
     status: 404,
     description: 'Project not found',
   })
-  async findOne(@Param('id') id: string, @GetOrganization() organizationId: string) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+  async findOne(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: { id: string; role: Role },
+  ) {
+    await this.projectsService.verifyProjectAccess(id, organizationId, user.id, user.role);
     return this.projectsService.findById(id);
   }
 
@@ -121,8 +125,12 @@ export class ProjectsController {
     status: 404,
     description: 'Project not found',
   })
-  async getMetrics(@Param('id') id: string, @GetOrganization() organizationId: string) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+  async getMetrics(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: { id: string; role: Role },
+  ) {
+    await this.projectsService.verifyProjectAccess(id, organizationId, user.id, user.role);
     return this.projectsService.getProjectMetrics(id);
   }
 
@@ -140,8 +148,12 @@ export class ProjectsController {
     status: 404,
     description: 'Project not found',
   })
-  async getTechnicalDebt(@Param('id') id: string, @GetOrganization() organizationId: string) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+  async getTechnicalDebt(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: { id: string; role: Role },
+  ) {
+    await this.projectsService.verifyProjectAccess(id, organizationId, user.id, user.role);
     return this.projectsService.getTechnicalDebt(id);
   }
 
@@ -182,7 +194,7 @@ export class ProjectsController {
     @GetUser('id') userId: string,
     @GetOrganization() organizationId: string,
   ) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+    await this.projectsService.verifyProjectAccess(id, organizationId, userId, Role.ADMIN);
     return this.projectsService.update(id, dto);
   }
 
@@ -218,7 +230,7 @@ export class ProjectsController {
     @GetUser('id') userId: string,
     @GetOrganization() organizationId: string,
   ) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+    await this.projectsService.verifyProjectAccess(id, organizationId, userId, Role.ADMIN);
     return this.projectsService.delete(id);
   }
 
@@ -259,7 +271,7 @@ export class ProjectsController {
     @GetUser('id') userId: string,
     @GetOrganization() organizationId: string,
   ) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+    await this.projectsService.verifyProjectAccess(id, organizationId, userId, Role.ADMIN);
     return this.projectsService.assignRepository(id, dto.repositoryId, organizationId);
   }
 
@@ -297,7 +309,7 @@ export class ProjectsController {
     @GetUser('id') userId: string,
     @GetOrganization() organizationId: string,
   ) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+    await this.projectsService.verifyProjectAccess(id, organizationId, userId, Role.ADMIN);
     return this.projectsService.removeRepository(id, repoId, organizationId);
   }
 
@@ -338,7 +350,7 @@ export class ProjectsController {
     @GetUser('id') userId: string,
     @GetOrganization() organizationId: string,
   ) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+    await this.projectsService.verifyProjectAccess(id, organizationId, userId, Role.ADMIN);
     return this.projectsService.assignTeam(id, dto.teamId, organizationId);
   }
 
@@ -376,7 +388,7 @@ export class ProjectsController {
     @GetUser('id') userId: string,
     @GetOrganization() organizationId: string,
   ) {
-    await this.projectsService.verifyProjectAccess(id, organizationId);
+    await this.projectsService.verifyProjectAccess(id, organizationId, userId, Role.ADMIN);
     return this.projectsService.removeTeam(id, teamId, organizationId);
   }
 }

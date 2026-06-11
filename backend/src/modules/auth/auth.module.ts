@@ -20,6 +20,7 @@ import { PrismaModule } from '../../prisma';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuditModule } from '../audit/audit.module';
 import { CacheModule } from '../cache/cache.module';
+import { getRequiredJwtSecret } from './utils/jwt-secret.util';
 
 @Module({
   imports: [
@@ -28,7 +29,7 @@ import { CacheModule } from '../cache/cache.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_SECRET', 'default-secret-change-in-production'),
+        secret: getRequiredJwtSecret(configService),
         signOptions: {
           expiresIn: '15m',
         },

@@ -132,7 +132,7 @@ class SQSModel:
         if features.churn_rate > 0.3:
             recs.append("Implement robust software design reviews. High code churn indicates frequent refactoring and requirement changes.")
 
-        if features.bug_density > 3.0:
+        if features.bug_density > 0.3:
             recs.append("Establish strict pull request guidelines and pre-merge validation tests to reduce bug density.")
 
         if features.debt_count > 15:
