@@ -1506,6 +1506,7 @@ export interface GitHubConnection {
 
 export interface Repository {
   id: string;
+  githubId?: number;
   name: string;
   fullName: string;
   description?: string;
