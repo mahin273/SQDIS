@@ -16,6 +16,7 @@ describe('DashboardService', () => {
     dQSScore: Record<string, jest.Mock>;
     alert: Record<string, jest.Mock>;
     user: Record<string, jest.Mock>;
+    teamMembership: Record<string, jest.Mock>;
   };
 
   beforeEach(async () => {
@@ -26,6 +27,9 @@ describe('DashboardService', () => {
       },
       team: {
         count: jest.fn(),
+      },
+      teamMembership: {
+        findFirst: jest.fn(),
       },
       project: {
         count: jest.fn(),
@@ -40,6 +44,7 @@ describe('DashboardService', () => {
       },
       organizationMember: {
         count: jest.fn(),
+        findMany: jest.fn(),
       },
       coverageReport: {
         findFirst: jest.fn(),
@@ -222,4 +227,64 @@ describe('DashboardService', () => {
       expect(result[1].type).toBe('alert');
     });
   });
+
+  describe('getTopDevelopers', () => {
+    it('returns developers sorted by DQS desc, with commitCount secondary sort and contract compatibility', async () => {
+      prisma.organizationMember.findMany.mockResolvedValue([
+        {
+          userId: 'dev-1',
+          user: { id: 'dev-1', name: 'Dev One', email: 'one@example.com', avatarUrl: null },
+        },
+        {
+          userId: 'dev-2',
+          user: { id: 'dev-2', name: 'Dev Two', email: 'two@example.com', avatarUrl: null },
+        },
+        {
+          userId: 'dev-3',
+          user: { id: 'dev-3', name: 'Dev Three', email: 'three@example.com', avatarUrl: null },
+        },
+      ]);
+
+      // Dev 1 has DQS 85, 10 commits
+      // Dev 2 has DQS 0, 50 commits
+      // Dev 3 has DQS 0, 100 commits (should rank above Dev 2 due to secondary sort)
+      prisma.dQSScore.findFirst
+        .mockResolvedValueOnce({ score: 85 })
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce({ score: 0 });
+
+      prisma.commit.count
+        .mockResolvedValueOnce(10)
+        .mockResolvedValueOnce(50)
+        .mockResolvedValueOnce(100);
+
+      prisma.teamMembership.findFirst
+        .mockResolvedValueOnce({ team: { name: 'Core Team' } })
+        .mockResolvedValueOnce(null)
+        .mockResolvedValueOnce(null);
+
+      const topDevs = await service.getTopDevelopers('org-1', 5);
+
+      expect(topDevs).toHaveLength(3);
+      // Rank 1: Dev One (DQS 85)
+      expect(topDevs[0].id).toBe('dev-1');
+      expect(topDevs[0].dqs).toBe(85);
+      expect(topDevs[0].commitCount).toBe(10);
+      expect(topDevs[0].commits).toBe(10);
+      expect(topDevs[0].teamName).toBe('Core Team');
+
+      // Rank 2: Dev Three (DQS 0, 100 commits - beats Dev 2 on secondary sort)
+      expect(topDevs[1].id).toBe('dev-3');
+      expect(topDevs[1].dqs).toBe(0);
+      expect(topDevs[1].commitCount).toBe(100);
+      expect(topDevs[1].commits).toBe(100);
+
+      // Rank 3: Dev Two (DQS 0, 50 commits)
+      expect(topDevs[2].id).toBe('dev-2');
+      expect(topDevs[2].dqs).toBe(0);
+      expect(topDevs[2].commitCount).toBe(50);
+      expect(topDevs[2].commits).toBe(50);
+    });
+  });
 });
+

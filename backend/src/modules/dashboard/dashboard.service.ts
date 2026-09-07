@@ -265,6 +265,11 @@ export class DashboardService {
           where: { developerId: member.userId },
         });
 
+        const teamMember = await this.prisma.teamMembership.findFirst({
+          where: { userId: member.userId, leftAt: null },
+          include: { team: { select: { name: true } } },
+        });
+
         return {
           id: member.user.id,
           name: member.user.name,
@@ -272,11 +277,20 @@ export class DashboardService {
           avatarUrl: member.user.avatarUrl,
           dqs: Number((latestScore?.score || 0).toFixed(1)),
           commits: commitCount,
+          commitCount,
+          teamName: teamMember?.team?.name || null,
         };
       }),
     );
 
-    return devScores.sort((a, b) => b.dqs - a.dqs).slice(0, limit);
+    return devScores
+      .sort((a, b) => {
+        if (b.dqs !== a.dqs) {
+          return b.dqs - a.dqs;
+        }
+        return b.commits - a.commits;
+      })
+      .slice(0, limit);
   }
 
   /**

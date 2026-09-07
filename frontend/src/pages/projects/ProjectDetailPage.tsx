@@ -65,7 +65,10 @@ export function ProjectDetailPage() {
 
   const project = projectQuery.data
   const metrics = metricsQuery.data as ProjectMetrics | undefined
-  const debtItems = debtQuery.data ?? []
+  const debtRaw = debtQuery.data
+  const debtItems: any[] = Array.isArray(debtRaw)
+    ? debtRaw
+    : ((debtRaw as any)?.items ?? [])
 
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -152,8 +155,8 @@ export function ProjectDetailPage() {
                       {debtItems.map((item, idx) => (
                         <div key={item.id || idx} className="flex items-center justify-between py-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
                           <div className="pr-4">
-                            <p className="font-medium text-slate-900 dark:text-slate-100">{item.title || item.type || 'Debt Item'}</p>
-                            <p className="text-sm text-slate-500 line-clamp-1">{item.description || 'File issue'}</p>
+                            <p className="font-medium text-slate-900 dark:text-slate-100">{item.title || item.markerType || item.type || 'Debt Item'}</p>
+                            <p className="text-sm text-slate-500 line-clamp-1">{item.description || item.content || item.filePath || 'File issue'}</p>
                           </div>
                           <Badge 
                             variant={item.severity === 'CRITICAL' || item.severity === 'HIGH' ? 'destructive' : item.severity === 'MEDIUM' ? 'default' : 'secondary'}

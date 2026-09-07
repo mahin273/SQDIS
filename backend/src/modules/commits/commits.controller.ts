@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, UseGuards, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 import { CommitsService } from './commits.service';
 import { CommitFiltersDto, CommitStatsQueryDto, HeatmapQueryDto } from './dto';
@@ -177,6 +177,28 @@ export class CommitsController {
     }
 
     return commit;
+  }
+
+  /**
+   * Re-attribute existing unattributed commits to developers
+   */
+  @Post('reattribute')
+  @ApiOperation({ summary: 'Re-attribute existing unattributed commits to developers' })
+  @ApiResponse({
+    status: 200,
+    description: 'Re-attribution completed',
+  })
+  async reattributeCommits(
+    @GetOrganization() orgId: string | undefined,
+    @GetUser() user: RequestUser,
+    @Query('repositoryId') repositoryId?: string,
+  ) {
+    const organizationId = orgId || (user as any)?.organizationId;
+    if (!organizationId) {
+      return { updated: 0, developersDiscovered: 0 };
+    }
+    await this.verifyOrganizationAccess(organizationId, user.id);
+    return this.commitsService.reattributeExistingCommits(organizationId, repositoryId);
   }
 
   /**

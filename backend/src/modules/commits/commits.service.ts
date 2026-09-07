@@ -486,9 +486,14 @@ export class CommitsService {
     authorName: string,
     organizationId: string,
   ): Promise<string | null> {
-    // First, try to find user by primary email
+    if (!authorEmail) {
+      return null;
+    }
+    const normalizedEmail = authorEmail.trim().toLowerCase();
+
+    // 1. First, try to find user by primary email
     const userByEmail = await this.prisma.user.findUnique({
-      where: { email: authorEmail },
+      where: { email: normalizedEmail },
       include: {
         memberships: {
           where: { organizationId },
@@ -496,13 +501,18 @@ export class CommitsService {
       },
     });
 
-    if (userByEmail && userByEmail.memberships.length > 0) {
+    if (userByEmail) {
+      if (userByEmail.memberships.length === 0) {
+        // User exists in system, enroll them in this organization
+        await this.createOrganizationMembership(this.prisma, userByEmail.id, organizationId);
+      }
+      await this.removeFromUnmappedEmails(this.prisma, normalizedEmail, organizationId);
       return userByEmail.id;
     }
 
-    // Try to find by email alias
+    // 2. Try to find by email alias
     const alias = await this.prisma.emailAlias.findUnique({
-      where: { email: authorEmail },
+      where: { email: normalizedEmail },
       include: {
         user: {
           include: {
@@ -514,15 +524,107 @@ export class CommitsService {
       },
     });
 
-    if (alias?.isVerified && alias.user.memberships.length > 0) {
+    if (alias) {
+      if (alias.user.memberships.length === 0) {
+        await this.createOrganizationMembership(this.prisma, alias.user.id, organizationId);
+      }
+      await this.removeFromUnmappedEmails(this.prisma, normalizedEmail, organizationId);
       return alias.user.id;
     }
 
-    // No match found - add to unmapped emails list
-    await this.trackUnmappedEmail(authorEmail, authorName, organizationId);
+    // 3. Check if this is a GitHub noreply email
+    const githubUsername = this.extractGitHubUsername(normalizedEmail);
+    if (githubUsername) {
+      const linkedUser = await this.handleGitHubNoreplyEmail(
+        normalizedEmail,
+        authorName,
+        githubUsername,
+        organizationId,
+      );
+      if (linkedUser) {
+        await this.removeFromUnmappedEmails(this.prisma, normalizedEmail, organizationId);
+        return linkedUser.id;
+      }
+    }
 
+    // 4. Auto-discover contributor: provision developer user and membership
+    const discoveredUser = await this.autoDiscoverContributor(
+      normalizedEmail,
+      authorName,
+      organizationId,
+    );
+
+    if (discoveredUser) {
+      return discoveredUser.id;
+    }
+
+    // Fallback if auto-discovery fails: record in unmapped emails list
+    await this.trackUnmappedEmail(authorEmail, authorName, organizationId);
     this.logger.debug(`Could not attribute commit author ${authorEmail} to any developer`);
     return null;
+  }
+
+  /**
+   * Re-attribute existing unattributed commits for an organization or repository
+   * Resolves developerId for commits where developerId is currently null, auto-discovers developers,
+   * and purges resolved entries from unmapped_emails.
+   *
+   * @param organizationId - Organization ID
+   * @param repositoryId - Optional repository ID filter
+   * @returns Count of updated commits and newly discovered developers
+   */
+  async reattributeExistingCommits(
+    organizationId: string,
+    repositoryId?: string,
+  ): Promise<{ updated: number; developersDiscovered: number }> {
+    const whereClause: Prisma.CommitWhereInput = {
+      repository: { organizationId },
+      developerId: null,
+    };
+    if (repositoryId) {
+      whereClause.repositoryId = repositoryId;
+    }
+
+    const unattributedCommits = await this.prisma.commit.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        authorEmail: true,
+        authorName: true,
+      },
+    });
+
+    const initialMembers = await this.prisma.organizationMember.count({
+      where: { organizationId },
+    });
+
+    let updated = 0;
+    for (const commit of unattributedCommits) {
+      const developerId = await this.attributeDeveloper(
+        commit.authorEmail,
+        commit.authorName,
+        organizationId,
+      );
+
+      if (developerId) {
+        await this.prisma.commit.update({
+          where: { id: commit.id },
+          data: { developerId },
+        });
+        updated++;
+      }
+    }
+
+    const finalMembers = await this.prisma.organizationMember.count({
+      where: { organizationId },
+    });
+    const developersDiscovered = Math.max(0, finalMembers - initialMembers);
+
+    this.logger.log(
+      `Re-attribution complete for org ${organizationId}: updated ${updated} commits, discovered ${developersDiscovered} new developers`,
+    );
+
+    return { updated, developersDiscovered };
   }
 
   /**
@@ -1121,13 +1223,13 @@ export class CommitsService {
   /**
    * Create a new user account with transaction support
    *
-   * @param tx - Prisma transaction client
+   * @param tx - Prisma transaction client or PrismaService
    * @param email - User email address
    * @param name - User name (falls back to email prefix if not provided)
    * @returns Created user
    */
   private async createUser(
-    tx: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient | PrismaService,
     email: string,
     name: string,
   ): Promise<{ id: string; email: string; name: string }> {
@@ -1148,12 +1250,12 @@ export class CommitsService {
   /**
    * Create organization membership with duplicate handling
    *
-   * @param tx - Prisma transaction client
+   * @param tx - Prisma transaction client or PrismaService
    * @param userId - User ID
    * @param organizationId - Organization ID
    */
   private async createOrganizationMembership(
-    tx: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient | PrismaService,
     userId: string,
     organizationId: string,
   ): Promise<void> {
@@ -1208,12 +1310,12 @@ export class CommitsService {
   /**
    * Remove email from unmapped emails table
    *
-   * @param tx - Prisma transaction client
+   * @param tx - Prisma transaction client or PrismaService
    * @param email - Email address to remove
    * @param organizationId - Organization ID
    */
   private async removeFromUnmappedEmails(
-    tx: Prisma.TransactionClient,
+    tx: Prisma.TransactionClient | PrismaService,
     email: string,
     organizationId: string,
   ): Promise<void> {
@@ -1233,7 +1335,7 @@ export class CommitsService {
   }
 
   /**
-   * Handle GitHub noreply email by checking for existing users with matching GitHub username
+   * Handle GitHub noreply email by checking for existing users with matching GitHub username or name
    *
    * @param noreplyEmail - GitHub noreply email address
    * @param authorName - Commit author name
@@ -1248,14 +1350,17 @@ export class CommitsService {
     organizationId: string,
   ): Promise<{ id: string; email: string; name: string } | null> {
     try {
-      // Check if user with this GitHub username already exists in the organization
-      // We look for users whose email contains the GitHub username or who have a matching githubId
+      // Look for existing user in org by username in email, or matching display name
+      const conditions: Prisma.UserWhereInput[] = [
+        { email: { contains: githubUsername, mode: 'insensitive' } },
+      ];
+      if (authorName && authorName.trim().length > 1) {
+        conditions.push({ name: { equals: authorName.trim(), mode: 'insensitive' } });
+      }
+
       const existingUser = await this.prisma.user.findFirst({
         where: {
-          OR: [
-            { email: { contains: githubUsername, mode: 'insensitive' } },
-            { githubId: { not: null } }, // Would need GitHub ID lookup in future enhancement
-          ],
+          OR: conditions,
           memberships: {
             some: { organizationId },
           },
@@ -1276,11 +1381,62 @@ export class CommitsService {
         return existingUser;
       }
 
-      // No existing user found, create new user with noreply email
-      // This will be handled by the caller (autoDiscoverContributor)
       return null;
     } catch (error) {
       this.logger.error(`Failed to handle GitHub noreply email ${noreplyEmail}:`, error);
+      return null;
+    }
+  }
+
+  /**
+   * Auto-discover a contributor from a commit by creating a developer account and organization membership
+   *
+   * @param email - Contributor email
+   * @param authorName - Contributor name from git
+   * @param organizationId - Organization ID
+   * @returns Created or existing user record
+   */
+  private async autoDiscoverContributor(
+    email: string,
+    authorName: string,
+    organizationId: string,
+  ): Promise<{ id: string; email: string; name: string } | null> {
+    if (!this.isValidEmail(email)) {
+      return null;
+    }
+
+    try {
+      let user = await this.prisma.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, name: true },
+      });
+
+      if (!user) {
+        try {
+          user = await this.createUser(this.prisma, email, authorName);
+        } catch (error: any) {
+          if (this.isUniqueConstraintViolation(error)) {
+            user = await this.prisma.user.findUnique({
+              where: { email },
+              select: { id: true, email: true, name: true },
+            });
+          } else {
+            throw error;
+          }
+        }
+      }
+
+      if (user) {
+        await this.createOrganizationMembership(this.prisma, user.id, organizationId);
+        await this.removeFromUnmappedEmails(this.prisma, email, organizationId);
+        this.logger.log(
+          `Auto-discovered contributor ${authorName} (${email}) as developer ${user.id} in org ${organizationId}`,
+        );
+      }
+
+      return user;
+    } catch (error) {
+      this.logger.error(`Failed to auto-discover contributor for ${email}:`, error);
       return null;
     }
   }

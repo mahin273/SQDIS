@@ -64,12 +64,24 @@ describe('CommitsService', () => {
         aggregate: jest.fn(),
         groupBy: jest.fn(),
         create: jest.fn(),
+        update: jest.fn(),
       },
       user: {
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
+        create: jest.fn(),
+      },
+      organizationMember: {
+        create: jest.fn(),
+        count: jest.fn(),
       },
       emailAlias: {
         findUnique: jest.fn(),
+        create: jest.fn(),
+      },
+      unmappedEmail: {
+        delete: jest.fn(),
+        upsert: jest.fn(),
       },
       projectRepository: {
         findMany: jest.fn(),
@@ -365,5 +377,232 @@ describe('CommitsService', () => {
   it('calculates churn ratio using shared utility logic', () => {
     expect(service.calculateChurnRatio(10, 0)).toBe(0);
     expect(service.calculateChurnRatio(5, 5)).toBe(0.5);
+  });
+
+  describe('Contributor Auto-Discovery', () => {
+    it('auto-discovers a new contributor and provisions User and OrganizationMember', async () => {
+      prisma.commit.findUnique.mockResolvedValue(null);
+      // No existing user found initially
+      prisma.user.findUnique.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+      prisma.emailAlias.findUnique.mockResolvedValue(null);
+
+      const createdUser = {
+        id: 'new-dev-uuid',
+        email: 'newauthor@example.com',
+        name: 'New Author',
+      };
+      prisma.user.create.mockResolvedValue(createdUser);
+      prisma.organizationMember.create.mockResolvedValue({
+        id: 'om-1',
+        userId: 'new-dev-uuid',
+        organizationId: 'org-1',
+        role: 'DEVELOPER',
+      });
+      prisma.unmappedEmail.delete.mockResolvedValue({});
+
+      prisma.commit.create.mockResolvedValue({
+        id: 'commit-2',
+        sha: 'sha-new-123',
+        linesAdded: 5,
+        linesDeleted: 1,
+        filesChanged: 1,
+        churnRatio: 0.1,
+        developerId: 'new-dev-uuid',
+        classification: CommitClassification.FEATURE,
+        fileChanges: [],
+      });
+      prisma.projectRepository.findMany.mockResolvedValue([]);
+
+      const result = await service.processCommit(
+        {
+          sha: 'sha-new-123',
+          message: 'feat: add new feature',
+          authorEmail: 'newauthor@example.com',
+          authorName: 'New Author',
+          repositoryFullName: 'acme/api',
+          timestamp: new Date('2026-02-01T00:00:00.000Z'),
+        },
+        'repo-1',
+        'org-1',
+      );
+
+      expect(result.developerId).toBe('new-dev-uuid');
+      expect(prisma.user.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            email: 'newauthor@example.com',
+            name: 'New Author',
+            passwordHash: null,
+          }),
+        }),
+      );
+      expect(prisma.organizationMember.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'new-dev-uuid',
+            organizationId: 'org-1',
+            role: 'DEVELOPER',
+          }),
+        }),
+      );
+      expect(prisma.unmappedEmail.delete).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            organizationId_email: {
+              organizationId: 'org-1',
+              email: 'newauthor@example.com',
+            },
+          },
+        }),
+      );
+    });
+
+    it('links GitHub privacy noreply email to an existing organization member and creates alias', async () => {
+      prisma.commit.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.emailAlias.findUnique.mockResolvedValue(null);
+
+      // Matches existing member with username 'mahin273' or name 'Mahin Khan'
+      const existingUser = {
+        id: 'existing-mahin-id',
+        email: 'md.mahin.bd18@gmail.com',
+        name: 'Mahin Khan',
+      };
+      prisma.user.findFirst.mockResolvedValue(existingUser);
+      prisma.emailAlias.create.mockResolvedValue({});
+      prisma.unmappedEmail.delete.mockResolvedValue({});
+
+      prisma.commit.create.mockResolvedValue({
+        id: 'commit-3',
+        sha: 'sha-noreply-123',
+        linesAdded: 20,
+        linesDeleted: 5,
+        filesChanged: 2,
+        churnRatio: 0.2,
+        developerId: 'existing-mahin-id',
+        classification: CommitClassification.FEATURE,
+        fileChanges: [],
+      });
+      prisma.projectRepository.findMany.mockResolvedValue([]);
+
+      const result = await service.processCommit(
+        {
+          sha: 'sha-noreply-123',
+          message: 'fix: correct typo',
+          authorEmail: '42418258+mahin273@users.noreply.github.com',
+          authorName: 'Mahin Khan',
+          repositoryFullName: 'acme/api',
+          timestamp: new Date('2026-02-02T00:00:00.000Z'),
+        },
+        'repo-1',
+        'org-1',
+      );
+
+      expect(result.developerId).toBe('existing-mahin-id');
+      expect(prisma.emailAlias.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'existing-mahin-id',
+            email: '42418258+mahin273@users.noreply.github.com',
+            isVerified: true,
+            source: 'GITHUB_OAUTH',
+          }),
+        }),
+      );
+    });
+
+    it('recovers gracefully from unique constraint error when user is created concurrently', async () => {
+      prisma.commit.findUnique.mockResolvedValue(null);
+      prisma.user.findUnique
+        .mockResolvedValueOnce(null) // first check in attributeDeveloper
+        .mockResolvedValueOnce(null) // check before create in autoDiscoverContributor
+        .mockResolvedValueOnce({
+          id: 'concurrent-user-id',
+          email: 'concurrent@example.com',
+          name: 'Concurrent Dev',
+        }); // re-query after P2002 conflict
+
+      prisma.emailAlias.findUnique.mockResolvedValue(null);
+
+      // Simulate P2002 error on user.create
+      const p2002Error: any = new Error('Unique constraint failed on email');
+      p2002Error.code = 'P2002';
+      prisma.user.create.mockRejectedValue(p2002Error);
+
+      prisma.organizationMember.create.mockResolvedValue({});
+      prisma.unmappedEmail.delete.mockResolvedValue({});
+
+      prisma.commit.create.mockResolvedValue({
+        id: 'commit-4',
+        sha: 'sha-concurrent-123',
+        linesAdded: 3,
+        linesDeleted: 0,
+        filesChanged: 1,
+        churnRatio: 0,
+        developerId: 'concurrent-user-id',
+        classification: CommitClassification.FEATURE,
+        fileChanges: [],
+      });
+      prisma.projectRepository.findMany.mockResolvedValue([]);
+
+      const result = await service.processCommit(
+        {
+          sha: 'sha-concurrent-123',
+          message: 'docs: update readme',
+          authorEmail: 'concurrent@example.com',
+          authorName: 'Concurrent Dev',
+          repositoryFullName: 'acme/api',
+          timestamp: new Date('2026-02-03T00:00:00.000Z'),
+        },
+        'repo-1',
+        'org-1',
+      );
+
+      expect(result.developerId).toBe('concurrent-user-id');
+      expect(prisma.organizationMember.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'concurrent-user-id',
+            organizationId: 'org-1',
+          }),
+        }),
+      );
+    });
+
+    it('re-attributes existing unattributed commits and updates developerId in database', async () => {
+      prisma.commit.findMany.mockResolvedValue([
+        { id: 'c1', authorEmail: 'user1@example.com', authorName: 'User One' },
+        { id: 'c2', authorEmail: 'user2@example.com', authorName: 'User Two' },
+      ]);
+      prisma.organizationMember.count
+        .mockResolvedValueOnce(1) // initial count
+        .mockResolvedValueOnce(3); // final count after discovery
+
+      prisma.user.findUnique.mockResolvedValue(null);
+      prisma.emailAlias.findUnique.mockResolvedValue(null);
+      prisma.user.create
+        .mockResolvedValueOnce({ id: 'u1', email: 'user1@example.com', name: 'User One' })
+        .mockResolvedValueOnce({ id: 'u2', email: 'user2@example.com', name: 'User Two' });
+      prisma.organizationMember.create.mockResolvedValue({});
+      prisma.unmappedEmail.delete.mockResolvedValue({});
+      prisma.commit.update.mockResolvedValue({});
+
+      const result = await service.reattributeExistingCommits('org-1');
+
+      expect(result.updated).toBe(2);
+      expect(result.developersDiscovered).toBe(2);
+      expect(prisma.commit.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'c1' },
+          data: { developerId: 'u1' },
+        }),
+      );
+      expect(prisma.commit.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'c2' },
+          data: { developerId: 'u2' },
+        }),
+      );
+    });
   });
 });

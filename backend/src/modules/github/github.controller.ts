@@ -627,7 +627,7 @@ export class GitHubController {
   @ApiQuery({
     name: 'days',
     required: false,
-    description: 'Number of days to backfill (default: 90)',
+    description: 'Number of days to backfill (default: 365, 0 = all history)',
   })
   @ApiResponse({
     status: 201,
@@ -642,7 +642,7 @@ export class GitHubController {
     description: 'Repository not found',
   })
   async triggerBackfill(@Param('id') repoId: string, @Query('days') days?: string) {
-    const daysNum = days ? parseInt(days, 10) : 90;
+    const daysNum = days !== undefined ? parseInt(days, 10) : 365;
 
     const repository = await this.githubService.getRepository(repoId);
     if (!repository) {
