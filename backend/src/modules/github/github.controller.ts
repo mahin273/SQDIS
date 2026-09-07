@@ -50,7 +50,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
-import { GetUser, RequestUser } from '../auth/decorators/get-user.decorator';
+import { GetUser } from '../auth/decorators/get-user.decorator';
+import type { RequestUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { Role } from '@prisma/client';
 import { WebSocketGateway } from '../websocket/websocket.gateway';
@@ -155,6 +156,64 @@ export class GitHubController {
   })
   async validatePAT(@Body() dto: ConnectGithubDto) {
     return this.githubService.validatePAT(dto.pat);
+  }
+
+  /**
+   * Get GitHub OAuth 2.0 authorization URL for 1-click connection
+   * Only OWNER and ADMIN roles can initiate connection
+   */
+  @Get('oauth/authorize')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(Role.OWNER, Role.ADMIN)
+  @AuditLog({
+    action: 'READ',
+    resourceType: 'GitHubConnection',
+    captureSnapshot: false,
+  })
+  @ApiOperation({ summary: 'Get GitHub OAuth authorization URL' })
+  @ApiResponse({
+    status: 200,
+    description: 'OAuth authorization URL returned successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Insufficient permissions or missing organization context',
+  })
+  async getOAuthAuthorizeUrl(
+    @GetOrganization('id') organizationId: string | undefined,
+    @GetUser() user: RequestUser,
+  ) {
+    const orgId = this.validateOrganizationContext(organizationId);
+    return this.githubService.generateOAuthAuthorizeUrl(orgId, user.id);
+  }
+
+  /**
+   * Handle GitHub OAuth callback for organization connection
+   */
+  @Public()
+  @Get('oauth/callback')
+  @ApiOperation({ summary: 'Handle GitHub OAuth callback for organization integration' })
+  async oauthCallback(
+    @Query('code') code: string | undefined,
+    @Query('state') state: string | undefined,
+    @Query('error') error: string | undefined,
+    @Res() res: Response,
+  ) {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+    if (error) {
+      return res.redirect(`${frontendUrl}/settings/github?error=${encodeURIComponent(error)}`);
+    }
+    if (!code || !state) {
+      return res.redirect(`${frontendUrl}/settings/github?error=missing_code_or_state`);
+    }
+    try {
+      await this.githubService.handleOAuthCallback(code, state);
+      return res.redirect(`${frontendUrl}/settings/github?connected=success`);
+    } catch (err: any) {
+      const message = err?.message || 'Failed to complete GitHub OAuth';
+      return res.redirect(`${frontendUrl}/settings/github?error=${encodeURIComponent(message)}`);
+    }
   }
 
   /**

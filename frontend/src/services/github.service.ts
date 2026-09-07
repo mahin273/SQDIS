@@ -16,6 +16,14 @@ export const githubService = {
   },
 
   /**
+   * Get GitHub OAuth 2.0 authorization URL
+   */
+  async getOAuthAuthorizeUrl(): Promise<{ url: string }> {
+    const response = await api.get<{ url: string }>('/github/oauth/authorize');
+    return response.data;
+  },
+
+  /**
    * Connect GitHub PAT to organization
    */
   async connect(data: ConnectGitHubRequest): Promise<GitHubConnectionStatus> {

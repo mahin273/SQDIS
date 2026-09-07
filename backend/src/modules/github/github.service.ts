@@ -13,8 +13,9 @@ import { DataFilterService } from '../auth/services/data-filter.service';
 import { EncryptionService } from './services/encryption.service';
 import { EnableRepoDto } from './dto';
 import { CacheService } from '../cache/cache.service';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHmac } from 'crypto';
 import { Role } from '@prisma/client';
+import { ConfigService } from '@nestjs/config';
 
 /**
  * Interface for BackfillService to avoid circular dependency
@@ -92,6 +93,7 @@ export class GitHubService {
     private readonly encryptionService: EncryptionService,
     private readonly dataFilterService: DataFilterService,
     private readonly cacheService: CacheService,
+    private readonly configService: ConfigService,
   ) {}
 
   /**
@@ -172,6 +174,134 @@ export class GitHubService {
       this.logger.warn(`PAT validation failed: ${error}`);
       return { valid: false, scopes: [] };
     }
+  }
+
+  /**
+   * Generate signed GitHub OAuth 2.0 authorization URL for organization
+   */
+  generateOAuthAuthorizeUrl(organizationId: string, userId: string): { url: string } {
+    const clientId = this.configService.get<string>('GITHUB_CLIENT_ID');
+    if (!clientId) {
+      throw new InternalServerErrorException(
+        'GitHub OAuth is not configured on server (GITHUB_CLIENT_ID missing)',
+      );
+    }
+
+    const secret = this.configService.get<string>('JWT_SECRET') || 'sqdis-oauth-secret';
+    const payload = {
+      organizationId,
+      userId,
+      timestamp: Date.now(),
+      nonce: randomBytes(16).toString('hex'),
+    };
+
+    const encodedPayload = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const signature = createHmac('sha256', secret).update(encodedPayload).digest('hex');
+    const state = `${encodedPayload}.${signature}`;
+
+    const scopes = REQUIRED_SCOPES.join(',');
+    const callbackUrl = this.configService.get<string>('GITHUB_CALLBACK_URL');
+
+    const params = new URLSearchParams({
+      client_id: clientId,
+      scope: scopes,
+      state: state,
+    });
+
+    if (callbackUrl) {
+      params.append('redirect_uri', callbackUrl);
+    }
+
+    const url = `https://github.com/login/oauth/authorize?${params.toString()}`;
+    return { url };
+  }
+
+  /**
+   * Verify and parse signed OAuth state parameter
+   */
+  verifyOAuthState(state: string): { organizationId: string; userId: string } {
+    if (!state || !state.includes('.')) {
+      throw new BadRequestException('Invalid OAuth state parameter');
+    }
+
+    const [encodedPayload, signature] = state.split('.');
+    if (!encodedPayload || !signature) {
+      throw new BadRequestException('Malformed OAuth state parameter');
+    }
+
+    const secret = this.configService.get<string>('JWT_SECRET') || 'sqdis-oauth-secret';
+    const expectedSignature = createHmac('sha256', secret).update(encodedPayload).digest('hex');
+
+    if (signature !== expectedSignature) {
+      throw new BadRequestException('Invalid or tampered OAuth state signature');
+    }
+
+    try {
+      const payloadStr = Buffer.from(encodedPayload, 'base64url').toString('utf8');
+      const payload = JSON.parse(payloadStr);
+
+      const MAX_AGE_MS = 10 * 60 * 1000; // 10 minutes
+      if (!payload.timestamp || Date.now() - payload.timestamp > MAX_AGE_MS) {
+        throw new BadRequestException('OAuth state parameter has expired. Please try again.');
+      }
+
+      if (!payload.organizationId || !payload.userId) {
+        throw new BadRequestException('OAuth state parameter missing required context');
+      }
+
+      return {
+        organizationId: payload.organizationId,
+        userId: payload.userId,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException) throw error;
+      throw new BadRequestException('Failed to parse OAuth state payload');
+    }
+  }
+
+  /**
+   * Handle OAuth callback: verify state, exchange code with GitHub for token, and connect account
+   */
+  async handleOAuthCallback(code: string, state: string): Promise<GitHubConnectionResponse> {
+    const { organizationId } = this.verifyOAuthState(state);
+
+    const clientId = this.configService.get<string>('GITHUB_CLIENT_ID');
+    const clientSecret = this.configService.get<string>('GITHUB_CLIENT_SECRET');
+
+    if (!clientId || !clientSecret) {
+      throw new InternalServerErrorException(
+        'GitHub OAuth credentials are not fully configured on server',
+      );
+    }
+
+    let data: any;
+    try {
+      const response = await fetch('https://github.com/login/oauth/access_token', {
+        method: 'POST',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          client_secret: clientSecret,
+          code,
+        }),
+      });
+
+      data = await response.json();
+    } catch (err: any) {
+      this.logger.error(`Failed to exchange GitHub OAuth code: ${err.message}`, err.stack);
+      throw new BadRequestException('Failed to communicate with GitHub OAuth service');
+    }
+
+    if (data.error || !data.access_token) {
+      const errorDescription = data.error_description || data.error || 'Token exchange failed';
+      this.logger.warn(`GitHub OAuth token exchange failed: ${errorDescription}`);
+      throw new BadRequestException(`GitHub OAuth failed: ${errorDescription}`);
+    }
+
+    return this.connectAccount(organizationId, data.access_token);
   }
 
   /**

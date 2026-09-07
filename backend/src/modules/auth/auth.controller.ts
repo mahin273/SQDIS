@@ -10,11 +10,14 @@ import {
   Req,
   Res,
   Ip,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { Throttle, SkipThrottle } from '@nestjs/throttler';
 import type { Response } from 'express';
 import { AuthService } from './auth.service';
+import { GitHubService } from '../github/github.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
 import { RefreshDto } from './dto/refresh.dto';
@@ -35,7 +38,11 @@ import { Public } from './decorators/public.decorator';
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
-  constructor(private readonly authService: AuthService) { }
+  constructor(
+    private readonly authService: AuthService,
+    @Inject(forwardRef(() => GitHubService))
+    private readonly githubService: GitHubService,
+  ) { }
 
   /**
    * Extracts the client IP address from the request.
@@ -257,12 +264,33 @@ export class AuthController {
   @ApiOperation({ summary: 'Handle GitHub OAuth 2.0 callback' })
   @ApiResponse({
     status: 302,
-    description: 'OAuth successful, redirects to frontend with tokens',
+    description: 'OAuth successful, redirects to frontend with tokens or connection status',
   })
   @ApiResponse({ status: 401, description: 'OAuth authentication failed' })
   async githubAuthCallback(@Req() req: any, @Res() res: Response): Promise<void> {
-    const authResponse = req.user as AuthResponse;
+    const state = req.query?.state as string | undefined;
+    const code = req.query?.code as string | undefined;
+    const error = req.query?.error as string | undefined;
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+
+    // If state contains dot-separated signature, it is an organization integration callback
+    if (state && typeof state === 'string' && state.includes('.')) {
+      if (error) {
+        return res.redirect(`${frontendUrl}/settings/github?error=${encodeURIComponent(error)}`);
+      }
+      if (!code) {
+        return res.redirect(`${frontendUrl}/settings/github?error=missing_code`);
+      }
+      try {
+        await this.githubService.handleOAuthCallback(code, state);
+        return res.redirect(`${frontendUrl}/settings/github?connected=success`);
+      } catch (err: any) {
+        const message = err?.message || 'Failed to complete GitHub OAuth';
+        return res.redirect(`${frontendUrl}/settings/github?error=${encodeURIComponent(message)}`);
+      }
+    }
+
+    const authResponse = req.user as AuthResponse;
     const userParam = encodeURIComponent(JSON.stringify(authResponse.user));
     const redirectUrl = `${frontendUrl}/auth/callback?accessToken=${authResponse.accessToken}&refreshToken=${authResponse.refreshToken}&user=${userParam}`;
     res.redirect(redirectUrl);

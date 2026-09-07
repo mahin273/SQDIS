@@ -7,6 +7,12 @@ import { AuthGuard } from '@nestjs/passport';
 @Injectable()
 export class GitHubAuthGuard extends AuthGuard('github') {
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    const req = context.switchToHttp().getRequest();
+    // If request contains a signed state parameter (dot-separated), it is an organization integration callback
+    if (req.query?.state && typeof req.query.state === 'string' && req.query.state.includes('.')) {
+      return true;
+    }
+
     const result = (await super.canActivate(context)) as boolean;
     return result;
   }
