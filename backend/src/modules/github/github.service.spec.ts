@@ -21,6 +21,7 @@ describe('GitHubService', () => {
   let encryptionService: Record<string, jest.Mock>;
   let dataFilterService: Record<string, jest.Mock>;
   let cacheService: Record<string, jest.Mock>;
+  let configService: Record<string, jest.Mock>;
   let octokit: any;
 
   const connection = {
@@ -73,6 +74,14 @@ describe('GitHubService', () => {
     cacheService = {
       delete: jest.fn(),
     };
+    configService = {
+      get: jest.fn((key: string) => {
+        if (key === 'GITHUB_CLIENT_ID') return 'mock-client-id';
+        if (key === 'GITHUB_CALLBACK_URL') return 'http://localhost:3000/api/auth/github/callback';
+        if (key === 'JWT_SECRET') return 'test-jwt-secret';
+        return null;
+      }),
+    };
     octokit = {
       rest: {
         users: {
@@ -96,6 +105,7 @@ describe('GitHubService', () => {
       encryptionService as any,
       dataFilterService as any,
       cacheService as any,
+      configService as any,
     );
   });
 
@@ -346,5 +356,154 @@ describe('GitHubService', () => {
     await expect(service.testWebhookConnectivity('org-1', 'missing')).rejects.toBeInstanceOf(
       NotFoundException,
     );
+  });
+
+  describe('OAuth 2.0 Flow', () => {
+    it('generates a valid GitHub authorization URL with signed state', () => {
+      const result = service.generateOAuthAuthorizeUrl('org-1', 'user-1');
+
+      expect(result).toHaveProperty('url');
+      const parsedUrl = new URL(result.url);
+
+      expect(parsedUrl.origin).toBe('https://github.com');
+      expect(parsedUrl.pathname).toBe('/login/oauth/authorize');
+      expect(parsedUrl.searchParams.get('client_id')).toBe('mock-client-id');
+      expect(parsedUrl.searchParams.get('scope')).toBe('repo,read:org,admin:repo_hook');
+      expect(parsedUrl.searchParams.get('redirect_uri')).toBe('http://localhost:3000/api/auth/github/callback');
+
+      const state = parsedUrl.searchParams.get('state');
+      expect(state).toBeDefined();
+      expect(state).toContain('.');
+
+      // Verify the state with service
+      const verified = service.verifyOAuthState(state!);
+      expect(verified).toEqual({
+        organizationId: 'org-1',
+        userId: 'user-1',
+      });
+    });
+
+    it('throws InternalServerErrorException if GITHUB_CLIENT_ID is missing', () => {
+      configService.get.mockReturnValueOnce(null);
+
+      expect(() => service.generateOAuthAuthorizeUrl('org-1', 'user-1')).toThrow(
+        InternalServerErrorException,
+      );
+    });
+
+    it('rejects tampered OAuth state parameter', () => {
+      const result = service.generateOAuthAuthorizeUrl('org-1', 'user-1');
+      const parsedUrl = new URL(result.url);
+      const state = parsedUrl.searchParams.get('state')!;
+      const [payload] = state.split('.');
+      const tamperedState = `${payload}.invalid-signature`;
+
+      expect(() => service.verifyOAuthState(tamperedState)).toThrow(BadRequestException);
+    });
+
+    it('rejects expired OAuth state parameter', () => {
+      const secret = 'test-jwt-secret';
+      const expiredPayload = {
+        organizationId: 'org-1',
+        userId: 'user-1',
+        timestamp: Date.now() - 15 * 60 * 1000, // 15 mins ago (TTL is 10 mins)
+        nonce: 'expired-nonce',
+      };
+      const encoded = Buffer.from(JSON.stringify(expiredPayload)).toString('base64url');
+      const crypto = require('crypto');
+      const sig = crypto.createHmac('sha256', secret).update(encoded).digest('hex');
+      const expiredState = `${encoded}.${sig}`;
+
+      expect(() => service.verifyOAuthState(expiredState)).toThrow(BadRequestException);
+    });
+
+    it('successfully handles OAuth callback and connects account', async () => {
+      const authUrlResult = service.generateOAuthAuthorizeUrl('org-1', 'user-1');
+      const state = new URL(authUrlResult.url).searchParams.get('state')!;
+
+      // Mock configService for client credentials
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'GITHUB_CLIENT_ID') return 'mock-client-id';
+        if (key === 'GITHUB_CLIENT_SECRET') return 'mock-client-secret';
+        if (key === 'JWT_SECRET') return 'test-jwt-secret';
+        return null;
+      });
+
+      // Mock fetch
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValue({
+        json: jest.fn().mockResolvedValue({
+          access_token: 'gho_test_access_token',
+          scope: 'repo,admin:org,admin:repo_hook',
+          token_type: 'bearer',
+        }),
+      } as any);
+
+      // Mock validatePAT and connectAccount dependencies
+      octokit.rest.users.getAuthenticated.mockResolvedValue({
+        data: { login: 'octocat' },
+        headers: {
+          'x-oauth-scopes': 'repo, admin:org, admin:repo_hook',
+        },
+      });
+
+      prisma.gitHubConnection.findUnique.mockResolvedValue(null);
+      prisma.gitHubConnection.create.mockResolvedValue({
+        id: 'new-conn-id',
+        organizationId: 'org-1',
+        encryptedPAT: 'encrypted:gho_test_access_token',
+        scopes: ['repo', 'admin:org', 'admin:repo_hook'],
+        connectedAt: new Date(),
+      });
+
+      const response = await service.handleOAuthCallback('valid-code', state);
+
+      expect(response).toEqual(
+        expect.objectContaining({
+          id: 'new-conn-id',
+          organizationId: 'org-1',
+          scopes: expect.arrayContaining(['repo', 'admin:org', 'admin:repo_hook']),
+        }),
+      );
+
+      expect(global.fetch).toHaveBeenCalledWith(
+        'https://github.com/login/oauth/access_token',
+        expect.objectContaining({
+          method: 'POST',
+          headers: {
+            Accept: 'application/json',
+            'Content-Type': 'application/json',
+          },
+        }),
+      );
+
+      global.fetch = originalFetch;
+    });
+
+    it('throws BadRequestException if GitHub returns OAuth error', async () => {
+      const authUrlResult = service.generateOAuthAuthorizeUrl('org-1', 'user-1');
+      const state = new URL(authUrlResult.url).searchParams.get('state')!;
+
+      configService.get.mockImplementation((key: string) => {
+        if (key === 'GITHUB_CLIENT_ID') return 'mock-client-id';
+        if (key === 'GITHUB_CLIENT_SECRET') return 'mock-client-secret';
+        if (key === 'JWT_SECRET') return 'test-jwt-secret';
+        return null;
+      });
+
+      const originalFetch = global.fetch;
+      global.fetch = jest.fn().mockResolvedValue({
+        json: jest.fn().mockResolvedValue({
+          error: 'bad_verification_code',
+          error_description: 'The code passed is incorrect or expired.',
+        }),
+      } as any);
+
+      await expect(service.handleOAuthCallback('invalid-code', state)).rejects.toThrow(
+        BadRequestException,
+      );
+
+      global.fetch = originalFetch;
+    });
   });
 });

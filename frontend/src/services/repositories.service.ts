@@ -8,7 +8,10 @@ export const repositoriesService = {
   async getAll(): Promise<Repository[]> {
     try {
       const response = await api.get<Repository[]>('/github/repositories');
-      return response.data || [];
+      return (response.data || []).map((repo: any) => ({
+        ...repo,
+        isActive: repo.isActive ?? repo.isEnabled ?? false,
+      }));
     } catch (err: any) {
       if (err?.response?.status === 404) {
         return [];
@@ -18,42 +21,72 @@ export const repositoriesService = {
   },
 
   /**
-   * Update repository tracking settings
-   */
-  async update(id: string, data: { isActive?: boolean; defaultBranch?: string }): Promise<Repository> {
-    const response = await api.patch<Repository>(`/github/repositories/${id}`, data);
-    return response.data;
-  },
-
-  /**
-   * Sync a single repository
-   */
-  async sync(id: string): Promise<{ success: boolean; message: string }> {
-    const response = await api.post<{ success: boolean; message: string }>(`/github/repositories/${id}/sync`);
-    return response.data;
-  },
-
-  /**
-   * Sync all active repositories
-   */
-  async syncAll(): Promise<{ success: boolean; message: string }> {
-    const response = await api.post<{ success: boolean; message: string }>('/github/repositories/sync-all');
-    return response.data;
-  },
-
-  /**
    * Enable repository tracking
    */
-  async enable(id: string, data: { defaultBranch?: string; webhookSecret?: string; autoBackfill?: boolean }): Promise<Repository> {
-    const response = await api.post<Repository>(`/github/repositories/${id}/enable`, data);
+  async enable(repo: { id?: string; githubId?: number; name: string; fullName: string; backfill?: boolean }): Promise<Repository> {
+    const targetId = repo.id || (repo.githubId ? repo.githubId.toString() : repo.name);
+    const response = await api.post<Repository>(`/github/repositories/${targetId}/enable`, {
+      githubId: repo.githubId || 0,
+      name: repo.name,
+      fullName: repo.fullName,
+      backfill: repo.backfill ?? true,
+    });
     return response.data;
   },
 
   /**
    * Disable repository tracking
    */
-  async disable(id: string): Promise<void> {
-    await api.delete(`/github/repositories/${id}/disable`);
+  async disable(repo: { id?: string; githubId?: number; name?: string }): Promise<void> {
+    const targetId = repo.id || (repo.githubId ? repo.githubId.toString() : repo.name);
+    await api.delete(`/github/repositories/${targetId}/disable`);
+  },
+
+  /**
+   * Toggle repository tracking (enables or disables repository)
+   */
+  async toggle(repo: Repository, enabled: boolean): Promise<any> {
+    if (enabled) {
+      return this.enable({
+        id: repo.id,
+        githubId: repo.githubId,
+        name: repo.name,
+        fullName: repo.fullName || repo.name,
+        backfill: true,
+      });
+    } else {
+      return this.disable({
+        id: repo.id,
+        githubId: repo.githubId,
+        name: repo.name,
+      });
+    }
+  },
+
+  /**
+   * Update repository tracking settings
+   */
+  async update(id: string, data: { isActive?: boolean; defaultBranch?: string }): Promise<any> {
+    if (data.isActive === false) {
+      return this.disable({ id });
+    }
+    return { id, ...data };
+  },
+
+  /**
+   * Sync a single repository
+   */
+  async sync(id: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.post<{ success: boolean; message: string }>(`/github/repositories/${id}/backfill`);
+    return response.data;
+  },
+
+  /**
+   * Sync all active repositories
+   */
+  async syncAll(): Promise<{ message: string }> {
+    const response = await api.post<{ message: string }>('/github/webhooks/refresh');
+    return response.data;
   },
 
   /**

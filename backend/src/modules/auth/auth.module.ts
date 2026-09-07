@@ -20,6 +20,7 @@ import { PrismaModule } from '../../prisma';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { AuditModule } from '../audit/audit.module';
 import { CacheModule } from '../cache/cache.module';
+import { GitHubModule } from '../github/github.module';
 import { getRequiredJwtSecret } from './utils/jwt-secret.util';
 
 @Module({
@@ -39,6 +40,7 @@ import { getRequiredJwtSecret } from './utils/jwt-secret.util';
     ConfigModule,
     forwardRef(() => OrganizationsModule),
     forwardRef(() => AuditModule),
+    forwardRef(() => GitHubModule),
     CacheModule,
   ],
   controllers: [AuthController],

@@ -24,10 +24,13 @@ export function RepositoriesPage() {
 
   // Mutations
   const toggleRepoMutation = useMutation({
-    mutationFn: ({ id, enabled }: { id: string; enabled: boolean }) => 
-      repositoriesService.update(id, { isActive: enabled }),
+    mutationFn: ({ repo, enabled }: { repo: Repository; enabled: boolean }) => 
+      repositoriesService.toggle(repo, enabled),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.github.status })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.stats })
     },
   })
 
@@ -55,7 +58,11 @@ export function RepositoriesPage() {
     : []
 
   const filteredRepos = useMemo(() => {
-    return repositories.filter((repo: Repository) => 
+    return repositories.map((r: any) => ({
+      ...r,
+      isActive: r.isActive ?? r.isEnabled ?? false,
+      url: r.url || (r.fullName ? `https://github.com/${r.fullName}` : undefined),
+    })).filter((repo: Repository) => 
       repo.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       repo.fullName?.toLowerCase().includes(searchQuery.toLowerCase())
     ).sort((a: Repository, b: Repository) => {
@@ -66,7 +73,7 @@ export function RepositoriesPage() {
     })
   }, [repositories, searchQuery])
 
-  const activeCount = repositories.filter((r: Repository) => r.isActive).length
+  const activeCount = repositories.filter((r: any) => r.isActive ?? r.isEnabled ?? false).length
 
   return (
     <div className="space-y-6">
@@ -135,107 +142,121 @@ export function RepositoriesPage() {
                   <p className="text-sm mt-1">Try adjusting your search query.</p>
                 </div>
               ) : (
-                filteredRepos.map((repo: Repository) => (
-                  <div key={repo.id} className={`p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-colors ${repo.isActive ? 'hover:bg-slate-50 dark:hover:bg-slate-900/50' : 'bg-slate-50/50 dark:bg-slate-900/20 opacity-80'}`}>
-                    
-                    {/* Repo Info */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
-                          {repo.fullName || repo.name}
-                        </h4>
-                        {!repo.isActive && (
-                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Inactive</Badge>
-                        )}
-                        {repo.isPrivate && (
-                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:bg-amber-900/20">Private</Badge>
-                        )}
-                      </div>
-                      
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 mt-2">
-                        <span className="flex items-center gap-1">
-                          <GitBranch className="h-3.5 w-3.5" /> {repo.defaultBranch || 'main'}
-                        </span>
-                        
-                        {repo.isActive ? (
-                          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
-                            <CheckCircle2 className="h-3.5 w-3.5" /> Healthy
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-slate-400">
-                            <AlertTriangle className="h-3.5 w-3.5" /> Sync Disabled
-                          </span>
-                        )}
-                        
-                        {repo.lastSyncedAt && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" /> 
-                            Synced {new Date(repo.lastSyncedAt).toLocaleDateString()}
-                          </span>
-                        )}
-                      </div>
-                    </div>
+                filteredRepos.map((repo: Repository) => {
+                  const targetIdentifier = repo.id || (repo.githubId ? repo.githubId.toString() : repo.name)
+                  const isTogglingThis = toggleRepoMutation.isPending && (
+                    toggleRepoMutation.variables?.repo.id === repo.id ||
+                    toggleRepoMutation.variables?.repo.githubId === repo.githubId ||
+                    toggleRepoMutation.variables?.repo.name === repo.name
+                  )
 
-                    {/* Stats & Actions */}
-                    <div className="flex items-center justify-between lg:justify-end gap-6 border-t lg:border-t-0 pt-4 lg:pt-0 border-slate-100 dark:border-slate-800">
+                  return (
+                    <div key={repo.id || repo.githubId || repo.name} className={`p-4 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-colors ${repo.isActive ? 'hover:bg-slate-50 dark:hover:bg-slate-900/50' : 'bg-slate-50/50 dark:bg-slate-900/20 opacity-80'}`}>
                       
-                      {repo.isActive && (
-                        <div className="flex items-center gap-6 hidden sm:flex">
-                          <div className="text-center">
-                            <p className="text-xs text-slate-500 mb-0.5">Commits</p>
-                            <p className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 justify-center">
-                              <GitCommit className="h-3 w-3" />
-                              {repo.commitCount || 0}
-                            </p>
-                          </div>
-                          <div className="text-center">
-                            <p className="text-xs text-slate-500 mb-0.5">Quality Score</p>
-                            <p className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 justify-center">
-                              <Shield className="h-3 w-3" />
-                              {repo.sqsScore ? `${repo.sqsScore}/100` : 'N/A'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center gap-3">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          title="Sync Repository"
-                          disabled={!repo.isActive || (syncRepoMutation.isPending && syncRepoMutation.variables === repo.id)}
-                          onClick={() => syncRepoMutation.mutate(repo.id)}
-                        >
-                          <RefreshCw className={`h-4 w-4 ${syncRepoMutation.isPending && syncRepoMutation.variables === repo.id ? 'animate-spin' : ''}`} />
-                        </Button>
-                        
-                        {repo.url && (
-                          <Button variant="ghost" size="icon" asChild title="View on GitHub">
-                            <a href={repo.url} target="_blank" rel="noopener noreferrer">
-                              <ExternalLink className="h-4 w-4" />
-                            </a>
-                          </Button>
-                        )}
-                        
-                        <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
-                        
-                        <button
-                          onClick={() => toggleRepoMutation.mutate({ id: repo.id, enabled: !repo.isActive })}
-                          disabled={toggleRepoMutation.isPending && toggleRepoMutation.variables?.id === repo.id}
-                          className={`flex items-center gap-2 text-sm font-medium transition-colors ${
-                            repo.isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
-                          }`}
-                        >
-                          {repo.isActive ? (
-                            <><ToggleRight className="h-8 w-8 text-blue-500" /> Active</>
-                          ) : (
-                            <><ToggleLeft className="h-8 w-8 text-slate-400" /> Inactive</>
+                      {/* Repo Info */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
+                            {repo.fullName || repo.name}
+                          </h4>
+                          {!repo.isActive && (
+                            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Inactive</Badge>
                           )}
-                        </button>
+                          {repo.isPrivate && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 border-amber-200 text-amber-700 bg-amber-50 dark:border-amber-900 dark:text-amber-400 dark:bg-amber-900/20">Private</Badge>
+                          )}
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500 mt-2">
+                          <span className="flex items-center gap-1">
+                            <GitBranch className="h-3.5 w-3.5" /> {repo.defaultBranch || 'main'}
+                          </span>
+                          
+                          {repo.isActive ? (
+                            <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Active & Syncing
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 text-slate-400">
+                              <AlertTriangle className="h-3.5 w-3.5" /> Sync Disabled
+                            </span>
+                          )}
+                          
+                          {repo.lastSyncAt && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5" /> 
+                              Synced {new Date(repo.lastSyncAt).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Stats & Actions */}
+                      <div className="flex items-center justify-between lg:justify-end gap-6 border-t lg:border-t-0 pt-4 lg:pt-0 border-slate-100 dark:border-slate-800">
+                        
+                        {repo.isActive && (
+                          <div className="flex items-center gap-6 hidden sm:flex">
+                            <div className="text-center">
+                              <p className="text-xs text-slate-500 mb-0.5">Commits</p>
+                              <p className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 justify-center">
+                                <GitCommit className="h-3 w-3" />
+                                {repo.commitCount || 0}
+                              </p>
+                            </div>
+                            <div className="text-center">
+                              <p className="text-xs text-slate-500 mb-0.5">Quality Score</p>
+                              <p className="font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1 justify-center">
+                                <Shield className="h-3 w-3" />
+                                {repo.sqsScore ? `${repo.sqsScore}/100` : 'N/A'}
+                              </p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex items-center gap-3">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Sync Repository"
+                            disabled={!repo.isActive || (syncRepoMutation.isPending && syncRepoMutation.variables === targetIdentifier)}
+                            onClick={() => syncRepoMutation.mutate(targetIdentifier)}
+                          >
+                            <RefreshCw className={`h-4 w-4 ${syncRepoMutation.isPending && syncRepoMutation.variables === targetIdentifier ? 'animate-spin' : ''}`} />
+                          </Button>
+                          
+                          {repo.url && (
+                            <Button variant="ghost" size="icon" asChild title="View on GitHub">
+                              <a href={repo.url} target="_blank" rel="noopener noreferrer">
+                                <ExternalLink className="h-4 w-4" />
+                              </a>
+                            </Button>
+                          )}
+                          
+                          <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1"></div>
+                          
+                          <button
+                            onClick={() => toggleRepoMutation.mutate({ repo, enabled: !repo.isActive })}
+                            disabled={isTogglingThis}
+                            className={`flex items-center gap-2 text-sm font-medium transition-colors px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 ${
+                              repo.isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                            }`}
+                          >
+                            {isTogglingThis ? (
+                              <>
+                                <RefreshCw className="h-5 w-5 animate-spin text-blue-500" />
+                                <span className="text-xs">{repo.isActive ? 'Disabling...' : 'Enabling...'}</span>
+                              </>
+                            ) : repo.isActive ? (
+                              <><ToggleRight className="h-7 w-7 text-blue-500" /> Active</>
+                            ) : (
+                              <><ToggleLeft className="h-7 w-7 text-slate-400" /> Inactive</>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               )}
             </div>
           </CardContent>
