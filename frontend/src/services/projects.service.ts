@@ -77,8 +77,15 @@ export const projectsService = {
    * Get technical debt items for a project
    */
   async getTechnicalDebt(id: string): Promise<ProjectDebtItem[]> {
-    const response = await api.get<ProjectDebtItem[]>(`/projects/${id}/debt`);
-    return response.data;
+    const response = await api.get<any>(`/projects/${id}/debt`);
+    const data = response.data;
+    if (Array.isArray(data)) {
+      return data;
+    }
+    if (data && Array.isArray(data.items)) {
+      return data.items;
+    }
+    return [];
   },
 
   /**

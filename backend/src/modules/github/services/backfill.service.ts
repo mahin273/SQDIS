@@ -7,9 +7,9 @@ import { CommitProcessorQueue } from '../queues/commit-processor.queue';
 import { ParsedCommitData } from '../dto/webhook-payload.dto';
 
 /**
- * Default backfill period in days
+ * Default backfill period in days (1 year to encompass full historical context)
  */
-const DEFAULT_BACKFILL_DAYS = 90;
+const DEFAULT_BACKFILL_DAYS = 365;
 
 /**
  * Batch size for processing commits
@@ -31,17 +31,17 @@ export class BackfillService {
   ) {}
 
   /**
-   * Backfill commits for a repository for the last N days
+   * Backfill commits for a repository for the last N days (0 = full history)
    *
    * @param repositoryId - Internal repository ID
-   * @param days - Number of days to backfill (default: 90)
+   * @param days - Number of days to backfill (default: 365, 0 = all history)
    * @returns Number of commits queued for processing
    */
   async backfillRepository(
     repositoryId: string,
     days: number = DEFAULT_BACKFILL_DAYS,
-  ): Promise<{ commitsQueued: number; startDate: Date; endDate: Date }> {
-    this.logger.log(`Starting backfill for repository ${repositoryId} (last ${days} days)`);
+  ): Promise<{ commitsQueued: number; startDate: Date | null; endDate: Date }> {
+    this.logger.log(`Starting backfill for repository ${repositoryId} (window: ${days === 0 ? 'all history' : `${days} days`})`);
 
     const repository = await this.prisma.repository.findUnique({
       where: { id: repositoryId },
@@ -56,11 +56,14 @@ export class BackfillService {
 
     const [owner, repo] = repository.fullName.split('/');
     const endDate = new Date();
-    const startDate = new Date();
-    startDate.setDate(startDate.getDate() - days);
+    let startDate: Date | undefined;
+    if (days && days > 0) {
+      startDate = new Date();
+      startDate.setDate(startDate.getDate() - days);
+    }
 
     this.logger.log(
-      `Fetching commits for ${repository.fullName} from ${startDate.toISOString()} to ${endDate.toISOString()}`,
+      `Fetching commits for ${repository.fullName} from ${startDate ? startDate.toISOString() : 'beginning of repository'} to ${endDate.toISOString()}`,
     );
 
     // Fetch all commit SHAs using pagination
@@ -120,7 +123,7 @@ export class BackfillService {
       `Backfill complete for ${repository.fullName}: ${commitsQueued} commits queued`,
     );
 
-    return { commitsQueued, startDate, endDate };
+    return { commitsQueued, startDate: startDate ?? null, endDate };
   }
 
   /**
@@ -137,22 +140,28 @@ export class BackfillService {
     octokit: Octokit,
     owner: string,
     repo: string,
-    since: Date,
-    until: Date,
+    since?: Date,
+    until?: Date,
   ): Promise<string[]> {
     this.logger.debug(`Fetching commits with pagination for ${owner}/${repo}`);
 
     try {
-      // Use Octokit's built-in pagination
-      const commits = await octokit.paginate(octokit.rest.repos.listCommits, {
+      const params: any = {
         owner,
         repo,
-        since: since.toISOString(),
-        until: until.toISOString(),
         per_page: 100,
-      });
+      };
+      if (since) {
+        params.since = since.toISOString();
+      }
+      if (until) {
+        params.until = until.toISOString();
+      }
 
-      return commits.map((commit) => commit.sha);
+      // Use Octokit's built-in pagination
+      const commits = await octokit.paginate(octokit.rest.repos.listCommits, params);
+
+      return (commits as any[]).map((commit) => commit.sha);
     } catch (error) {
       this.logger.error(`Failed to fetch commits with pagination: ${error}`);
       throw error;

@@ -68,27 +68,33 @@ export class OrganizationGuard implements CanActivate {
    * Extract organization ID from request parameters or body
    */
   private getOrganizationIdFromRequest(request: any): string | null {
-    // Check route parameters first (most common)
+    // 1. Check X-Organization-Id header first (standard across frontend)
+    const headerOrgId = request.headers?.['x-organization-id'];
+    if (headerOrgId) {
+      return headerOrgId;
+    }
+
+    // 2. Check route parameter organizationId
     if (request.params?.organizationId) {
       return request.params.organizationId;
     }
 
-    // Check for 'id' parameter (used in /organizations/:id routes)
-    if (request.params?.id) {
+    // 3. Check for 'id' parameter ONLY for organizations routes (e.g. /organizations/:id)
+    if (request.params?.id && (request.baseUrl?.includes('organizations') || request.url?.includes('/organizations/'))) {
       return request.params.id;
     }
 
-    // Check request body
+    // 4. Check request body
     if (request.body?.organizationId) {
       return request.body.organizationId;
     }
 
-    // Check query parameters
+    // 5. Check query parameters
     if (request.query?.organizationId) {
       return request.query.organizationId;
     }
 
-    // Check JWT payload for organization context
+    // 6. Check JWT payload for organization context
     if (request.user?.organizationId) {
       return request.user.organizationId;
     }

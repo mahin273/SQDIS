@@ -26,4 +26,22 @@ export class UpdateProjectDto {
   @IsOptional()
   @MaxLength(500)
   description?: string;
+
+  @ApiPropertyOptional({
+    description: 'Project key',
+    example: 'CORE',
+    maxLength: 50,
+  })
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  key?: string;
+
+  @ApiPropertyOptional({
+    description: 'Project badge color',
+    example: '#3b82f6',
+  })
+  @IsString()
+  @IsOptional()
+  color?: string;
 }

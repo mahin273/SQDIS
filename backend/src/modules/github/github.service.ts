@@ -26,7 +26,7 @@ export interface IBackfillService {
     days?: number,
   ): Promise<{
     commitsQueued: number;
-    startDate: Date;
+    startDate: Date | null;
     endDate: Date;
   }>;
 }
