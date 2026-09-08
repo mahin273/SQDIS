@@ -44,6 +44,14 @@ export class GoalsController {
     private readonly historyService: GoalHistoryService,
   ) {}
 
+  private getOrgId(req: any): string {
+    return (
+      req.headers?.['x-organization-id'] ||
+      req.organizationId ||
+      req.user?.organizationId
+    );
+  }
+
   // ==================== GOAL ENDPOINTS ====================
 
   /**
@@ -53,7 +61,7 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get goals dashboard data' })
   @ApiResponse({ status: 200, description: 'Dashboard stats and active goals list retrieved successfully.' })
   async getDashboard(@Request() req: any, @Query() filters: GoalsDashboardFiltersDto) {
-    return this.goalsService.getDashboard(req.user.organizationId, filters);
+    return this.goalsService.getDashboard(this.getOrgId(req), filters);
   }
 
   /**
@@ -63,7 +71,7 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get all goals with filters' })
   @ApiResponse({ status: 200, description: 'Goals list retrieved successfully.' })
   async findAll(@Request() req: any, @Query() filters: GoalFiltersDto) {
-    return this.goalsService.findAll(req.user.organizationId, filters);
+    return this.goalsService.findAll(this.getOrgId(req), filters);
   }
 
   /**
@@ -73,7 +81,7 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get history of goals' })
   @ApiResponse({ status: 200, description: 'Goals history retrieved successfully.' })
   async getHistory(@Request() req: any, @Query() filters: GoalFiltersDto) {
-    return this.goalsService.getHistory(req.user.organizationId, filters);
+    return this.goalsService.getHistory(this.getOrgId(req), filters);
   }
 
   /**
@@ -91,7 +99,7 @@ export class GoalsController {
   ) {
     return this.achievementService.getAchievementHistory(
       req.user.id,
-      req.user.organizationId,
+      this.getOrgId(req),
       page || 1,
       limit || 20,
     );
@@ -106,7 +114,7 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get all goal templates' })
   @ApiResponse({ status: 200, description: 'Goal templates list retrieved successfully.' })
   async getTemplates(@Request() req: any) {
-    return this.templatesService.findAll(req.user.organizationId);
+    return this.templatesService.findAll(this.getOrgId(req));
   }
 
   /**
@@ -116,7 +124,7 @@ export class GoalsController {
   @ApiOperation({ summary: 'Create a new goal template' })
   @ApiResponse({ status: 201, description: 'Goal template created successfully.' })
   async createTemplate(@Request() req: any, @Body() dto: CreateGoalTemplateDto) {
-    return this.templatesService.create(req.user.organizationId, dto);
+    return this.templatesService.create(this.getOrgId(req), dto);
   }
 
   /**
@@ -127,7 +135,7 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template details retrieved.' })
   async getTemplate(@Request() req: any, @Param('id') id: string) {
-    return this.templatesService.findById(id, req.user.organizationId);
+    return this.templatesService.findById(id, this.getOrgId(req));
   }
 
   /**
@@ -142,7 +150,7 @@ export class GoalsController {
     @Param('id') id: string,
     @Body() dto: UpdateGoalTemplateDto,
   ) {
-    return this.templatesService.update(id, req.user.organizationId, dto);
+    return this.templatesService.update(id, this.getOrgId(req), dto);
   }
 
   /**
@@ -153,7 +161,7 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template deleted successfully.' })
   async deleteTemplate(@Request() req: any, @Param('id') id: string) {
-    return this.templatesService.delete(id, req.user.organizationId);
+    return this.templatesService.delete(id, this.getOrgId(req));
   }
 
   // ==================== HISTORY ENDPOINTS ====================
@@ -264,7 +272,7 @@ export class GoalsController {
   @ApiOperation({ summary: 'Create a new quality goal / OKR' })
   @ApiResponse({ status: 201, description: 'Goal successfully created.' })
   async create(@Request() req: any, @Body() dto: CreateGoalDto) {
-    return this.goalsService.create(req.user.organizationId, req.user.id, dto);
+    return this.goalsService.create(this.getOrgId(req), req.user.id, dto);
   }
 
   /**
@@ -275,7 +283,7 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Goal details retrieved.' })
   async findById(@Request() req: any, @Param('id') id: string) {
-    return this.goalsService.findById(id, req.user.organizationId);
+    return this.goalsService.findById(id, this.getOrgId(req));
   }
 
   /**
@@ -286,7 +294,7 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Goal updated successfully.' })
   async update(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateGoalDto) {
-    return this.goalsService.update(id, req.user.organizationId, dto);
+    return this.goalsService.update(id, this.getOrgId(req), dto);
   }
 
   /**
@@ -297,7 +305,7 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Goal deleted successfully.' })
   async delete(@Request() req: any, @Param('id') id: string) {
-    return this.goalsService.delete(id, req.user.organizationId);
+    return this.goalsService.delete(id, this.getOrgId(req));
   }
 
   /**
@@ -308,7 +316,7 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Current progress metrics retrieved.' })
   async getProgress(@Request() req: any, @Param('id') id: string) {
-    return this.goalsService.getProgress(id, req.user.organizationId);
+    return this.goalsService.getProgress(id, this.getOrgId(req));
   }
 
   /**
@@ -319,7 +327,7 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'OKR summary retrieved.' })
   async getOKRSummary(@Request() req: any, @Param('id') id: string) {
-    return this.goalsService.getOKRSummary(id, req.user.organizationId);
+    return this.goalsService.getOKRSummary(id, this.getOrgId(req));
   }
 
   // ==================== KEY RESULT ENDPOINTS ====================
@@ -336,7 +344,7 @@ export class GoalsController {
     @Param('id') id: string,
     @Body() dto: CreateKeyResultDto,
   ) {
-    return this.goalsService.addKeyResult(id, req.user.organizationId, dto);
+    return this.goalsService.addKeyResult(id, this.getOrgId(req), dto);
   }
 
   /**
@@ -353,7 +361,7 @@ export class GoalsController {
     @Param('keyResultId') keyResultId: string,
     @Body() dto: UpdateKeyResultDto,
   ) {
-    return this.goalsService.updateKeyResult(goalId, keyResultId, req.user.organizationId, dto);
+    return this.goalsService.updateKeyResult(goalId, keyResultId, this.getOrgId(req), dto);
   }
 
   /**
@@ -369,6 +377,6 @@ export class GoalsController {
     @Param('goalId') goalId: string,
     @Param('keyResultId') keyResultId: string,
   ) {
-    return this.goalsService.deleteKeyResult(goalId, keyResultId, req.user.organizationId);
+    return this.goalsService.deleteKeyResult(goalId, keyResultId, this.getOrgId(req));
   }
 }

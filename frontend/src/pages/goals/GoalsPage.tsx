@@ -11,7 +11,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { goalsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
-import type { Goal, GoalStatus, GoalMetricType } from '@/types'
+import type { Goal, GoalStatus, GoalMetricType, GoalOperator } from '@/types'
 
 export function GoalsPage() {
   const queryClient = useQueryClient()
@@ -26,9 +26,11 @@ export function GoalsPage() {
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
   const [metricType, setMetricType] = useState<GoalMetricType>('DQS')
+  const [operator, setOperator] = useState<GoalOperator>('GTE')
   const [targetValue, setTargetValue] = useState<number>(100)
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState('')
+  const [formError, setFormError] = useState<string | null>(null)
 
   // Queries
   const goalsQuery = useQuery({
@@ -43,6 +45,10 @@ export function GoalsPage() {
       queryClient.invalidateQueries({ queryKey: queryKeys.goals.all() })
       closeGoalModal()
     },
+    onError: (err: any) => {
+      const msg = err.response?.data?.message || err.message || 'Failed to create goal'
+      setFormError(Array.isArray(msg) ? msg.join(', ') : msg)
+    },
   })
 
   const updateMutation = useMutation({
@@ -50,6 +56,10 @@ export function GoalsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.goals.all() })
       closeGoalModal()
+    },
+    onError: (err: any) => {
+      const msg = err.response?.data?.message || err.message || 'Failed to update goal'
+      setFormError(Array.isArray(msg) ? msg.join(', ') : msg)
     },
   })
 
@@ -78,9 +88,11 @@ export function GoalsPage() {
     setTitle('')
     setDescription('')
     setMetricType('DQS')
+    setOperator('GTE')
     setTargetValue(100)
     setStartDate(new Date().toISOString().split('T')[0])
     setEndDate('')
+    setFormError(null)
     setIsGoalModalOpen(true)
   }
 
@@ -90,25 +102,34 @@ export function GoalsPage() {
     setTitle(goal.name)
     setDescription(goal.description || '')
     setMetricType(goal.metricType || 'DQS')
+    setOperator(goal.operator || (goal.metricType === 'BUG_COUNT' ? 'LTE' : 'GTE'))
     setTargetValue(goal.targetValue || 100)
     setStartDate(goal.startDate ? new Date(goal.startDate).toISOString().split('T')[0] : '')
     setEndDate(goal.endDate ? new Date(goal.endDate).toISOString().split('T')[0] : '')
+    setFormError(null)
     setIsGoalModalOpen(true)
   }
 
   const closeGoalModal = () => {
     setIsGoalModalOpen(false)
     setEditingGoalId(null)
+    setFormError(null)
   }
 
   const handleSaveGoal = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!title.trim() || !startDate) return
+    setFormError(null)
+    if (!title.trim() || !startDate) {
+      setFormError('Goal name and start date are required.')
+      return
+    }
 
+    const effectiveOperator = operator || (metricType === 'BUG_COUNT' ? 'LTE' : 'GTE')
     const payload = {
-      name: title,
-      description,
+      name: title.trim(),
+      description: description.trim() || undefined,
       metricType,
+      operator: effectiveOperator,
       targetValue: Number(targetValue),
       startDate,
       endDate: endDate || undefined,
@@ -344,6 +365,13 @@ export function GoalsPage() {
       {/* Create/Edit Modal */}
       <Modal isOpen={isGoalModalOpen} onClose={closeGoalModal} title={editingGoalId ? "Edit Engineering Goal" : "Create Engineering Goal"}>
         <form onSubmit={handleSaveGoal} className="space-y-4">
+          {formError && (
+            <div className="p-3 text-sm text-rose-700 bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-900 rounded-lg flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 shrink-0 text-rose-500" />
+              <span>{formError}</span>
+            </div>
+          )}
+
           <Input 
             label="Goal Name"
             value={title} 
@@ -368,7 +396,11 @@ export function GoalsPage() {
               <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Metric Type</label>
               <select
                 value={metricType}
-                onChange={(e) => setMetricType(e.target.value as GoalMetricType)}
+                onChange={(e) => {
+                  const val = e.target.value as GoalMetricType
+                  setMetricType(val)
+                  setOperator(val === 'BUG_COUNT' ? 'LTE' : 'GTE')
+                }}
                 className="w-full h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
                 <option value="DQS">DQS (Developer Quality Score)</option>
@@ -376,18 +408,32 @@ export function GoalsPage() {
                 <option value="BUG_COUNT">Bug Count (Lower is better)</option>
                 <option value="COMMIT_COUNT">Commit Count</option>
                 <option value="REVIEW_COUNT">Review Count</option>
-                <option value="SQS">SQS (System Quality Score)</option>
               </select>
             </div>
-            
-            <Input 
-              label="Target Value"
-              type="number" 
-              value={targetValue} 
-              onChange={(e) => setTargetValue(Number(e.target.value))} 
-              required 
-            />
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">Target Condition</label>
+              <select
+                value={operator}
+                onChange={(e) => setOperator(e.target.value as GoalOperator)}
+                className="w-full h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="GTE">&gt;= At least (Target or higher)</option>
+                <option value="LTE">&lt;= At most (Target or lower)</option>
+                <option value="GT">&gt; Greater than</option>
+                <option value="LT">&lt; Less than</option>
+                <option value="EQ">= Equal to</option>
+              </select>
+            </div>
           </div>
+
+          <Input 
+            label="Target Value"
+            type="number" 
+            value={targetValue} 
+            onChange={(e) => setTargetValue(Number(e.target.value))} 
+            required 
+          />
           
           <div className="grid grid-cols-2 gap-4">
             <Input 
