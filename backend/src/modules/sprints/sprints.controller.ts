@@ -373,9 +373,7 @@ export class SprintsController {
     @GetOrganization() organizationId: string,
   ): Promise<SprintReportDto> {
     await this.sprintsService.verifySprintAccess(id, organizationId);
-    return this.sprintsService.generateReport(id);
   }
-
 
   /**
    * Export sprint report as PDF
@@ -452,7 +450,6 @@ export class SprintsController {
 
     res.send(csvContent);
   }
-
 
   /**
    * Get sprint burndown data
