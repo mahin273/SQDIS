@@ -44,6 +44,7 @@ import {
 } from './dto/sprint-analytics.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
+import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { TeamsService } from '../teams/teams.service';
 import { Role } from '@prisma/client';
@@ -92,7 +93,7 @@ export class SprintsController {
   async create(
     @Body() dto: CreateSprintDto,
     @GetUser('id') userId: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     // Check if user is OWNER, ADMIN, or Team Lead of the specified team
     const isTeamLead = await this.teamsService.isTeamLead(dto.teamId, userId);
@@ -119,9 +120,134 @@ export class SprintsController {
   })
   async findAll(
     @Query('teamId') teamId: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     return this.sprintsService.findAll(organizationId, teamId);
+  }
+
+  /**
+   * Get active sprints for the current organization
+   */
+  @Get('active')
+  @ApiOperation({ summary: 'Get active sprints for current organization' })
+  @ApiQuery({ name: 'teamId', required: false, description: 'Filter by team ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of active sprints',
+  })
+  async getActive(
+    @Query('teamId') teamId: string,
+    @GetOrganization() organizationId: string,
+  ) {
+    return this.sprintsService.findAll(organizationId, teamId);
+  }
+
+  /**
+   * Compare multiple sprints
+   */
+  @Get('compare')
+  @ApiOperation({ summary: 'Compare multiple sprints side-by-side' })
+  @ApiQuery({
+    name: 'sprintIds',
+    description: 'Comma-separated sprint IDs to compare (2-5 sprints)',
+    example: 'sprint-id-1,sprint-id-2',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sprint comparison with metrics and changes',
+    type: SprintCompareResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid number of sprints (must be 2-5)',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'One or more sprints not found',
+  })
+  async compareSprints(
+    @Query('sprintIds') sprintIds: string,
+    @GetOrganization() organizationId: string,
+  ): Promise<SprintCompareResponseDto> {
+    const ids = sprintIds
+      .split(',')
+      .map((id) => id.trim())
+      .filter((id) => id);
+    return this.sprintsService.compareSprints(ids, organizationId);
+  }
+
+  /**
+   * Trigger sprint auto-generation check (admin only)
+   */
+  @Post('auto-generate')
+  @ApiOperation({ summary: 'Manually trigger sprint report auto-generation for ended sprints' })
+  @ApiResponse({
+    status: 200,
+    description: 'Auto-generation triggered successfully',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'User does not have permission to trigger auto-generation',
+  })
+  async triggerAutoGeneration(
+    @GetUser('id') userId: string,
+    @GetOrganization() organizationId: string,
+  ): Promise<{ message: string; count: number; processed: number }> {
+    // Only OWNER and ADMIN can trigger auto-generation
+    await this.organizationsService.verifyUserRole(organizationId, userId, [
+      Role.OWNER,
+      Role.ADMIN,
+    ]);
+
+    const result = await this.sprintAutoGenerationService.triggerSprintEndCheck();
+    const count =
+      typeof result === 'object' && result !== null && 'processed' in result
+        ? (result as any).processed
+        : Array.isArray(result)
+        ? (result as any).length
+        : Number(result) || 0;
+
+    return {
+      message: 'Sprint reports generated successfully',
+      count,
+      processed: count,
+    };
+  }
+
+  /**
+   * Get velocity trend across sprints
+   * Feature 1: Sprint Velocity Chart
+   */
+  @Get('analytics/velocity')
+  @ApiOperation({ summary: 'Get sprint velocity trend' })
+  @ApiQuery({ name: 'teamId', required: false, description: 'Filter by team ID' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Number of sprints to include' })
+  @ApiResponse({ status: 200, description: 'Velocity trend data', type: VelocityTrendDto })
+  async getVelocityTrend(
+    @GetOrganization() organizationId: string,
+    @Query('teamId') teamId?: string,
+    @Query('limit') limit?: string,
+  ): Promise<VelocityTrendDto> {
+    return this.sprintsService.getVelocityTrend(
+      organizationId,
+      teamId,
+      limit ? parseInt(limit, 10) : 10,
+    );
+  }
+
+  /**
+   * Get sprint timeline for Gantt view
+   * Feature 7: Sprint Timeline/Gantt View
+   */
+  @Get('analytics/timeline')
+  @ApiOperation({ summary: 'Get sprint timeline for Gantt view' })
+  @ApiQuery({ name: 'months', required: false, description: 'Number of months to include' })
+  @ApiResponse({ status: 200, description: 'Sprint timeline data' })
+  async getSprintTimeline(
+    @GetOrganization() organizationId: string,
+    @Query('months') months?: string,
+  ) {
+    return this.sprintsService.getSprintTimeline(organizationId, months ? parseInt(months, 10) : 3);
   }
 
   /**
@@ -138,7 +264,7 @@ export class SprintsController {
     status: 404,
     description: 'Sprint not found',
   })
-  async findOne(@Param('id') id: string, @GetUser('organizationId') organizationId: string) {
+  async findOne(@Param('id') id: string, @GetOrganization() organizationId: string) {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.findById(id);
   }
@@ -173,7 +299,7 @@ export class SprintsController {
     @Param('id') id: string,
     @Body() dto: UpdateSprintDto,
     @GetUser('id') userId: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     const sprint = await this.sprintsService.verifySprintAccess(id, organizationId);
 
@@ -211,7 +337,7 @@ export class SprintsController {
   async delete(
     @Param('id') id: string,
     @GetUser('id') userId: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     const sprint = await this.sprintsService.verifySprintAccess(id, organizationId);
 
@@ -244,7 +370,7 @@ export class SprintsController {
   })
   async getReport(
     @Param('id') id: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ): Promise<SprintReportDto> {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.generateReport(id);
@@ -275,7 +401,7 @@ export class SprintsController {
   })
   async compareSprints(
     @Query('sprintIds') sprintIds: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ): Promise<SprintCompareResponseDto> {
     const ids = sprintIds
       .split(',')
@@ -299,7 +425,7 @@ export class SprintsController {
   })
   async triggerAutoGeneration(
     @GetUser('id') userId: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ): Promise<{ processed: number }> {
     // Only OWNER and ADMIN can trigger auto-generation
     await this.organizationsService.verifyUserRole(organizationId, userId, [
@@ -331,7 +457,7 @@ export class SprintsController {
   })
   async exportPdf(
     @Param('id') id: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
     @Res() res: Response,
   ): Promise<void> {
     await this.sprintsService.verifySprintAccess(id, organizationId);
@@ -369,7 +495,7 @@ export class SprintsController {
   })
   async exportCsv(
     @Param('id') id: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
     @Res() res: Response,
   ): Promise<void> {
     await this.sprintsService.verifySprintAccess(id, organizationId);
@@ -398,7 +524,7 @@ export class SprintsController {
   @ApiQuery({ name: 'limit', required: false, description: 'Number of sprints to include' })
   @ApiResponse({ status: 200, description: 'Velocity trend data', type: VelocityTrendDto })
   async getVelocityTrend(
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
     @Query('teamId') teamId?: string,
     @Query('limit') limit?: string,
   ): Promise<VelocityTrendDto> {
@@ -418,7 +544,7 @@ export class SprintsController {
   @ApiQuery({ name: 'months', required: false, description: 'Number of months to include' })
   @ApiResponse({ status: 200, description: 'Sprint timeline data' })
   async getSprintTimeline(
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
     @Query('months') months?: string,
   ) {
     return this.sprintsService.getSprintTimeline(organizationId, months ? parseInt(months, 10) : 3);
@@ -435,7 +561,7 @@ export class SprintsController {
   @ApiResponse({ status: 404, description: 'Sprint not found' })
   async getBurndown(
     @Param('id') id: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ): Promise<SprintBurndownDto> {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.getBurndown(id);
@@ -452,7 +578,7 @@ export class SprintsController {
   @ApiResponse({ status: 404, description: 'Sprint not found' })
   async getSprintHealth(
     @Param('id') id: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.getSprintHealth(id);
@@ -473,7 +599,7 @@ export class SprintsController {
   @ApiResponse({ status: 404, description: 'Sprint not found' })
   async getDeveloperContributions(
     @Param('id') id: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ): Promise<SprintContributionsDto> {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.getDeveloperContributions(id);
@@ -493,7 +619,7 @@ export class SprintsController {
   async createGoal(
     @Param('id') id: string,
     @Body() dto: CreateSprintGoalDto,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.createGoal(id, dto);
@@ -507,7 +633,7 @@ export class SprintsController {
   @ApiParam({ name: 'id', description: 'Sprint ID' })
   @ApiResponse({ status: 200, description: 'Sprint goals' })
   @ApiResponse({ status: 404, description: 'Sprint not found' })
-  async getGoals(@Param('id') id: string, @GetUser('organizationId') organizationId: string) {
+  async getGoals(@Param('id') id: string, @GetOrganization() organizationId: string) {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.getGoals(id);
   }
@@ -538,7 +664,7 @@ export class SprintsController {
   async upsertRetrospective(
     @Param('id') id: string,
     @Body() dto: CreateRetrospectiveDto,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.upsertRetrospective(id, dto);
@@ -553,7 +679,7 @@ export class SprintsController {
   @ApiResponse({ status: 200, description: 'Sprint retrospective', type: SprintRetrospectiveDto })
   async getRetrospective(
     @Param('id') id: string,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.getRetrospective(id);
@@ -573,7 +699,7 @@ export class SprintsController {
   async createCarryOver(
     @Param('id') id: string,
     @Body() dto: CreateCarryOverDto,
-    @GetUser('organizationId') organizationId: string,
+    @GetOrganization() organizationId: string,
   ) {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.createCarryOver(id, dto);
@@ -586,7 +712,7 @@ export class SprintsController {
   @ApiOperation({ summary: 'Get carry-overs for a sprint' })
   @ApiParam({ name: 'id', description: 'Sprint ID' })
   @ApiResponse({ status: 200, description: 'Sprint carry-overs' })
-  async getCarryOvers(@Param('id') id: string, @GetUser('organizationId') organizationId: string) {
+  async getCarryOvers(@Param('id') id: string, @GetOrganization() organizationId: string) {
     await this.sprintsService.verifySprintAccess(id, organizationId);
     return this.sprintsService.getCarryOvers(id);
   }

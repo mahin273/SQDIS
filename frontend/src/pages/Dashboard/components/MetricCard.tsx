@@ -21,12 +21,13 @@ function getTrendIcon(direction: TrendDirection) {
   return <FiArrowRight />
 }
 
-function getSqsTone(value: string) {
-  const num = Number(value)
-  if (!Number.isFinite(num)) return 'text-gray-900'
-  if (num > 70) return 'text-green-700'
-  if (num >= 50) return 'text-yellow-700'
-  return 'text-red-700'
+function getSqsTone(value: string | number) {
+  const match = String(value).match(/[-+]?[0-9]*\.?[0-9]+/)
+  const num = match ? parseFloat(match[0]) : parseFloat(String(value))
+  if (!Number.isFinite(num)) return 'text-gray-900 dark:text-slate-100'
+  if (num > 70) return 'text-emerald-700 dark:text-emerald-400'
+  if (num >= 50) return 'text-amber-700 dark:text-amber-400'
+  return 'text-rose-700 dark:text-rose-400'
 }
 
 export default function MetricCard({

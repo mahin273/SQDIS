@@ -791,7 +791,9 @@ export interface CoverageTrendResponse {
 
 // ============== REVIEWS ==============
 
-export type ReviewState = 'OPEN' | 'MERGED' | 'CLOSED' | 'DRAFT';
+export type ReviewStateFilter = 'PENDING' | 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
+
+export type ReviewState = 'OPEN' | 'MERGED' | 'CLOSED' | 'DRAFT' | ReviewStateFilter;
 
 export interface Review {
   id: string;
@@ -826,7 +828,7 @@ export interface ReviewFilters {
   pageSize?: number;
   organizationId?: string;
   repositoryId?: string;
-  state?: ReviewState;
+  state?: ReviewState | ReviewStateFilter;
   authorId?: string;
   reviewerId?: string;
   startDate?: string;
@@ -1321,6 +1323,7 @@ export interface Notification {
   message: string;
   metadata?: Record<string, unknown>;
   read: boolean;
+  isRead?: boolean;
   readAt?: string;
   createdAt: string;
 }
@@ -1329,6 +1332,7 @@ export interface NotificationFilters {
   page?: number;
   pageSize?: number;
   read?: boolean;
+  isRead?: boolean;
   type?: string;
   startDate?: string;
   endDate?: string;

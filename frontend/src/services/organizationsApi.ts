@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { api } from './api';
 import type {
   Organization,
   CreateOrganizationRequest,
@@ -19,7 +19,7 @@ export const organizationsApi = {
    * Get all organizations
    */
   getAll: async (): Promise<Organization[]> => {
-    const response = await apiClient.get<Organization[]>('/organizations');
+    const response = await api.get<Organization[]>('/organizations');
     return response.data;
   },
 
@@ -27,7 +27,7 @@ export const organizationsApi = {
    * Get organization by ID
    */
   getById: async (id: string): Promise<Organization> => {
-    const response = await apiClient.get<Organization>(`/organizations/${id}`);
+    const response = await api.get<Organization>(`/organizations/${id}`);
     return response.data;
   },
 
@@ -35,7 +35,7 @@ export const organizationsApi = {
    * Create a new organization
    */
   create: async (data: CreateOrganizationRequest): Promise<Organization> => {
-    const response = await apiClient.post<Organization>('/organizations', data);
+    const response = await api.post<Organization>('/organizations', data);
     return response.data;
   },
 
@@ -43,7 +43,7 @@ export const organizationsApi = {
    * Update organization
    */
   update: async (id: string, data: UpdateOrganizationRequest): Promise<Organization> => {
-    const response = await apiClient.patch<Organization>(`/organizations/${id}`, data);
+    const response = await api.patch<Organization>(`/organizations/${id}`, data);
     return response.data;
   },
 
@@ -51,7 +51,7 @@ export const organizationsApi = {
    * Delete organization
    */
   delete: async (id: string): Promise<{ message: string }> => {
-    const response = await apiClient.delete(`/organizations/${id}`);
+    const response = await api.delete(`/organizations/${id}`);
     return response.data;
   },
 
@@ -59,7 +59,7 @@ export const organizationsApi = {
    * Get organization members
    */
   getMembers: async (id: string): Promise<OrganizationMember[]> => {
-    const response = await apiClient.get<OrganizationMember[]>(`/organizations/${id}/members`);
+    const response = await api.get<OrganizationMember[]>(`/organizations/${id}/members`);
     return response.data;
   },
 
@@ -67,7 +67,7 @@ export const organizationsApi = {
    * Invite user to organization
    */
   inviteUser: async (id: string, data: InviteRequest): Promise<Invitation> => {
-    const response = await apiClient.post<Invitation>(`/organizations/${id}/invite`, data);
+    const response = await api.post<Invitation>(`/organizations/${id}/invite`, data);
     return response.data;
   },
 
@@ -75,7 +75,7 @@ export const organizationsApi = {
    * Resend invitation
    */
   resendInvitation: async (id: string, email: string): Promise<Invitation> => {
-    const response = await apiClient.post<Invitation>(`/organizations/${id}/invite/resend`, {
+    const response = await api.post<Invitation>(`/organizations/${id}/invite/resend`, {
       email,
     });
     return response.data;
@@ -85,7 +85,7 @@ export const organizationsApi = {
    * Get invitation details by token
    */
   getInvitation: async (token: string): Promise<Invitation> => {
-    const response = await apiClient.get<Invitation>(`/organizations/invitations/${token}`);
+    const response = await api.get<Invitation>(`/organizations/invitations/${token}`);
     return response.data;
   },
 
@@ -93,7 +93,7 @@ export const organizationsApi = {
    * Accept organization invitation
    */
   acceptInvitation: async (data: AcceptInvitationRequest): Promise<OrganizationMember> => {
-    const response = await apiClient.post<OrganizationMember>(
+    const response = await api.post<OrganizationMember>(
       `/organizations/invitations/${data.token}/accept`,
       {}
     );
@@ -108,7 +108,7 @@ export const organizationsApi = {
     userId: string,
     data: UpdateMemberRequest
   ): Promise<OrganizationMember> => {
-    const response = await apiClient.patch<OrganizationMember>(
+    const response = await api.patch<OrganizationMember>(
       `/organizations/${organizationId}/members/${userId}`,
       data
     );
@@ -119,7 +119,7 @@ export const organizationsApi = {
    * Remove member from organization
    */
   removeMember: async (organizationId: string, userId: string): Promise<{ message: string }> => {
-    const response = await apiClient.delete(
+    const response = await api.delete(
       `/organizations/${organizationId}/members/${userId}`
     );
     return response.data;

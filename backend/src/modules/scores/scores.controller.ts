@@ -130,7 +130,7 @@ export class ScoresController {
   @ApiParam({ name: 'projectId', description: 'Project ID' })
   @ApiResponse({ status: 200, description: 'Risky modules list retrieved.' })
   async getRiskyModules(
-    @Param('projectId', ParseUUIDPipe) projectId: string,
+    @Param('projectId') projectId: string,
     @GetOrganization() organizationId: string,
   ) {
     return this.scoresService.getRiskyModules(projectId, organizationId);

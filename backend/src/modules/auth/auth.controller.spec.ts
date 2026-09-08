@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { GitHubService } from '../github/github.service';
 import { EmailThrottlerGuard } from './guards/email-throttler.guard';
 import { GitHubAuthGuard } from './guards/github-auth.guard';
 import { GoogleAuthGuard } from './guards/google-auth.guard';
@@ -21,11 +22,17 @@ describe('AuthController', () => {
     updateProfile: jest.fn(),
     changePassword: jest.fn(),
   };
+  const githubServiceMock = {
+    handleOAuthCallback: jest.fn(),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [AuthController],
-      providers: [{ provide: AuthService, useValue: authServiceMock }],
+      providers: [
+        { provide: AuthService, useValue: authServiceMock },
+        { provide: GitHubService, useValue: githubServiceMock },
+      ],
     })
       .overrideGuard(EmailThrottlerGuard)
       .useValue({ canActivate: jest.fn(() => true) })

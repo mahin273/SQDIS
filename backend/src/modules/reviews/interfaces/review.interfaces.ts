@@ -63,8 +63,25 @@ export interface ReviewerRanking {
   constructiveComments?: number;
 }
 
+export interface ReviewDebtItem {
+  id: string;
+  pullRequestTitle: string;
+  prNumber?: number;
+  prUrl?: string;
+  waitedDays: number;
+  reviewers: string[];
+  createdAt: string;
+}
+
 export interface ReviewDebt {
+  teamId?: string;
+  teamName?: string;
   totalPending: number;
+  pendingReviews: number;
+  score: number;
+  avgWaitingDays: number;
+  oldestPendingReviewDays: number;
+  items: ReviewDebtItem[];
   debtByAssignee: {
     reviewer: {
       id: string;

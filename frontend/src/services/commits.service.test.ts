@@ -14,7 +14,7 @@ describe('commitsService', () => {
     vi.mocked(api.get).mockResolvedValueOnce({ data: mockData });
 
     const result = await commitsService.getAll({ page: 1 });
-    expect(api.get).toHaveBeenCalledWith('/commits', { params: { page: 1 } });
+    expect(api.get).toHaveBeenCalledWith('/commits', { params: { page: 1, limit: 20 } });
     expect(result).toEqual(mockData);
   });
 });
