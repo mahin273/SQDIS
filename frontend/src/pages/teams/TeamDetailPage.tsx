@@ -10,7 +10,7 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { teamsService, membersService } from '@/services'
+import { teamsService, membersService, projectsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState, formatScore } from '../pageUtils'
 import type { TeamMetrics } from '@/types'
@@ -23,6 +23,10 @@ export function TeamDetailPage() {
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false)
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [isProjectModalOpen, setIsProjectModalOpen] = useState(false)
+  const [assigningProjectId, setAssigningProjectId] = useState<string | null>(null)
+  const [unassigningProjectId, setUnassigningProjectId] = useState<string | null>(null)
+  const [projectActionError, setProjectActionError] = useState<string | null>(null)
   const [memberSearchQuery, setMemberSearchQuery] = useState('')
   const [selectedUserId, setSelectedUserId] = useState('')
   
@@ -82,6 +86,57 @@ export function TeamDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.teams.all() })
       navigate('/teams')
+    },
+  })
+
+  const projectsQuery = useQuery({
+    queryKey: queryKeys.projects.all(),
+    queryFn: () => projectsService.getAll(),
+  })
+
+  const assignProjectMutation = useMutation({
+    mutationFn: (projectId: string) => {
+      setProjectActionError(null)
+      return projectsService.assignTeam(projectId, { teamId: id! })
+    },
+    onMutate: (projectId: string) => {
+      setAssigningProjectId(projectId)
+    },
+    onSettled: () => {
+      setAssigningProjectId(null)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+    },
+    onError: (err: any) => {
+      setProjectActionError(
+        err?.response?.data?.message || err?.message || 'Failed to assign project'
+      )
+    },
+  })
+
+  const removeProjectMutation = useMutation({
+    mutationFn: (projectId: string) => {
+      setProjectActionError(null)
+      return projectsService.removeTeam(projectId, id!)
+    },
+    onMutate: (projectId: string) => {
+      setUnassigningProjectId(projectId)
+    },
+    onSettled: () => {
+      setUnassigningProjectId(null)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+    },
+    onError: (err: any) => {
+      setProjectActionError(
+        err?.response?.data?.message || err?.message || 'Failed to unassign project'
+      )
     },
   })
 
@@ -271,29 +326,52 @@ export function TeamDetailPage() {
                   </CardContent>
                 </Card>
 
-                {team.projects && team.projects.length > 0 && (
-                  <Card>
-                    <CardHeader>
-                      <CardTitle>Associated Projects</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="space-y-3">
-                        {team.projects.map(project => (
-                          <Link key={project.id} to={`/projects/${project.id}`} className="block p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-                            <div className="flex items-center justify-between">
-                              <span className="font-medium text-slate-900 dark:text-slate-100">{project.name}</span>
-                              {project.sqsScore !== undefined && (
-                                <Badge variant="secondary" className="text-xs">
-                                  SQS {formatScore(project.sqsScore)}
-                                </Badge>
-                              )}
-                            </div>
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Activity className="h-5 w-5 text-blue-500" /> Associated Projects
+                    </CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => setIsProjectModalOpen(true)} className="gap-1.5">
+                      <Plus className="h-3.5 w-3.5" /> Assign Project
+                    </Button>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-3">
+                      {(team.projects ?? []).map((project) => (
+                        <div key={project.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+                          <Link to={`/projects/${project.id}`} className="flex-1 min-w-0 mr-2">
+                            <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{project.name}</p>
+                            {project.sqsScore !== undefined && (
+                              <p className="text-xs text-slate-500">SQS {formatScore(project.sqsScore)}</p>
+                            )}
                           </Link>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 h-8 w-8 p-0"
+                              disabled={removeProjectMutation.isPending && unassigningProjectId === project.id}
+                              onClick={() => removeProjectMutation.mutate(project.id)}
+                              title="Unassign project"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Link to={`/projects/${project.id}`} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                              <ArrowLeft className="h-4 w-4 rotate-180" />
+                            </Link>
+                          </div>
+                        </div>
+                      ))}
+                      {(!team.projects || team.projects.length === 0) && (
+                        <div className="py-8 text-center text-slate-500">
+                          <Activity className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-3" />
+                          <p>No projects assigned yet.</p>
+                          <Button variant="link" className="mt-2" onClick={() => setIsProjectModalOpen(true)}>Assign Project</Button>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </div>
@@ -352,6 +430,87 @@ export function TeamDetailPage() {
         variant="danger"
         isLoading={deleteMutation.isPending}
       />
+
+      <Modal
+        isOpen={isProjectModalOpen}
+        onClose={() => {
+          setIsProjectModalOpen(false)
+          setProjectActionError(null)
+        }}
+        title="Assign Projects to Team"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Select projects for this team to contribute to. Team members will be able to track sprint progress and quality scores for linked projects.
+          </p>
+
+          {projectActionError && (
+            <div className="p-3 text-sm rounded bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300">
+              {projectActionError}
+            </div>
+          )}
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 border rounded-md border-slate-200 dark:border-slate-800 max-h-80 overflow-y-auto">
+            {(projectsQuery.data ?? []).map((project) => {
+              const isAssigned = (team?.projects ?? []).some((p) => p.id === project.id)
+              const isAssigning = assigningProjectId === project.id
+              const isUnassigning = unassigningProjectId === project.id
+
+              return (
+                <div key={project.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{project.name}</p>
+                    <p className="text-xs text-slate-500">{project.key} &bull; SQS {formatScore(project.sqsScore ?? project.sqs)}</p>
+                  </div>
+                  {isAssigned ? (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400">
+                        Assigned
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                        isLoading={isUnassigning}
+                        disabled={removeProjectMutation.isPending || assignProjectMutation.isPending}
+                        onClick={() => removeProjectMutation.mutate(project.id)}
+                      >
+                        Unassign
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      isLoading={isAssigning}
+                      disabled={assignProjectMutation.isPending || removeProjectMutation.isPending}
+                      onClick={() => assignProjectMutation.mutate(project.id)}
+                    >
+                      Assign Project
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+            {(!projectsQuery.data || projectsQuery.data.length === 0) && (
+              <div className="p-6 text-center text-sm text-slate-500">
+                <p>No projects found in this organization.</p>
+                <Link
+                  to="/projects"
+                  className="text-blue-600 hover:underline mt-2 inline-block font-medium"
+                  onClick={() => setIsProjectModalOpen(false)}
+                >
+                  Go to Projects to create a project
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+            <Button variant="outline" onClick={() => setIsProjectModalOpen(false)}>Done</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
