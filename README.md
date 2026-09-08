@@ -195,4 +195,4 @@ Open http://localhost:5173 in your web browser.
 
 ---
 
-*SQDIS — Software Quality and Developer Intelligence System.*
+*SQDIS — Software Quality and Developer Insight System.*
