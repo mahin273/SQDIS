@@ -8,8 +8,9 @@ export class CreateReportDto {
   @IsEnum(ReportType)
   type!: ReportType;
 
+  @IsOptional()
   @IsEnum(ReportScope)
-  scope!: ReportScope;
+  scope?: ReportScope = ReportScope.ORGANIZATION;
 
   @IsOptional()
   @IsUUID()

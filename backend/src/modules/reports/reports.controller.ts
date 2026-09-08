@@ -25,7 +25,8 @@ import {
   LeaderboardQueryDto,
 } from './dto';
 import { FileStorageService } from './services/file-storage.service';
-import { ReportType, ReportStatus } from './constants';
+import { ReportType, ReportStatus, ReportScope } from './constants';
+import { PrismaService } from '../../prisma';
 import { createReadStream } from 'fs';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 
@@ -41,7 +42,24 @@ export class ReportsController {
     private readonly reportsService: ReportsService,
     private readonly fileStorageService: FileStorageService,
     private readonly leaderboardService: LeaderboardService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Helper to resolve active organization ID
+   */
+  private async resolveOrgId(user: any, orgId?: string): Promise<string | null> {
+    if (orgId) return orgId;
+    if (user?.organizationId) return user.organizationId;
+    if (user?.id) {
+      const membership = await this.prisma.organizationMember.findFirst({
+        where: { userId: user.id },
+        orderBy: { joinedAt: 'asc' },
+      });
+      if (membership) return membership.organizationId;
+    }
+    return null;
+  }
 
   /**
    * Create a new report (PDF or CSV)
@@ -54,8 +72,16 @@ export class ReportsController {
     @GetOrganization() organizationId: string | undefined,
     @GetUser() user: any,
   ) {
-    const orgId = organizationId || user.organizationId;
-    return this.reportsService.createReport(dto, orgId, user.id);
+    const orgId = await this.resolveOrgId(user, organizationId);
+    if (!orgId) {
+      throw new BadRequestException('Organization context required');
+    }
+    const reportDto: CreateReportDto = {
+      ...dto,
+      scope: dto.scope || ReportScope.ORGANIZATION,
+      type: dto.type === ReportType.CSV ? ReportType.CSV : ReportType.PDF,
+    };
+    return this.reportsService.createReport(reportDto, orgId, user.id);
   }
 
   /**
@@ -69,9 +95,13 @@ export class ReportsController {
     @GetOrganization() organizationId: string | undefined,
     @GetUser() user: any,
   ) {
-    const orgId = organizationId || user.organizationId;
+    const orgId = await this.resolveOrgId(user, organizationId);
+    if (!orgId) {
+      throw new BadRequestException('Organization context required');
+    }
     const reportDto: CreateReportDto = {
       ...dto,
+      scope: dto.scope || ReportScope.ORGANIZATION,
       type: ReportType.PDF,
     };
 
@@ -89,9 +119,13 @@ export class ReportsController {
     @GetOrganization() organizationId: string | undefined,
     @GetUser() user: any,
   ) {
-    const orgId = organizationId || user.organizationId;
+    const orgId = await this.resolveOrgId(user, organizationId);
+    if (!orgId) {
+      throw new BadRequestException('Organization context required');
+    }
     const reportDto: CreateReportDto = {
       ...dto,
+      scope: dto.scope || ReportScope.ORGANIZATION,
       type: ReportType.CSV,
     };
 
@@ -109,7 +143,10 @@ export class ReportsController {
     @GetOrganization() organizationId: string | undefined,
     @GetUser() user: any,
   ) {
-    const orgId = organizationId || user.organizationId;
+    const orgId = await this.resolveOrgId(user, organizationId);
+    if (!orgId) {
+      return { reports: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+    }
     return this.reportsService.findAll(orgId, filters);
   }
 

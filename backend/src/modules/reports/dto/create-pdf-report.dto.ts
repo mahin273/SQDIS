@@ -5,8 +5,13 @@ import { ReportScope } from '../constants';
  * DTO for creating a PDF report
  */
 export class CreatePdfReportDto {
+  @IsOptional()
   @IsEnum(ReportScope)
-  scope!: ReportScope;
+  scope?: ReportScope = ReportScope.ORGANIZATION;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
 
   @IsOptional()
   @IsUUID()
