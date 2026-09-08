@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ShieldCheck, GitBranch, Layers, Settings, Users, Activity, CalendarDays, BarChart2 } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, GitBranch, Layers, Settings, Users, Activity, CalendarDays, BarChart2, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { projectsService } from '@/services'
+import { projectsService, repositoriesService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState, formatScore } from '../pageUtils'
 import type { ProjectMetrics } from '@/types'
@@ -24,6 +24,7 @@ export function ProjectDetailPage() {
   
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [isRepoModalOpen, setIsRepoModalOpen] = useState(false)
   
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -60,6 +61,29 @@ export function ProjectDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
       navigate('/projects')
+    },
+  })
+
+  const orgReposQuery = useQuery({
+    queryKey: queryKeys.repositories.all(),
+    queryFn: () => repositoriesService.getAll(),
+  })
+
+  const assignRepoMutation = useMutation({
+    mutationFn: (repositoryId: string) => projectsService.assignRepository(id!, { repositoryId }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.metrics(id!) })
+    },
+  })
+
+  const removeRepoMutation = useMutation({
+    mutationFn: (repoId: string) => projectsService.removeRepository(id!, repoId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.metrics(id!) })
     },
   })
 
@@ -116,10 +140,13 @@ export function ProjectDetailPage() {
             <div className="grid gap-6 md:grid-cols-3">
               <div className="md:col-span-2 space-y-6">
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <GitBranch className="h-5 w-5 text-blue-500" /> Linked Repositories
                     </CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => setIsRepoModalOpen(true)} className="gap-1.5">
+                      <Settings className="h-3.5 w-3.5" /> Configure
+                    </Button>
                   </CardHeader>
                   <CardContent>
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
@@ -129,14 +156,26 @@ export function ProjectDetailPage() {
                             <p className="font-semibold text-slate-900 dark:text-slate-100">{repo.name}</p>
                             <p className="text-sm text-slate-500">{repo.fullName || repo.url}</p>
                           </div>
-                          <Badge variant="outline">{repo.defaultBranch || 'main'}</Badge>
+                          <div className="flex items-center gap-3">
+                            <Badge variant="outline">{repo.defaultBranch || 'main'}</Badge>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 h-8 w-8 p-0"
+                              disabled={removeRepoMutation.isPending}
+                              onClick={() => removeRepoMutation.mutate(repo.id)}
+                              title="Unlink repository"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       ))}
                       {(!project.repositories || project.repositories.length === 0) && (
                         <div className="py-8 text-center text-slate-500">
                           <GitBranch className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-3" />
                           <p>No repositories assigned to this project.</p>
-                          <Button variant="link" className="mt-2">Configure Repositories</Button>
+                          <Button variant="link" className="mt-2" onClick={() => setIsRepoModalOpen(true)}>Configure Repositories</Button>
                         </div>
                       )}
                     </div>
@@ -287,6 +326,73 @@ export function ProjectDetailPage() {
         variant="danger"
         isLoading={deleteMutation.isPending}
       />
+
+      <Modal
+        isOpen={isRepoModalOpen}
+        onClose={() => setIsRepoModalOpen(false)}
+        title="Configure Linked Repositories"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Select repositories from your organization to link to this project. Quality scores, metrics, and debt analysis will aggregate data from all linked repositories.
+          </p>
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 border rounded-md border-slate-200 dark:border-slate-800 max-h-80 overflow-y-auto">
+            {(orgReposQuery.data ?? []).map((repo) => {
+              const isAssigned = (project?.repositories ?? []).some((r: any) => r.id === repo.id);
+              return (
+                <div key={repo.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{repo.name}</p>
+                    <p className="text-xs text-slate-500">{repo.fullName || repo.url}</p>
+                  </div>
+                  {isAssigned ? (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400">
+                        Linked
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                        disabled={removeRepoMutation.isPending}
+                        onClick={() => removeRepoMutation.mutate(repo.id)}
+                      >
+                        Unlink
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={assignRepoMutation.isPending}
+                      onClick={() => assignRepoMutation.mutate(repo.id)}
+                    >
+                      Link Repository
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+            {(!orgReposQuery.data || orgReposQuery.data.length === 0) && (
+              <div className="p-6 text-center text-sm text-slate-500">
+                <p>No repositories found in this organization.</p>
+                <Link
+                  to="/settings?tab=repositories"
+                  className="text-blue-600 hover:underline mt-2 inline-block font-medium"
+                  onClick={() => setIsRepoModalOpen(false)}
+                >
+                  Go to Settings &rarr; Repositories to connect your GitHub repositories
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+            <Button variant="outline" onClick={() => setIsRepoModalOpen(false)}>Done</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }
