@@ -492,8 +492,10 @@ export class ScoresService {
         include: { repositories: true },
       });
       if (project && project.repositories && project.repositories.length > 0) {
-        repository = project.repositories[0];
-        targetProjectId = repository.id;
+        targetProjectId = project.repositories[0].repositoryId;
+        repository = await this.prisma.repository.findFirst({
+          where: { id: targetProjectId, organizationId },
+        });
       } else if (!project && projectId !== 'default') {
         throw new NotFoundException(`Project with ID ${projectId} not found in organization`);
       }

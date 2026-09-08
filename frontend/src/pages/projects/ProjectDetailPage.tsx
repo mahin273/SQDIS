@@ -1,14 +1,14 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ShieldCheck, GitBranch, Layers, Settings, Users, Activity, CalendarDays, BarChart2 } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, GitBranch, Layers, Settings, Users, Activity, CalendarDays, BarChart2, Trash2, Plus } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { projectsService } from '@/services'
+import { projectsService, repositoriesService, teamsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState, formatScore } from '../pageUtils'
 import type { ProjectMetrics } from '@/types'
@@ -24,6 +24,8 @@ export function ProjectDetailPage() {
   
   const [isEditOpen, setIsEditOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [isRepoModalOpen, setIsRepoModalOpen] = useState(false)
+  const [isTeamModalOpen, setIsTeamModalOpen] = useState(false)
   
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
@@ -60,6 +62,144 @@ export function ProjectDetailPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
       navigate('/projects')
+    },
+  })
+
+  const [linkingRepoKey, setLinkingRepoKey] = useState<string | null>(null)
+  const [unlinkingRepoKey, setUnlinkingRepoKey] = useState<string | null>(null)
+  const [repoActionError, setRepoActionError] = useState<string | null>(null)
+
+  const orgReposQuery = useQuery({
+    queryKey: queryKeys.repositories.all(),
+    queryFn: () => repositoriesService.getAll(),
+  })
+
+  const linkRepoMutation = useMutation({
+    mutationFn: async (repo: any) => {
+      setRepoActionError(null)
+      let targetRepoId = repo.id
+
+      // If repository has not been enabled in SQDIS yet, enable it first
+      if (!targetRepoId || !repo.isEnabled) {
+        try {
+          const enabled = await repositoriesService.enable({
+            id: repo.id || undefined,
+            githubId: repo.githubId,
+            name: repo.name,
+            fullName: repo.fullName || repo.name,
+            backfill: true,
+          })
+          targetRepoId = enabled?.id || targetRepoId
+        } catch (enableErr: any) {
+          console.warn('Repository enable warning:', enableErr)
+          // Fallback to name/fullName/githubId if enable didn't return an id
+          if (!targetRepoId) {
+            targetRepoId = repo.fullName || String(repo.githubId) || repo.name
+          }
+        }
+      }
+
+      if (!targetRepoId) {
+        throw new Error('Could not determine repository identifier')
+      }
+
+      return await projectsService.assignRepository(id!, { repositoryId: targetRepoId })
+    },
+    onMutate: (repo: any) => {
+      setLinkingRepoKey(repo.id || repo.fullName || String(repo.githubId) || repo.name)
+    },
+    onSettled: () => {
+      setLinkingRepoKey(null)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.metrics(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all() })
+    },
+    onError: (err: any) => {
+      setRepoActionError(
+        err?.response?.data?.message || err?.message || 'Failed to link repository'
+      )
+    },
+  })
+
+  const removeRepoMutation = useMutation({
+    mutationFn: (repoId: string) => {
+      setRepoActionError(null)
+      return projectsService.removeRepository(id!, repoId)
+    },
+    onMutate: (repoId: string) => {
+      setUnlinkingRepoKey(repoId)
+    },
+    onSettled: () => {
+      setUnlinkingRepoKey(null)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.metrics(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all() })
+    },
+    onError: (err: any) => {
+      setRepoActionError(
+        err?.response?.data?.message || err?.message || 'Failed to unlink repository'
+      )
+    },
+  })
+
+  const [assigningTeamId, setAssigningTeamId] = useState<string | null>(null)
+  const [unassigningTeamId, setUnassigningTeamId] = useState<string | null>(null)
+  const [teamActionError, setTeamActionError] = useState<string | null>(null)
+
+  const orgTeamsQuery = useQuery({
+    queryKey: queryKeys.teams.all(),
+    queryFn: () => teamsService.getAll(),
+  })
+
+  const assignTeamMutation = useMutation({
+    mutationFn: (teamId: string) => {
+      setTeamActionError(null)
+      return projectsService.assignTeam(id!, { teamId })
+    },
+    onMutate: (teamId: string) => {
+      setAssigningTeamId(teamId)
+    },
+    onSettled: () => {
+      setAssigningTeamId(null)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams.all() })
+    },
+    onError: (err: any) => {
+      setTeamActionError(
+        err?.response?.data?.message || err?.message || 'Failed to assign team'
+      )
+    },
+  })
+
+  const removeTeamMutation = useMutation({
+    mutationFn: (teamId: string) => {
+      setTeamActionError(null)
+      return projectsService.removeTeam(id!, teamId)
+    },
+    onMutate: (teamId: string) => {
+      setUnassigningTeamId(teamId)
+    },
+    onSettled: () => {
+      setUnassigningTeamId(null)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.teams.all() })
+    },
+    onError: (err: any) => {
+      setTeamActionError(
+        err?.response?.data?.message || err?.message || 'Failed to unassign team'
+      )
     },
   })
 
@@ -116,27 +256,49 @@ export function ProjectDetailPage() {
             <div className="grid gap-6 md:grid-cols-3">
               <div className="md:col-span-2 space-y-6">
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <GitBranch className="h-5 w-5 text-blue-500" /> Linked Repositories
                     </CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => setIsRepoModalOpen(true)} className="gap-1.5">
+                      <Settings className="h-3.5 w-3.5" /> Configure
+                    </Button>
                   </CardHeader>
                   <CardContent>
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(project.repositories ?? []).map((repo) => (
-                        <div key={repo.id} className="flex items-center justify-between py-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                          <div>
-                            <p className="font-semibold text-slate-900 dark:text-slate-100">{repo.name}</p>
-                            <p className="text-sm text-slate-500">{repo.fullName || repo.url}</p>
+                      {(project.repositories ?? []).map((repo: any) => {
+                        const repoId = repo.id || repo.repositoryId || repo.repository?.id
+                        const repoName = repo.name || repo.repository?.name || 'Repository'
+                        const repoFullName = repo.fullName || repo.repository?.fullName || repo.url || ''
+                        const branch = repo.defaultBranch || repo.repository?.defaultBranch || 'main'
+                        const unlinkTarget = repo.assignmentId || repoId
+                        return (
+                          <div key={repoId || repoName} className="flex items-center justify-between py-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                            <div>
+                              <p className="font-semibold text-slate-900 dark:text-slate-100">{repoName}</p>
+                              <p className="text-sm text-slate-500">{repoFullName}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Badge variant="outline">{branch}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 h-8 w-8 p-0"
+                                disabled={removeRepoMutation.isPending && unlinkingRepoKey === unlinkTarget}
+                                onClick={() => removeRepoMutation.mutate(unlinkTarget)}
+                                title="Unlink repository"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                          <Badge variant="outline">{repo.defaultBranch || 'main'}</Badge>
-                        </div>
-                      ))}
+                        )
+                      })}
                       {(!project.repositories || project.repositories.length === 0) && (
                         <div className="py-8 text-center text-slate-500">
                           <GitBranch className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-3" />
                           <p>No repositories assigned to this project.</p>
-                          <Button variant="link" className="mt-2">Configure Repositories</Button>
+                          <Button variant="link" className="mt-2" onClick={() => setIsRepoModalOpen(true)}>Configure Repositories</Button>
                         </div>
                       )}
                     </div>
@@ -223,23 +385,51 @@ export function ProjectDetailPage() {
                 </Card>
 
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between">
                     <CardTitle className="flex items-center gap-2">
                       <Users className="h-5 w-5 text-indigo-500" /> Associated Teams
                     </CardTitle>
+                    <Button variant="outline" size="sm" onClick={() => setIsTeamModalOpen(true)} className="gap-1.5">
+                      <Plus className="h-3.5 w-3.5" /> Assign Team
+                    </Button>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {(project.teams ?? []).map(team => (
-                        <Link key={team.id} to={`/teams/${team.id}`} className="block p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-slate-900 dark:text-slate-100">{team.name}</span>
-                            <ArrowLeft className="h-4 w-4 rotate-180 text-slate-400" />
+                      {((project.teams && project.teams.length > 0)
+                        ? project.teams
+                        : (project.teamAssignments ?? []).map((ta: any) => ta.team)
+                      ).filter(Boolean).map((team: any) => (
+                        <div key={team.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
+                          <Link to={`/teams/${team.id}`} className="flex-1 min-w-0 mr-2">
+                            <p className="font-medium text-slate-900 dark:text-slate-100 truncate">{team.name}</p>
+                            {team.description && (
+                              <p className="text-xs text-slate-500 truncate">{team.description}</p>
+                            )}
+                          </Link>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 h-8 w-8 p-0"
+                              disabled={removeTeamMutation.isPending && unassigningTeamId === team.id}
+                              onClick={() => removeTeamMutation.mutate(team.id)}
+                              title="Unassign team"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                            <Link to={`/teams/${team.id}`} className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200">
+                              <ArrowLeft className="h-4 w-4 rotate-180" />
+                            </Link>
                           </div>
-                        </Link>
+                        </div>
                       ))}
-                      {(!project.teams || project.teams.length === 0) && (
-                        <p className="text-center text-sm text-slate-500 py-2">No teams associated yet.</p>
+                      {(!project.teams || project.teams.length === 0) &&
+                       (!project.teamAssignments || project.teamAssignments.length === 0) && (
+                        <div className="py-8 text-center text-slate-500">
+                          <Users className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-3" />
+                          <p>No teams associated yet.</p>
+                          <Button variant="link" className="mt-2" onClick={() => setIsTeamModalOpen(true)}>Assign Team</Button>
+                        </div>
                       )}
                     </div>
                   </CardContent>
@@ -287,6 +477,186 @@ export function ProjectDetailPage() {
         variant="danger"
         isLoading={deleteMutation.isPending}
       />
+
+      <Modal
+        isOpen={isRepoModalOpen}
+        onClose={() => {
+          setIsRepoModalOpen(false)
+          setRepoActionError(null)
+        }}
+        title="Configure Linked Repositories"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Select repositories from your organization to link to this project. Quality scores, metrics, and debt analysis will aggregate data from all linked repositories.
+          </p>
+
+          {repoActionError && (
+            <div className="p-3 text-sm rounded bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300">
+              {repoActionError}
+            </div>
+          )}
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 border rounded-md border-slate-200 dark:border-slate-800 max-h-80 overflow-y-auto">
+            {(orgReposQuery.data ?? []).map((repo) => {
+              const repoKey = repo.id || repo.fullName || String(repo.githubId) || repo.name
+              const assignedObj = (project?.repositories ?? []).find((r: any) => {
+                const assignedId = r.id || r.repositoryId || r.repository?.id
+                const assignedName = r.fullName || r.repository?.fullName || r.name || r.repository?.name
+                return (
+                  (repo.id && assignedId === repo.id) ||
+                  (repo.fullName && assignedName === repo.fullName) ||
+                  (repo.name && assignedName === repo.name)
+                )
+              })
+              const isAssigned = !!assignedObj
+              const isLinking = linkingRepoKey === repoKey
+              const isUnlinking = unlinkingRepoKey === repo.id || (assignedObj && unlinkingRepoKey === (assignedObj.assignmentId || assignedObj.id))
+
+              return (
+                <div key={repoKey} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{repo.name}</p>
+                    <p className="text-xs text-slate-500">{repo.fullName || repo.url}</p>
+                  </div>
+                  {isAssigned ? (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400">
+                        Linked
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                        isLoading={isUnlinking}
+                        disabled={removeRepoMutation.isPending || linkRepoMutation.isPending}
+                        onClick={() => {
+                          const targetId = assignedObj?.assignmentId || assignedObj?.id || assignedObj?.repositoryId || repo.id
+                          removeRepoMutation.mutate(targetId)
+                        }}
+                      >
+                        Unlink
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      isLoading={isLinking}
+                      disabled={linkRepoMutation.isPending || removeRepoMutation.isPending}
+                      onClick={() => linkRepoMutation.mutate(repo)}
+                    >
+                      Link Repository
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+            {(!orgReposQuery.data || orgReposQuery.data.length === 0) && (
+              <div className="p-6 text-center text-sm text-slate-500">
+                <p>No repositories found in this organization.</p>
+                <Link
+                  to="/settings?tab=repositories"
+                  className="text-blue-600 hover:underline mt-2 inline-block font-medium"
+                  onClick={() => setIsRepoModalOpen(false)}
+                >
+                  Go to Settings &rarr; Repositories to connect your GitHub repositories
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+            <Button variant="outline" onClick={() => setIsRepoModalOpen(false)}>Done</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal
+        isOpen={isTeamModalOpen}
+        onClose={() => {
+          setIsTeamModalOpen(false)
+          setTeamActionError(null)
+        }}
+        title="Assign Teams to Project"
+        size="lg"
+      >
+        <div className="space-y-4">
+          <p className="text-sm text-slate-500 dark:text-slate-400">
+            Assign teams from your organization to work on this project. Team members will have project metrics attributed to their dashboards.
+          </p>
+
+          {teamActionError && (
+            <div className="p-3 text-sm rounded bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300">
+              {teamActionError}
+            </div>
+          )}
+
+          <div className="divide-y divide-slate-100 dark:divide-slate-800 border rounded-md border-slate-200 dark:border-slate-800 max-h-80 overflow-y-auto">
+            {(orgTeamsQuery.data ?? []).map((team) => {
+              const assignedTeams = (project?.teams && project.teams.length > 0)
+                ? project.teams
+                : (project?.teamAssignments ?? []).map((ta: any) => ta.team).filter(Boolean)
+              const isAssigned = assignedTeams.some((t: any) => t.id === team.id)
+              const isAssigning = assigningTeamId === team.id
+              const isUnassigning = unassigningTeamId === team.id
+
+              return (
+                <div key={team.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{team.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {team.description || `${team.memberCount ?? team.members?.length ?? 0} members`}
+                    </p>
+                  </div>
+                  {isAssigned ? (
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400">
+                        Assigned
+                      </Badge>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
+                        isLoading={isUnassigning}
+                        disabled={removeTeamMutation.isPending || assignTeamMutation.isPending}
+                        onClick={() => removeTeamMutation.mutate(team.id)}
+                      >
+                        Unassign
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button
+                      size="sm"
+                      isLoading={isAssigning}
+                      disabled={assignTeamMutation.isPending || removeTeamMutation.isPending}
+                      onClick={() => assignTeamMutation.mutate(team.id)}
+                    >
+                      Assign Team
+                    </Button>
+                  )}
+                </div>
+              )
+            })}
+            {(!orgTeamsQuery.data || orgTeamsQuery.data.length === 0) && (
+              <div className="p-6 text-center text-sm text-slate-500">
+                <p>No teams found in this organization.</p>
+                <Link
+                  to="/teams"
+                  className="text-blue-600 hover:underline mt-2 inline-block font-medium"
+                  onClick={() => setIsTeamModalOpen(false)}
+                >
+                  Go to Teams to create a team
+                </Link>
+              </div>
+            )}
+          </div>
+
+          <div className="flex justify-end pt-3 border-t border-slate-100 dark:border-slate-800">
+            <Button variant="outline" onClick={() => setIsTeamModalOpen(false)}>Done</Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

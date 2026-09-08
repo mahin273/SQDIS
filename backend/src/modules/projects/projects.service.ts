@@ -389,6 +389,22 @@ export class ProjectsService {
 
     return {
       ...project,
+      repositories: project.repositories.map((pr) => ({
+        id: pr.repository.id,
+        assignmentId: pr.id,
+        name: pr.repository.name,
+        fullName: pr.repository.fullName,
+        isEnabled: pr.repository.isEnabled,
+        lastSyncAt: pr.repository.lastSyncAt,
+        assignedAt: pr.assignedAt,
+        repository: pr.repository,
+      })),
+      teams: (project.teamAssignments ?? []).map((ta) => ({
+        id: ta.team.id,
+        name: ta.team.name,
+        description: ta.team.description,
+        startDate: ta.startDate,
+      })),
       totalCommits,
       bugsFixes,
       coverage: Number(totalCoverage.toFixed(1)),
@@ -490,13 +506,24 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
-    // Verify repository exists and belongs to the same organization
+    // Verify repository exists and belongs to the same organization (by id, githubId, or fullName)
+    const githubIdNum = parseInt(repositoryId, 10);
     const repository = await this.prisma.repository.findFirst({
-      where: { id: repositoryId, organizationId },
+      where: {
+        organizationId,
+        OR: [
+          { id: repositoryId },
+          ...(Number.isInteger(githubIdNum) && !isNaN(githubIdNum) && githubIdNum > 0
+            ? [{ githubId: githubIdNum }]
+            : []),
+          { fullName: repositoryId },
+          { name: repositoryId },
+        ],
+      },
     });
 
     if (!repository) {
-      throw new NotFoundException('Repository not found');
+      throw new NotFoundException('Repository not found or not enabled yet for this organization');
     }
 
     // Check if already assigned
@@ -504,7 +531,7 @@ export class ProjectsService {
       where: {
         projectId_repositoryId: {
           projectId,
-          repositoryId,
+          repositoryId: repository.id,
         },
       },
     });
@@ -516,7 +543,7 @@ export class ProjectsService {
     return this.prisma.projectRepository.create({
       data: {
         projectId,
-        repositoryId,
+        repositoryId: repository.id,
       },
       include: {
         repository: {
@@ -543,12 +570,13 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
-    const assignment = await this.prisma.projectRepository.findUnique({
+    const assignment = await this.prisma.projectRepository.findFirst({
       where: {
-        projectId_repositoryId: {
-          projectId,
-          repositoryId,
-        },
+        projectId,
+        OR: [
+          { repositoryId },
+          { id: repositoryId },
+        ],
       },
     });
 
