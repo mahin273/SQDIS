@@ -75,7 +75,7 @@ export function ProjectsPage() {
       const q = searchQuery.toLowerCase()
       result = result.filter(p => 
         p.name.toLowerCase().includes(q) || 
-        p.key.toLowerCase().includes(q) ||
+        (p.key || p.name.slice(0, 4).toUpperCase()).toLowerCase().includes(q) ||
         p.description?.toLowerCase().includes(q)
       )
     }
@@ -132,7 +132,7 @@ export function ProjectsPage() {
     setSelectedProject(project)
     setName(project.name)
     setDescription(project.description || '')
-    setKey(project.key)
+    setKey(project.key || '')
     setIsEditOpen(true)
   }
 
@@ -222,7 +222,7 @@ export function ProjectsPage() {
                             <h2 className="text-lg font-semibold text-slate-950 dark:text-white truncate" title={project.name}>
                               {project.name}
                             </h2>
-                            <div className="text-xs text-slate-500 font-mono mt-0.5">{project.key}</div>
+                            <div className="text-xs text-slate-500 font-mono mt-0.5">{project.key || project.name.slice(0, 4).toUpperCase()}</div>
                           </div>
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="font-mono">

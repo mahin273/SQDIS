@@ -116,35 +116,62 @@ export class AuditLogController {
   }
 
   /**
-   * Get a single audit log entry by ID
+   * Get audit log statistics
    */
-  @Get(':id')
+  @Get('stats')
   @Roles(Role.ADMIN, Role.OWNER)
-  @ApiOperation({ summary: 'Get a single audit log entry by ID' })
-  @ApiParam({ name: 'id', description: 'Audit log entry ID' })
+  @ApiOperation({ summary: 'Get audit log statistics' })
   @ApiResponse({
     status: HttpStatus.OK,
-    description: 'Audit log entry returned successfully',
+    description: 'Audit log statistics returned successfully',
   })
-  @ApiResponse({
-    status: HttpStatus.NOT_FOUND,
-    description: 'Audit log entry not found',
-  })
-  @ApiResponse({
-    status: HttpStatus.FORBIDDEN,
-    description: 'User does not have permission to access this audit log',
-  })
-  async getLogById(
-    @Param('id') id: string,
+  async getStats(
     @GetOrganization() organizationId: string | undefined,
     @GetUser() user: RequestUser,
   ) {
     const orgId = await this.resolveOrgId(user, organizationId);
     if (!orgId) {
-      throw new NotFoundException('Audit log entry not found');
+      return { total: 0, totalLogs: 0, todayLogs: 0, actionCounts: [] };
     }
 
-    return this.enhancedAuditLogService.getLogById(id, orgId);
+    const now = new Date();
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+    const [totalLogs, todayLogs, actionCounts] = await Promise.all([
+      this.prisma.auditLog.count({ where: { organizationId: orgId } }),
+      this.prisma.auditLog.count({
+        where: { organizationId: orgId, timestamp: { gte: todayStart } },
+      }),
+      this.auditAnalyticsService.getActionCountsByType(orgId, thirtyDaysAgo, now),
+    ]);
+
+    return {
+      total: totalLogs,
+      totalLogs,
+      todayLogs,
+      actionCounts,
+    };
+  }
+
+  /**
+   * List recent audit log exports
+   */
+  @Get('export')
+  @Roles(Role.ADMIN, Role.OWNER)
+  @ApiOperation({ summary: 'List recent audit log exports' })
+  async listExports(
+    @GetOrganization() organizationId: string | undefined,
+    @GetUser() user: RequestUser,
+  ) {
+    const orgId = await this.resolveOrgId(user, organizationId);
+    if (!orgId) return [];
+
+    return this.prisma.auditExport.findMany({
+      where: { organizationId: orgId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
   }
 
   /**
@@ -650,5 +677,37 @@ export class AuditLogController {
     });
 
     return report;
+  }
+
+  /**
+   * Get a single audit log entry by ID
+   */
+  @Get(':id')
+  @Roles(Role.ADMIN, Role.OWNER)
+  @ApiOperation({ summary: 'Get a single audit log entry by ID' })
+  @ApiParam({ name: 'id', description: 'Audit log entry ID' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Audit log entry returned successfully',
+  })
+  @ApiResponse({
+    status: HttpStatus.NOT_FOUND,
+    description: 'Audit log entry not found',
+  })
+  @ApiResponse({
+    status: HttpStatus.FORBIDDEN,
+    description: 'User does not have permission to access this audit log',
+  })
+  async getLogById(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string | undefined,
+    @GetUser() user: RequestUser,
+  ) {
+    const orgId = await this.resolveOrgId(user, organizationId);
+    if (!orgId) {
+      throw new NotFoundException('Audit log entry not found');
+    }
+
+    return this.enhancedAuditLogService.getLogById(id, orgId);
   }
 }

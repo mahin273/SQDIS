@@ -7,6 +7,7 @@ import {
   ReviewStats,
   ReviewerRanking,
   ReviewDebt,
+  ReviewDebtItem,
   PaginatedResult,
   ReviewQualityMetrics,
   ReviewActivityData,
@@ -615,6 +616,13 @@ export class ReviewsService {
       },
     });
 
+    const team = this.prisma.team?.findUnique
+      ? await this.prisma.team.findUnique({
+          where: { id: teamId },
+          select: { name: true },
+        })
+      : null;
+
     const debtByAssignee: Record<string, { reviewer: any; count: number; oldestAge: number }> = {};
 
     for (const review of pendingReviews) {
@@ -637,9 +645,41 @@ export class ReviewsService {
       );
     }
 
+    const items: ReviewDebtItem[] = pendingReviews.map((r: any) => {
+      const ageDays = (Date.now() - r.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+      const waitedDays = Math.round(ageDays * 10) / 10;
+      return {
+        id: r.id,
+        pullRequestTitle: r.prTitle || (r.prNumber ? `PR #${r.prNumber}` : 'Pending Pull Request'),
+        prNumber: r.prNumber,
+        prUrl: r.prUrl || '',
+        waitedDays,
+        reviewers: r.reviewer?.name ? [r.reviewer.name] : [],
+        createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : new Date(r.createdAt).toISOString(),
+      };
+    });
+
+    const oldestPendingReviewDays =
+      items.length > 0 ? Math.max(...items.map((i) => i.waitedDays)) : 0;
+
+    const avgWaitingDays =
+      items.length > 0
+        ? Math.round((items.reduce((sum, i) => sum + i.waitedDays, 0) / items.length) * 10) / 10
+        : 0;
+
+    const penalty = pendingReviews.length * 5 + oldestPendingReviewDays * 5;
+    const calculatedScore = Math.max(0, Math.min(100, Math.round(100 - penalty)));
+
     return {
+      teamId,
+      teamName: team?.name,
+      items,
       totalPending: pendingReviews.length,
       debtByAssignee: Object.values(debtByAssignee),
+      score: calculatedScore,
+      pendingReviews: pendingReviews.length,
+      oldestPendingReviewDays,
+      avgWaitingDays,
     };
   }
 

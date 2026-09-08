@@ -32,8 +32,6 @@
   },
   "include": ["src"],
   "exclude": [
-    "src/examples",
-    "src/pages/Dashboard/Dashboard.tsx",
-    "src/pages/Dashboard/components/ActivityFeed.tsx"
+    "src/examples"
   ]
 }

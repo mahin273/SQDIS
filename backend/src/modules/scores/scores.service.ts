@@ -435,8 +435,36 @@ export class ScoresService {
    * @returns List of risky modules
    */
   async getRiskyModules(projectId: string, organizationId: string) {
+    let targetProjectId = projectId;
+    if (projectId === 'default') {
+      const defaultRepo = await this.prisma.repository.findFirst({
+        where: { organizationId },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (defaultRepo) {
+        targetProjectId = defaultRepo.id;
+      } else {
+        const defaultProj = await this.prisma.project.findFirst({
+          where: { organizationId },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (defaultProj) {
+          targetProjectId = defaultProj.id;
+        } else {
+          return {
+            projectId: 'default',
+            riskyModules: [],
+            totalRiskyModules: 0,
+            highCriticalCount: 0,
+            calculatedAt: new Date(),
+            message: 'No project or repository found for organization',
+          };
+        }
+      }
+    }
+
     // Try to get from cache first
-    const cacheKey = CACHE_KEYS.SQS_RISKS(projectId);
+    const cacheKey = CACHE_KEYS.SQS_RISKS(targetProjectId);
     const cached = await this.cacheService.get<{
       projectId: string;
       riskyModules: Array<{ path: string; risk_level: string; reason: string }>;
@@ -446,50 +474,81 @@ export class ScoresService {
     }>(cacheKey);
 
     if (cached) {
-      this.logger.debug(`Cache hit for SQS risks: ${projectId}`);
+      this.logger.debug(`Cache hit for SQS risks: ${targetProjectId}`);
       return cached;
     }
 
-    // Verify project exists and belongs to organization
-    const repository = await this.prisma.repository.findFirst({
+    // Verify project exists and belongs to organization (check repository first, then project)
+    let repository = await this.prisma.repository.findFirst({
       where: {
-        id: projectId,
+        id: targetProjectId,
         organizationId,
       },
     });
 
     if (!repository) {
-      throw new NotFoundException(`Project with ID ${projectId} not found in organization`);
+      const project = await this.prisma.project.findFirst({
+        where: { id: targetProjectId, organizationId },
+        include: { repositories: true },
+      });
+      if (project && project.repositories && project.repositories.length > 0) {
+        targetProjectId = project.repositories[0].repositoryId;
+        repository = await this.prisma.repository.findFirst({
+          where: { id: targetProjectId, organizationId },
+        });
+      } else if (!project && projectId !== 'default') {
+        throw new NotFoundException(`Project with ID ${projectId} not found in organization`);
+      }
     }
 
     // Get latest SQS score with risky modules
     const latestScore = await this.prisma.sQSScore.findFirst({
-      where: { projectId },
+      where: { projectId: targetProjectId },
       orderBy: { calculatedAt: 'desc' },
     });
 
     if (!latestScore) {
       return {
-        projectId,
+        projectId: targetProjectId,
         riskyModules: [],
+        totalRiskyModules: 0,
+        highCriticalCount: 0,
+        calculatedAt: new Date(),
         message: 'No SQS score calculated yet',
       };
     }
 
     const riskyModules =
       (latestScore.riskyModules as Array<{
-        path: string;
-        risk_level: string;
-        reason: string;
+        path?: string;
+        modulePath?: string;
+        risk_level?: string;
+        riskScore?: number;
+        riskFactors?: string[];
+        reason?: string;
+        recommendation?: string;
       }>) || [];
 
     // Filter to only HIGH and CRITICAL risk modules
-    const highRiskModules = riskyModules.filter(
-      (m) => m.risk_level === 'HIGH' || m.risk_level === 'CRITICAL',
-    );
+    const highRiskModules = riskyModules
+      .filter(
+        (m) =>
+          m.risk_level === 'HIGH' ||
+          m.risk_level === 'CRITICAL' ||
+          (m.riskScore !== undefined && m.riskScore >= 70),
+      )
+      .map((m) => ({
+        path: m.path || m.modulePath || '',
+        modulePath: m.modulePath || m.path || '',
+        risk_level: m.risk_level || (m.riskScore && m.riskScore >= 90 ? 'CRITICAL' : 'HIGH'),
+        reason: m.reason || (m.riskFactors ? m.riskFactors.join(', ') : 'High complexity and churn'),
+        riskScore: m.riskScore ?? (m.risk_level === 'CRITICAL' ? 90 : 75),
+        riskFactors: m.riskFactors ?? (m.reason ? [m.reason] : ['High complexity']),
+        recommendation: m.recommendation ?? `Review and refactor ${m.path || m.modulePath || 'module'}`,
+      }));
 
     const result = {
-      projectId,
+      projectId: targetProjectId,
       riskyModules: highRiskModules,
       totalRiskyModules: riskyModules.length,
       highCriticalCount: highRiskModules.length,

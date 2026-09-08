@@ -4,6 +4,7 @@ import { Bell, AlertTriangle, CheckCircle2, ShieldAlert, Check } from 'lucide-re
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
 import { alertsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
@@ -19,7 +20,8 @@ export function AlertsPage() {
   })
 
   const resolveMutation = useMutation({
-    mutationFn: (id: string) => alertsService.resolve(id),
+    mutationFn: ({ id, notes }: { id: string; notes?: string }) =>
+      alertsService.resolve(id, notes || 'Resolved via alerts dashboard'),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['alerts'] })
     },
@@ -94,7 +96,7 @@ export function AlertsPage() {
                       <Button
                         size="sm"
                         variant="outline"
-                        onClick={() => resolveMutation.mutate(alert.id)}
+                        onClick={() => resolveMutation.mutate({ id: alert.id, notes: 'Resolved by user via alert management console' })}
                         isLoading={resolveMutation.isPending}
                         className="gap-1 shrink-0"
                       >
@@ -105,7 +107,22 @@ export function AlertsPage() {
                 )
               })}
               {alerts.length === 0 && (
-                <p className="py-8 text-center text-sm text-slate-500">No active system alerts.</p>
+                <EmptyState
+                  title={severityFilter !== 'ALL' ? `No ${severityFilter.toLowerCase()} alerts` : "No active alerts"}
+                  description={
+                    severityFilter !== 'ALL'
+                      ? `There are currently no ${severityFilter.toLowerCase()} priority alerts. Try selecting a different filter.`
+                      : "All systems are operating normally. Quality drops, coverage regressions, or security flags will appear here."
+                  }
+                  icon={<CheckCircle2 className="h-7 w-7 text-emerald-500" />}
+                  action={
+                    severityFilter !== 'ALL' ? (
+                      <Button variant="outline" size="sm" onClick={() => setSeverityFilter('ALL')}>
+                        Show all alerts
+                      </Button>
+                    ) : undefined
+                  }
+                />
               )}
             </div>
           </CardContent>
