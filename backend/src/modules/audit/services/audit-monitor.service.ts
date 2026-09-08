@@ -68,6 +68,9 @@ export class AuditMonitorService {
         timestamp: entry.timestamp,
         severity: entry.severity,
         metadata: entry.metadata,
+        ipAddress: entry.ipAddress,
+        userAgent: entry.userAgent,
+        user: (entry as any).user,
       });
 
       this.logger.debug(

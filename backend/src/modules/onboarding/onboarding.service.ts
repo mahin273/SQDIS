@@ -32,9 +32,14 @@ export class OnboardingService {
   ) {}
 
   async create(organizationId: string, dto: CreateOnboardingDto) {
+    const userId = dto.userId || dto.developerId;
+    if (!userId) {
+      throw new BadRequestException('userId or developerId is required');
+    }
+
     // Check if user exists and belongs to organization
     const member = await this.prisma.organizationMember.findFirst({
-      where: { userId: dto.userId, organizationId },
+      where: { userId, organizationId },
     });
 
     if (!member) {
@@ -43,7 +48,7 @@ export class OnboardingService {
 
     // Check if user already has an active onboarding
     const existing = await this.prisma.onboarding.findUnique({
-      where: { userId: dto.userId },
+      where: { userId },
     });
 
     if (existing && existing.status === OnboardingStatus.ACTIVE) {
@@ -58,7 +63,7 @@ export class OnboardingService {
     // Create onboarding record
     const onboarding = await this.prisma.onboarding.create({
       data: {
-        userId: dto.userId,
+        userId,
         mentorId: dto.mentorId,
         startDate,
         endDate,
@@ -95,6 +100,22 @@ export class OnboardingService {
           })),
         });
       }
+    } else {
+      // Seed default 4 standard onboarding steps if no template specified
+      const defaultSteps = [
+        { title: 'Set up local Docker environment', description: 'Clone repository and verify docker-compose up runs cleanly', order: 1 },
+        { title: 'Run test suite locally', description: 'Execute npm test and ensure all unit tests pass', order: 2 },
+        { title: 'Review architecture documentation', description: 'Review system design docs, PR guidelines, and API conventions', order: 3 },
+        { title: 'Submit and merge first pull request', description: 'Create your first PR, address code review feedback, and merge', order: 4 },
+      ];
+      await this.prisma.onboardingChecklistItem.createMany({
+        data: defaultSteps.map((step) => ({
+          onboardingId: onboarding.id,
+          title: step.title,
+          description: step.description,
+          order: step.order,
+        })),
+      });
     }
 
     return this.findById(onboarding.id);
@@ -308,6 +329,17 @@ export class OnboardingService {
 
     return {
       ...onboarding,
+      developer: onboarding.user,
+      developerId: onboarding.userId,
+      checklistItems: onboarding.checklistItems.map((item: any) => ({
+        id: item.id,
+        onboardingId: item.onboardingId,
+        title: item.title,
+        description: item.description ?? '',
+        isCompleted: item.completedAt !== null,
+        completedAt: item.completedAt,
+        order: item.order,
+      })),
       status: frontendStatus,
       team,
       progress,

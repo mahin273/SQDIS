@@ -22,7 +22,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import type { RequestUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
-import { Role } from '@prisma/client';
+import { Role, AuditSeverity } from '@prisma/client';
 import { EnhancedAuditLogService } from './services/enhanced-audit-log.service';
 import { AuditExportService } from './services/audit-export.service';
 import { AuditRetentionService } from './services/audit-retention.service';
@@ -113,6 +113,49 @@ export class AuditLogController {
     };
 
     return this.enhancedAuditLogService.queryLogs(filters, pagination);
+  }
+
+  /**
+   * Trigger a test audit event for real-time monitoring validation
+   */
+  @Post('test-event')
+  @Roles(Role.ADMIN, Role.OWNER)
+  @ApiOperation({ summary: 'Emit a test audit event for real-time monitoring validation' })
+  async triggerTestEvent(
+    @GetOrganization() organizationId: string | undefined,
+    @GetUser() user: RequestUser,
+    @Body() body: { action?: string; severity?: AuditSeverity; resourceType?: string; metadata?: Record<string, any> },
+  ) {
+    const orgId = await this.resolveOrgId(user, organizationId);
+    if (!orgId) {
+      throw new BadRequestException('Organization context required');
+    }
+
+    const action = body.action || 'REALTIME_MONITOR_PING';
+    const severity = body.severity || AuditSeverity.LOW;
+    const resourceType = body.resourceType || 'AuditMonitor';
+
+    await this.enhancedAuditLogService.logAction({
+      userId: user.id,
+      organizationId: orgId,
+      action,
+      resourceType,
+      resourceId: `ping-${Date.now()}`,
+      metadata: {
+        triggeredBy: user.email,
+        source: 'RealTimeAuditMonitor',
+        timestamp: new Date().toISOString(),
+        ...body.metadata,
+      },
+      ipAddress: '127.0.0.1',
+    });
+
+    return {
+      success: true,
+      message: 'Test audit event created and broadcasted to real-time monitor',
+      action,
+      severity,
+    };
   }
 
   /**
