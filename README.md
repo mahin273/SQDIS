@@ -192,3 +192,7 @@ Open http://localhost:5173 in your web browser.
 - Automated Model Retraining Pipeline: We would construct a closed-loop retraining pipeline. Score overrides logged via the telemetry feedback system would auto-trigger MLflow retraining runs, automatically updating the model endpoints.
 - Semantic Embeddings for Code Analysis: VADER sentiment analysis and scikit-learn classifiers could be replaced with specialized developer-focused transformer models. This would capture semantic intent from commit messages and code reviews more accurately.
 - Unified Monorepo Tooling: We would implement a monorepo manager such as NX or Turborepo to unify the frontend, backend, and ML workspaces. This would share TypeScript interfaces, optimize dependency matching, and speed up testing pipelines.
+
+---
+
+*SQDIS — Software Quality and Developer Intelligence System.*
