@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowLeft, Clock, AlertTriangle, UserCheck, ShieldAlert, GitPullRequest, Search, CheckCircle2, AlertCircle } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { EmptyState } from '@/components/ui/empty-state'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Avatar } from '@/components/ui/avatar'
@@ -95,8 +96,20 @@ export function ReviewDebtPage() {
           debtQuery.refetch()
         }}
       >
-        {/* Top level metrics */}
-        <div className="grid gap-4 md:grid-cols-4">
+        {teams.length === 0 ? (
+          <Card>
+            <CardContent className="p-0">
+              <EmptyState
+                title="No teams configured"
+                description="Review debt analytics are organized by team. Create a team and assign repositories to begin monitoring review turnaround and stale PRs."
+                icon={<UserCheck className="h-7 w-7 text-indigo-500" />}
+              />
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Top level metrics */}
+            <div className="grid gap-4 md:grid-cols-4">
           <Card className={`md:col-span-1 border-2 ${debtData?.score ? getScoreColor(debtData.score).split(' ').pop() : ''}`}>
             <CardContent className="p-6 flex flex-col items-center justify-center text-center h-full">
               <h3 className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-2">Review Health Score</h3>
@@ -260,14 +273,18 @@ export function ReviewDebtPage() {
                 )})}
 
                 {staleItems.length === 0 && (
-                  <div className="py-8 text-center text-sm text-slate-500">
-                    No bottleneck data available.
+                  <div className="py-8 flex flex-col items-center justify-center text-center text-sm text-slate-500">
+                    <CheckCircle2 className="h-8 w-8 text-emerald-500 mb-2" />
+                    <p className="font-medium text-slate-700 dark:text-slate-300">No review bottlenecks</p>
+                    <p className="text-xs text-slate-500">Workload is well-distributed across team reviewers.</p>
                   </div>
                 )}
               </div>
             </CardContent>
           </Card>
         </div>
+        </>
+      )}
       </QueryState>
     </div>
   )

@@ -1,18 +1,14 @@
 .env
 /DOCS
-TODO.md
 /FYDP*
-backend_test_commits.md
-task.md
-task.md
-frontend.md
-design.md
-frontend_docs.md
-backend_test_commits.md
 backend/test/backend.integration.e2e-spec.ts
 backend/src/modules/dashboard/dashboard.service.spec.ts
-futureplan.md
-backendDoc.md
-qa.md
-plan.md
 /LearningDocs_sqdis
+
+# Agent workspace
+.agents/
+
+# Ignore all markdown files except README.md
+*.md
+!README.md
+!**/README.md

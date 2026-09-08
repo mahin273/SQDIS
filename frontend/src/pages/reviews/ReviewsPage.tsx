@@ -12,8 +12,30 @@ import { Pagination } from '@/components/ui/pagination'
 import { reviewsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
-import type { Review, ReviewState, ReviewActivityTrendPoint, ReviewLeaderboardEntry } from '@/types'
+import type { Review, ReviewState, ReviewStateFilter, ReviewActivityTrendPoint, ReviewLeaderboardEntry } from '@/types'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
+
+const mapToReviewStateFilter = (filter: string): ReviewStateFilter | undefined => {
+  switch (filter) {
+    case 'PENDING':
+    case 'OPEN':
+    case 'DRAFT':
+      return 'PENDING'
+    case 'APPROVED':
+    case 'MERGED':
+      return 'APPROVED'
+    case 'CHANGES_REQUESTED':
+      return 'CHANGES_REQUESTED'
+    case 'COMMENTED':
+      return 'COMMENTED'
+    case 'DISMISSED':
+    case 'CLOSED':
+      return 'DISMISSED'
+    case 'ALL':
+    default:
+      return undefined
+  }
+}
 
 export function ReviewsPage() {
   const [filterState, setFilterState] = useState<string>('ALL')
@@ -21,10 +43,12 @@ export function ReviewsPage() {
   const [page, setPage] = useState(1)
   const pageSize = 10
 
+  const stateParam = mapToReviewStateFilter(filterState)
+
   const reviewsQuery = useQuery({
-    queryKey: queryKeys.reviews.all({ state: filterState !== 'ALL' ? filterState : undefined, page, pageSize }),
+    queryKey: queryKeys.reviews.all({ state: stateParam, page, pageSize }),
     queryFn: () => reviewsService.getAll({ 
-      state: filterState !== 'ALL' ? (filterState as ReviewState) : undefined,
+      state: stateParam,
       page,
       pageSize
     }),
@@ -73,14 +97,21 @@ export function ReviewsPage() {
     ? (rawTopReviewers as any).data
     : []
 
-  const getStatusBadge = (state: ReviewState) => {
+  const getStatusBadge = (state: ReviewState | ReviewStateFilter | string) => {
     switch (state) {
+      case 'APPROVED':
       case 'MERGED':
         return <Badge variant="success" className="gap-1"><CheckCircle2 className="h-3 w-3" /> Approved</Badge>
+      case 'CHANGES_REQUESTED':
       case 'CLOSED':
         return <Badge variant="destructive" className="gap-1"><AlertCircle className="h-3 w-3" /> Changes Requested</Badge>
+      case 'PENDING':
       case 'DRAFT':
         return <Badge variant="secondary" className="gap-1"><Clock className="h-3 w-3" /> Pending</Badge>
+      case 'COMMENTED':
+        return <Badge variant="outline" className="gap-1"><Activity className="h-3 w-3" /> Commented</Badge>
+      case 'DISMISSED':
+        return <Badge variant="outline" className="gap-1 text-slate-500">Dismissed</Badge>
       case 'OPEN':
         return <Badge variant="outline" className="gap-1"><Clock className="h-3 w-3" /> Open</Badge>
       default:
@@ -216,11 +247,12 @@ export function ReviewsPage() {
           
           <Tabs value={filterState} onValueChange={setFilterState} className="mt-4">
             <TabsList>
-              <TabsTrigger value="ALL">All PRs</TabsTrigger>
-              <TabsTrigger value="OPEN">Open</TabsTrigger>
-              <TabsTrigger value="MERGED">Merged</TabsTrigger>
-              <TabsTrigger value="CLOSED">Closed</TabsTrigger>
-              <TabsTrigger value="DRAFT">Drafts</TabsTrigger>
+              <TabsTrigger value="ALL">All</TabsTrigger>
+              <TabsTrigger value="PENDING">Pending</TabsTrigger>
+              <TabsTrigger value="APPROVED">Approved</TabsTrigger>
+              <TabsTrigger value="CHANGES_REQUESTED">Changes Requested</TabsTrigger>
+              <TabsTrigger value="COMMENTED">Commented</TabsTrigger>
+              <TabsTrigger value="DISMISSED">Dismissed</TabsTrigger>
             </TabsList>
           </Tabs>
         </CardHeader>

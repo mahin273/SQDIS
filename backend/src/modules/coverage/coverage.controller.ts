@@ -4,6 +4,7 @@ import {
   Post,
   Param,
   Query,
+  Body,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -200,9 +201,9 @@ export class CoverageController {
       }),
     )
     file: Express.Multer.File,
-    @Query('repositoryId') repositoryId: string,
-    @Query('commitSha') commitSha: string,
-    @Query('branch') branch: string,
+    @Body('repositoryId') repositoryId: string,
+    @Body('commitSha') commitSha: string,
+    @Body('branch') branch: string,
     @GetOrganization() organizationId: string,
     @GetUser('id') userId: string,
   ): Promise<CoverageResponseDto> {

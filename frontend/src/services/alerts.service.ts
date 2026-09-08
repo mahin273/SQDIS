@@ -39,8 +39,10 @@ export const alertsService = {
   /**
    * Resolve an alert with resolution notes
    */
-  async resolve(id: string, resolutionNotes?: string): Promise<Alert> {
-    const response = await api.post<Alert>(`/alerts/${id}/resolve`, { resolutionNotes });
+  async resolve(id: string, resolutionNotes: string = 'Resolved via alert management console'): Promise<Alert> {
+    const response = await api.post<Alert>(`/alerts/${id}/resolve`, {
+      resolutionNotes: resolutionNotes || 'Resolved via alert management console',
+    });
     return response.data;
   },
 

@@ -22,12 +22,10 @@ export function DebtPage() {
 
   const debtQuery = useQuery({
     queryKey: queryKeys.debt.all({ 
-      severity: severityFilter !== 'ALL' ? severityFilter : undefined,
       page,
       pageSize
     }),
     queryFn: () => debtService.getAll({ 
-      severity: severityFilter !== 'ALL' ? (severityFilter as DebtItem['severity']) : undefined,
       page,
       pageSize
     }),
@@ -79,16 +77,22 @@ export function DebtPage() {
     ? (rawHotspots as any).data
     : []
   
-  // Client-side search filtering
+  // Client-side search and severity filtering
   const filteredItems = useMemo(() => {
-    if (!searchQuery) return items;
-    const lowerQuery = searchQuery.toLowerCase()
-    return items.filter((i) => 
-      i.title?.toLowerCase().includes(lowerQuery) ||
-      i.type?.toLowerCase().includes(lowerQuery) ||
-      i.modulePath?.toLowerCase().includes(lowerQuery)
-    )
-  }, [items, searchQuery])
+    let result = items
+    if (severityFilter !== 'ALL') {
+      result = result.filter((i) => i.severity === severityFilter)
+    }
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase()
+      result = result.filter((i) => 
+        i.title?.toLowerCase().includes(lowerQuery) ||
+        i.type?.toLowerCase().includes(lowerQuery) ||
+        i.modulePath?.toLowerCase().includes(lowerQuery)
+      )
+    }
+    return result
+  }, [items, severityFilter, searchQuery])
 
   const highSeverityCount = items.filter((i) => i.severity === 'HIGH' || i.severity === 'CRITICAL').length
   const totalEffort = items.reduce((sum, item) => sum + (item.effortMinutes || 0), 0)

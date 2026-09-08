@@ -49,6 +49,11 @@ services:
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:80
     env_file:
       - .env
+    healthcheck:
+      test: ["CMD-SHELL", "python -c 'import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/api/ml/health\")' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     networks:
       - sqdis-network
 
@@ -67,6 +72,11 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ML_SERVICE_URL=http://ml-service:8000
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
       db:
         condition: service_healthy
@@ -85,6 +95,11 @@ services:
     restart: always
     ports:
       - "5173:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:80/ > /dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
     depends_on:
       - backend
     networks:

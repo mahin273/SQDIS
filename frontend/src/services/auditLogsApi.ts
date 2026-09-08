@@ -1,4 +1,4 @@
-import { apiClient } from './apiClient';
+import { api } from './api';
 import type {
   AuditLog,
   AuditLogsResponse,
@@ -27,7 +27,7 @@ export const auditLogsApi = {
    * Get audit logs with pagination and filtering
    */
   getAll: async (params?: QueryAuditLogsRequest & PaginationParams): Promise<AuditLogsResponse> => {
-    const response = await apiClient.get<AuditLogsResponse>('/audit-logs', {
+    const response = await api.get<AuditLogsResponse>('/audit-logs', {
       params,
     });
     return response.data;
@@ -37,7 +37,7 @@ export const auditLogsApi = {
    * Get specific audit log by ID
    */
   getById: async (id: string): Promise<AuditLog> => {
-    const response = await apiClient.get<AuditLog>(`/audit-logs/${id}`);
+    const response = await api.get<AuditLog>(`/audit-logs/${id}`);
     return response.data;
   },
 
@@ -45,7 +45,7 @@ export const auditLogsApi = {
    * Export audit logs
    */
   export: async (data: ExportAuditLogsRequest): Promise<Export> => {
-    const response = await apiClient.post<Export>('/audit-logs/export', data);
+    const response = await api.post<Export>('/audit-logs/export', data);
     return response.data;
   },
 
@@ -53,7 +53,7 @@ export const auditLogsApi = {
    * Get export status and download URL
    */
   getExport: async (id: string): Promise<Export> => {
-    const response = await apiClient.get<Export>(`/audit-logs/export/${id}`);
+    const response = await api.get<Export>(`/audit-logs/export/${id}`);
     return response.data;
   },
 
@@ -68,7 +68,7 @@ export const auditLogsApi = {
    * Get retention policy
    */
   getRetentionPolicy: async (): Promise<RetentionPolicy> => {
-    const response = await apiClient.get<RetentionPolicy>('/audit-logs/retention-policy');
+    const response = await api.get<RetentionPolicy>('/audit-logs/retention-policy');
     return response.data;
   },
 
@@ -76,7 +76,7 @@ export const auditLogsApi = {
    * Update retention policy
    */
   updateRetentionPolicy: async (data: UpdateRetentionPolicyRequest): Promise<RetentionPolicy> => {
-    const response = await apiClient.put<RetentionPolicy>('/audit-logs/retention-policy', data);
+    const response = await api.put<RetentionPolicy>('/audit-logs/retention-policy', data);
     return response.data;
   },
 
@@ -84,7 +84,7 @@ export const auditLogsApi = {
    * Get action counts analytics
    */
   getActionCounts: async (params?: { startDate?: string; endDate?: string }): Promise<ActionCountsAnalytics[]> => {
-    const response = await apiClient.get<ActionCountsAnalytics[]>(
+    const response = await api.get<ActionCountsAnalytics[]>(
       '/audit-logs/analytics/action-counts',
       {
         params,
@@ -97,7 +97,7 @@ export const auditLogsApi = {
    * Get active users analytics
    */
   getActiveUsers: async (params?: { startDate?: string; endDate?: string; limit?: number }): Promise<ActiveUsersAnalytics[]> => {
-    const response = await apiClient.get<ActiveUsersAnalytics[]>(
+    const response = await api.get<ActiveUsersAnalytics[]>(
       '/audit-logs/analytics/active-users',
       {
         params,
@@ -110,7 +110,7 @@ export const auditLogsApi = {
    * Get failed permissions analytics
    */
   getFailedPermissions: async (params?: { startDate?: string; endDate?: string }): Promise<FailedPermissionsAnalytics[]> => {
-    const response = await apiClient.get<FailedPermissionsAnalytics[]>(
+    const response = await api.get<FailedPermissionsAnalytics[]>(
       '/audit-logs/analytics/failed-permissions',
       {
         params,
@@ -123,7 +123,7 @@ export const auditLogsApi = {
    * Get timeline analytics (events over time)
    */
   getTimeline: async (params?: { startDate?: string; endDate?: string; granularity?: 'hour' | 'day' | 'week' }): Promise<TimelineAnalytics[]> => {
-    const response = await apiClient.get<TimelineAnalytics[]>(
+    const response = await api.get<TimelineAnalytics[]>(
       '/audit-logs/analytics/timeline',
       {
         params,
@@ -136,7 +136,7 @@ export const auditLogsApi = {
    * Get top resources analytics
    */
   getTopResources: async (params?: { startDate?: string; endDate?: string; limit?: number }): Promise<TopResourcesAnalytics[]> => {
-    const response = await apiClient.get<TopResourcesAnalytics[]>(
+    const response = await api.get<TopResourcesAnalytics[]>(
       '/audit-logs/analytics/top-resources',
       {
         params,
@@ -149,7 +149,7 @@ export const auditLogsApi = {
    * Get GDPR data access for a user
    */
   getGDPRDataAccess: async (userId: string): Promise<GDPRDataAccessResponse> => {
-    const response = await apiClient.get<GDPRDataAccessResponse>(
+    const response = await api.get<GDPRDataAccessResponse>(
       `/audit-logs/gdpr/data-access/${userId}`
     );
     return response.data;
@@ -159,7 +159,7 @@ export const auditLogsApi = {
    * Anonymize user data (GDPR right to be forgotten)
    */
   anonymizeUserData: async (userId: string): Promise<{ message: string }> => {
-    const response = await apiClient.post(`/audit-logs/gdpr/anonymize/${userId}`);
+    const response = await api.post(`/audit-logs/gdpr/anonymize/${userId}`);
     return response.data;
   },
 
@@ -169,7 +169,7 @@ export const auditLogsApi = {
   generateComplianceReport: async (
     data: ComplianceReportRequest
   ): Promise<ComplianceReport> => {
-    const response = await apiClient.post<ComplianceReport>(
+    const response = await api.post<ComplianceReport>(
       '/audit-logs/compliance/report',
       data
     );

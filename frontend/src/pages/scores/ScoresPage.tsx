@@ -1,9 +1,10 @@
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Award, AlertTriangle, TrendingUp, Layers } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { scoresService } from '@/services';
+import { scoresService, projectsService } from '@/services';
 import { queryKeys } from '@/lib/queryClient';
 import { PageHeader, QueryState } from '../pageUtils';
 import { useDeveloperRealtime } from '@/hooks/useDeveloperRealtime';
@@ -11,6 +12,8 @@ import type { RiskModule } from '@/types';
 import { QualityGateCard } from '@/components/scores/QualityGateCard';
 
 export function ScoresPage() {
+  const [selectedProjectId, setSelectedProjectId] = useState<string>('');
+
   const { data: myScore, isLoading: isScoreLoading, error: scoreError, refetch: refetchScore } = useQuery({
     queryKey: queryKeys.scores.me,
     queryFn: () => scoresService.getMyScore(),
@@ -19,9 +22,17 @@ export function ScoresPage() {
   // Realtime DQS updates over WS
   useDeveloperRealtime('me');
 
+  const { data: projects } = useQuery({
+    queryKey: queryKeys.projects.all(),
+    queryFn: () => projectsService.getAll(),
+  });
+
+  const activeProjectId = selectedProjectId || (projects && projects.length > 0 ? projects[0].id : '');
+
   const { data: riskyModules } = useQuery({
-    queryKey: queryKeys.scores.riskyModules('default'),
-    queryFn: () => scoresService.getRiskyModules('default'),
+    queryKey: queryKeys.scores.riskyModules(activeProjectId),
+    queryFn: () => scoresService.getRiskyModules(activeProjectId),
+    enabled: Boolean(activeProjectId && activeProjectId !== 'default'),
   });
 
   const getDqsGrade = (score?: number) => {
@@ -109,35 +120,52 @@ export function ScoresPage() {
         />
 
         {/* Risky Modules Panel */}
-        {riskyModules && riskyModules.length > 0 && (
+        {activeProjectId && (
           <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
-            <CardHeader className="border-b border-slate-100 dark:border-slate-800">
+            <CardHeader className="border-b border-slate-100 dark:border-slate-800 flex flex-row items-center justify-between">
               <CardTitle className="text-base flex items-center gap-2 text-rose-600 dark:text-rose-400">
                 <AlertTriangle className="h-5 w-5" />
                 Risky Modules Attention Required
               </CardTitle>
+              {projects && projects.length > 1 && (
+                <select
+                  value={activeProjectId}
+                  onChange={(e) => setSelectedProjectId(e.target.value)}
+                  className="text-xs rounded border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-slate-700 dark:text-slate-300"
+                >
+                  {projects.map((p) => (
+                    <option key={p.id} value={p.id}>{p.name}</option>
+                  ))}
+                </select>
+              )}
             </CardHeader>
             <CardContent className="p-0">
-              <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                {riskyModules.map((module: RiskModule, idx: number) => (
-                  <div key={idx} className="p-4 flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Layers className="h-5 w-5 text-slate-400" />
-                      <div>
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                          {module.modulePath}
-                        </p>
-                        <p className="text-xs text-slate-500">
-                          Recommendation: {module.recommendation} | Risk Factors: {module.riskFactors.join(', ')}
-                        </p>
+              {riskyModules && riskyModules.length > 0 ? (
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                  {riskyModules.map((module: RiskModule, idx: number) => (
+                    <div key={idx} className="p-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Layers className="h-5 w-5 text-slate-400" />
+                        <div>
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                            {module.modulePath}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            Recommendation: {module.recommendation} | Risk Factors: {module.riskFactors.join(', ')}
+                          </p>
+                        </div>
                       </div>
+                      <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400">
+                        Score: {module.riskScore}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400">
-                      Score: {module.riskScore}
-                    </Badge>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-8 text-center text-sm text-slate-500">
+                  No high-risk modules detected for this project.
+                </div>
+              )}
             </CardContent>
           </Card>
         )}
