@@ -16,7 +16,7 @@ import {
   CreateKeyResultDto,
   UpdateKeyResultDto,
 } from './dto';
-import { GoalStatus } from '@prisma/client';
+import { GoalStatus, ComparisonOp, MetricType } from '@prisma/client';
 
 /**
  * Service for managing quality goals and OKRs
@@ -370,12 +370,16 @@ export class GoalsService {
         throw new BadRequestException('targetValue is required when not using a template');
       }
       if (!operator) {
-        throw new BadRequestException('operator is required when not using a template');
+        // Automatically default operator: LTE for bugs, GTE for quality scores/coverage/reviews/commits
+        operator = metricType === MetricType.BUG_COUNT ? ComparisonOp.LTE : ComparisonOp.GTE;
       }
       if (!dto.endDate) {
-        throw new BadRequestException('endDate is required when not using a template');
+        // Default endDate to 90 days (1 quarter) if not provided
+        endDate = new Date(startDate);
+        endDate.setDate(endDate.getDate() + 90);
+      } else {
+        endDate = new Date(dto.endDate);
       }
-      endDate = new Date(dto.endDate);
     }
 
     // Validate dates
