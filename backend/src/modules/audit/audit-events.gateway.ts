@@ -39,6 +39,13 @@ interface AuditEventPayload {
   timestamp: Date;
   severity?: string | null;
   metadata?: any;
+  ipAddress?: string;
+  userAgent?: string;
+  user?: {
+    id: string;
+    email: string;
+    name?: string;
+  };
 }
 
 /**
@@ -116,11 +123,17 @@ export class AuditEventsGateway
         email: payload.email,
         organizationId: payload.organizationId || '',
         role: payload.role,
-        subscribedToAuditEvents: false,
+        subscribedToAuditEvents: true,
       };
 
       // Store client context
       this.connectedClients.set(client.id, authSocket);
+
+      // Auto-join organization room for immediate event streaming
+      if (payload.organizationId) {
+        const roomName = `audit:${payload.organizationId}`;
+        client.join(roomName);
+      }
 
       this.logger.log(
         `Client connected to audit events: ${client.id} (User: ${payload.email}, Org: ${payload.organizationId})`,
@@ -250,6 +263,9 @@ export class AuditEventsGateway
         timestamp: payload.timestamp,
         severity: payload.severity,
         metadata: payload.metadata,
+        ipAddress: payload.ipAddress,
+        userAgent: payload.userAgent,
+        user: payload.user,
       });
 
       this.logger.debug(

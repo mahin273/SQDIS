@@ -43,6 +43,14 @@ export const auditService = {
   },
 
   /**
+   * Trigger a test audit event to verify real-time websocket monitoring
+   */
+  async triggerTestEvent(action?: string, severity?: string): Promise<{ success: boolean; message: string; action: string; severity: string }> {
+    const response = await api.post('/audit-logs/test-event', { action, severity });
+    return response.data;
+  },
+
+  /**
    * Export audit logs to CSV or JSON format
    */
   async exportLogs(data: ExportAuditLogsRequest): Promise<AuditExport> {

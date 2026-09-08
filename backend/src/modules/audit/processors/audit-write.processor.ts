@@ -83,6 +83,15 @@ export class AuditWriteProcessor extends WorkerHost {
           entryHash: data.entryHash,
           previousEntryHash: data.previousEntryHash,
         },
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              name: true,
+            },
+          },
+        },
       });
 
       const duration = Date.now() - startTime;
