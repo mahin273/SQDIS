@@ -511,7 +511,14 @@ export class GitHubService {
     });
 
     const webhookSecret = this.generateWebhookSecret();
-    const webhookId = await this.configureWebhook(octokit, dto.fullName, webhookSecret);
+    let webhookId: number | null = null;
+    try {
+      webhookId = await this.configureWebhook(octokit, dto.fullName, webhookSecret);
+    } catch (webhookError: any) {
+      this.logger.warn(
+        `Failed to configure webhook for ${dto.fullName}: ${webhookError?.message}. Proceeding without webhook.`,
+      );
+    }
 
     if (!repository) {
       repository = await this.prisma.repository.create({

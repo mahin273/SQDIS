@@ -342,8 +342,9 @@ export interface Project {
   key: string;
   color?: string;
   organizationId: string;
-  repositories?: Repository[];
+  repositories?: (Repository & { assignmentId?: string; repositoryId?: string; repository?: any })[];
   teams?: Team[];
+  teamAssignments?: any[];
   sprints?: Sprint[];
   sqs?: number;
   sqsScore?: number;
@@ -1527,6 +1528,9 @@ export interface Repository {
   commitCount?: number;
   sqsScore?: number;
   createdAt: string;
+  assignmentId?: string;
+  repositoryId?: string;
+  repository?: any;
 }
 
 export interface ConnectGitHubRequest {

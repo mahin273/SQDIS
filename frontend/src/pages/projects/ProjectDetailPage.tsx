@@ -64,26 +64,86 @@ export function ProjectDetailPage() {
     },
   })
 
+  const [linkingRepoKey, setLinkingRepoKey] = useState<string | null>(null)
+  const [unlinkingRepoKey, setUnlinkingRepoKey] = useState<string | null>(null)
+  const [repoActionError, setRepoActionError] = useState<string | null>(null)
+
   const orgReposQuery = useQuery({
     queryKey: queryKeys.repositories.all(),
     queryFn: () => repositoriesService.getAll(),
   })
 
-  const assignRepoMutation = useMutation({
-    mutationFn: (repositoryId: string) => projectsService.assignRepository(id!, { repositoryId }),
+  const linkRepoMutation = useMutation({
+    mutationFn: async (repo: any) => {
+      setRepoActionError(null)
+      let targetRepoId = repo.id
+
+      // If repository has not been enabled in SQDIS yet, enable it first
+      if (!targetRepoId || !repo.isEnabled) {
+        try {
+          const enabled = await repositoriesService.enable({
+            id: repo.id || undefined,
+            githubId: repo.githubId,
+            name: repo.name,
+            fullName: repo.fullName || repo.name,
+            backfill: true,
+          })
+          targetRepoId = enabled?.id || targetRepoId
+        } catch (enableErr: any) {
+          console.warn('Repository enable warning:', enableErr)
+          // Fallback to name/fullName/githubId if enable didn't return an id
+          if (!targetRepoId) {
+            targetRepoId = repo.fullName || String(repo.githubId) || repo.name
+          }
+        }
+      }
+
+      if (!targetRepoId) {
+        throw new Error('Could not determine repository identifier')
+      }
+
+      return await projectsService.assignRepository(id!, { repositoryId: targetRepoId })
+    },
+    onMutate: (repo: any) => {
+      setLinkingRepoKey(repo.id || repo.fullName || String(repo.githubId) || repo.name)
+    },
+    onSettled: () => {
+      setLinkingRepoKey(null)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id!) })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.metrics(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all() })
+    },
+    onError: (err: any) => {
+      setRepoActionError(
+        err?.response?.data?.message || err?.message || 'Failed to link repository'
+      )
     },
   })
 
   const removeRepoMutation = useMutation({
-    mutationFn: (repoId: string) => projectsService.removeRepository(id!, repoId),
+    mutationFn: (repoId: string) => {
+      setRepoActionError(null)
+      return projectsService.removeRepository(id!, repoId)
+    },
+    onMutate: (repoId: string) => {
+      setUnlinkingRepoKey(repoId)
+    },
+    onSettled: () => {
+      setUnlinkingRepoKey(null)
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(id!) })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all() })
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.metrics(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.repositories.all() })
+    },
+    onError: (err: any) => {
+      setRepoActionError(
+        err?.response?.data?.message || err?.message || 'Failed to unlink repository'
+      )
     },
   })
 
@@ -150,27 +210,34 @@ export function ProjectDetailPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {(project.repositories ?? []).map((repo) => (
-                        <div key={repo.id} className="flex items-center justify-between py-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                          <div>
-                            <p className="font-semibold text-slate-900 dark:text-slate-100">{repo.name}</p>
-                            <p className="text-sm text-slate-500">{repo.fullName || repo.url}</p>
+                      {(project.repositories ?? []).map((repo: any) => {
+                        const repoId = repo.id || repo.repositoryId || repo.repository?.id
+                        const repoName = repo.name || repo.repository?.name || 'Repository'
+                        const repoFullName = repo.fullName || repo.repository?.fullName || repo.url || ''
+                        const branch = repo.defaultBranch || repo.repository?.defaultBranch || 'main'
+                        const unlinkTarget = repo.assignmentId || repoId
+                        return (
+                          <div key={repoId || repoName} className="flex items-center justify-between py-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                            <div>
+                              <p className="font-semibold text-slate-900 dark:text-slate-100">{repoName}</p>
+                              <p className="text-sm text-slate-500">{repoFullName}</p>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <Badge variant="outline">{branch}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 h-8 w-8 p-0"
+                                disabled={removeRepoMutation.isPending && unlinkingRepoKey === unlinkTarget}
+                                onClick={() => removeRepoMutation.mutate(unlinkTarget)}
+                                title="Unlink repository"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <Badge variant="outline">{repo.defaultBranch || 'main'}</Badge>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 h-8 w-8 p-0"
-                              disabled={removeRepoMutation.isPending}
-                              onClick={() => removeRepoMutation.mutate(repo.id)}
-                              title="Unlink repository"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
+                        )
+                      })}
                       {(!project.repositories || project.repositories.length === 0) && (
                         <div className="py-8 text-center text-slate-500">
                           <GitBranch className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-3" />
@@ -269,7 +336,10 @@ export function ProjectDetailPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {(project.teams ?? []).map(team => (
+                      {((project.teams && project.teams.length > 0)
+                        ? project.teams
+                        : (project.teamAssignments ?? []).map((ta: any) => ta.team)
+                      ).filter(Boolean).map((team: any) => (
                         <Link key={team.id} to={`/teams/${team.id}`} className="block p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-700 transition-colors">
                           <div className="flex items-center justify-between">
                             <span className="font-medium text-slate-900 dark:text-slate-100">{team.name}</span>
@@ -277,7 +347,8 @@ export function ProjectDetailPage() {
                           </div>
                         </Link>
                       ))}
-                      {(!project.teams || project.teams.length === 0) && (
+                      {(!project.teams || project.teams.length === 0) &&
+                       (!project.teamAssignments || project.teamAssignments.length === 0) && (
                         <p className="text-center text-sm text-slate-500 py-2">No teams associated yet.</p>
                       )}
                     </div>
@@ -329,7 +400,10 @@ export function ProjectDetailPage() {
 
       <Modal
         isOpen={isRepoModalOpen}
-        onClose={() => setIsRepoModalOpen(false)}
+        onClose={() => {
+          setIsRepoModalOpen(false)
+          setRepoActionError(null)
+        }}
         title="Configure Linked Repositories"
         size="lg"
       >
@@ -338,11 +412,30 @@ export function ProjectDetailPage() {
             Select repositories from your organization to link to this project. Quality scores, metrics, and debt analysis will aggregate data from all linked repositories.
           </p>
 
+          {repoActionError && (
+            <div className="p-3 text-sm rounded bg-rose-50 border border-rose-200 text-rose-700 dark:bg-rose-950/40 dark:border-rose-800 dark:text-rose-300">
+              {repoActionError}
+            </div>
+          )}
+
           <div className="divide-y divide-slate-100 dark:divide-slate-800 border rounded-md border-slate-200 dark:border-slate-800 max-h-80 overflow-y-auto">
             {(orgReposQuery.data ?? []).map((repo) => {
-              const isAssigned = (project?.repositories ?? []).some((r: any) => r.id === repo.id);
+              const repoKey = repo.id || repo.fullName || String(repo.githubId) || repo.name
+              const assignedObj = (project?.repositories ?? []).find((r: any) => {
+                const assignedId = r.id || r.repositoryId || r.repository?.id
+                const assignedName = r.fullName || r.repository?.fullName || r.name || r.repository?.name
+                return (
+                  (repo.id && assignedId === repo.id) ||
+                  (repo.fullName && assignedName === repo.fullName) ||
+                  (repo.name && assignedName === repo.name)
+                )
+              })
+              const isAssigned = !!assignedObj
+              const isLinking = linkingRepoKey === repoKey
+              const isUnlinking = unlinkingRepoKey === repo.id || (assignedObj && unlinkingRepoKey === (assignedObj.assignmentId || assignedObj.id))
+
               return (
-                <div key={repo.id} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                <div key={repoKey} className="p-3 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
                   <div>
                     <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{repo.name}</p>
                     <p className="text-xs text-slate-500">{repo.fullName || repo.url}</p>
@@ -356,8 +449,12 @@ export function ProjectDetailPage() {
                         variant="outline"
                         size="sm"
                         className="text-rose-600 hover:text-rose-700 dark:text-rose-400"
-                        disabled={removeRepoMutation.isPending}
-                        onClick={() => removeRepoMutation.mutate(repo.id)}
+                        isLoading={isUnlinking}
+                        disabled={removeRepoMutation.isPending || linkRepoMutation.isPending}
+                        onClick={() => {
+                          const targetId = assignedObj?.assignmentId || assignedObj?.id || assignedObj?.repositoryId || repo.id
+                          removeRepoMutation.mutate(targetId)
+                        }}
                       >
                         Unlink
                       </Button>
@@ -365,14 +462,15 @@ export function ProjectDetailPage() {
                   ) : (
                     <Button
                       size="sm"
-                      disabled={assignRepoMutation.isPending}
-                      onClick={() => assignRepoMutation.mutate(repo.id)}
+                      isLoading={isLinking}
+                      disabled={linkRepoMutation.isPending || removeRepoMutation.isPending}
+                      onClick={() => linkRepoMutation.mutate(repo)}
                     >
                       Link Repository
                     </Button>
                   )}
                 </div>
-              );
+              )
             })}
             {(!orgReposQuery.data || orgReposQuery.data.length === 0) && (
               <div className="p-6 text-center text-sm text-slate-500">
