@@ -50,10 +50,11 @@ export class ReportsService {
     const title = dto.title || this.generateReportTitle(dto);
 
     // Create report record
+    const scope = dto.scope || ReportScope.ORGANIZATION;
     const report = await this.prisma.report.create({
       data: {
         type: dto.type,
-        scope: dto.scope,
+        scope,
         status: ReportStatus.PENDING,
         title,
         startDate,
@@ -373,7 +374,8 @@ export class ReportsService {
    */
   private generateReportTitle(dto: CreateReportDto): string {
     const typeLabel = dto.type === ReportType.PDF ? 'PDF Report' : 'CSV Export';
-    const scopeLabel = dto.scope.charAt(0) + dto.scope.slice(1).toLowerCase();
+    const scope = dto.scope || ReportScope.ORGANIZATION;
+    const scopeLabel = scope.charAt(0) + scope.slice(1).toLowerCase();
     const dateRange = `${new Date(dto.startDate).toLocaleDateString()} - ${new Date(dto.endDate).toLocaleDateString()}`;
     return `${scopeLabel} ${typeLabel} (${dateRange})`;
   }

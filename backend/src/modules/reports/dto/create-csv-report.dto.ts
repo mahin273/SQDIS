@@ -5,8 +5,13 @@ import { ReportScope } from '../constants';
  * DTO for creating a CSV report
  */
 export class CreateCsvReportDto {
+  @IsOptional()
   @IsEnum(ReportScope)
-  scope!: ReportScope;
+  scope?: ReportScope = ReportScope.ORGANIZATION;
+
+  @IsOptional()
+  @IsString()
+  type?: string;
 
   @IsOptional()
   @IsUUID()

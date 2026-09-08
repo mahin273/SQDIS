@@ -1344,23 +1344,33 @@ export interface NotificationFilters {
 export type ReportType = 'PDF' | 'CSV';
 export type ReportStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 export type ReportCategory = 'DEVELOPER' | 'TEAM' | 'PROJECT' | 'ORGANIZATION' | 'SPRINT' | 'RELEASE';
+export type ReportScope = 'ORGANIZATION' | 'TEAM' | 'PROJECT' | 'DEVELOPER';
 
 export interface Report {
   id: string;
   type: ReportType;
-  category: ReportCategory;
+  scope?: ReportScope;
+  category?: ReportCategory;
   title: string;
   description?: string;
   status: ReportStatus;
-  filename: string;
-  format: 'pdf' | 'csv';
+  filename?: string | null;
+  filePath?: string | null;
+  fileSize?: number | null;
+  format?: 'pdf' | 'csv';
+  startDate?: string;
+  endDate?: string;
+  teamId?: string | null;
+  projectId?: string | null;
+  repositoryId?: string | null;
+  developerId?: string | null;
   filters?: Record<string, unknown>;
-  errorMessage?: string;
+  errorMessage?: string | null;
   organizationId: string;
-  createdBy: string;
+  createdBy?: string;
   createdByUser?: User;
   createdAt: string;
-  completedAt?: string;
+  completedAt?: string | null;
   downloadUrl?: string;
 }
 
