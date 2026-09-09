@@ -29,6 +29,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module.js';
 import { ScoresModule } from './modules/scores/scores.module.js';
 import { SprintsModule } from './modules/sprints/sprints.module.js';
 import { TeamsModule } from './modules/teams/teams.module.js';
+import { DevelopersModule } from './modules/developers/developers.module.js';
 
 /**
  * Root Application Module
@@ -77,6 +78,7 @@ import { TeamsModule } from './modules/teams/teams.module.js';
     ScoresModule,
     SprintsModule,
     TeamsModule,
+    DevelopersModule,
     PrismaModule,
   ],
   controllers: [AppController],
