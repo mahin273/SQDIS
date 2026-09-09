@@ -2,26 +2,50 @@ import { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   FileText,
+  FileSpreadsheet,
   Download,
-  Shield,
-  Users,
-  Layers,
   Plus,
-  Calendar,
-  Clock,
   Trash2,
-  CheckCircle,
   AlertTriangle,
   RefreshCw,
   Search,
   RotateCcw,
+  MoreHorizontal,
+  Copy,
 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
-import { Modal } from '@/components/ui/modal';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from '@/components/ui/table';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+  SheetFooter,
+} from '@/components/ui/sheet';
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { reportsService, teamsService, projectsService, membersService } from '@/services';
 import { queryKeys } from '@/lib/queryClient';
 import { PageHeader, QueryState } from '../pageUtils';
@@ -43,8 +67,8 @@ export function ReportsPage() {
   const [formatFilter, setFormatFilter] = useState<'ALL' | 'PDF' | 'CSV'>('ALL');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Modal State
-  const [isGenerateModalOpen, setIsGenerateModalOpen] = useState(false);
+  // Sheet State
+  const [isGenerateSheetOpen, setIsGenerateSheetOpen] = useState(false);
   const [newReportScope, setNewReportScope] = useState<ReportScope>('ORGANIZATION');
   const [newReportFormat, setNewReportFormat] = useState<'pdf' | 'csv'>('pdf');
   const [newReportTitle, setNewReportTitle] = useState('');
@@ -52,7 +76,7 @@ export function ReportsPage() {
   const [selectedProjectId, setSelectedProjectId] = useState('');
   const [selectedDeveloperId, setSelectedDeveloperId] = useState('');
   const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [modalError, setModalError] = useState<string | null>(null);
+  const [sheetError, setSheetError] = useState<string | null>(null);
 
   // Download state
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
@@ -70,23 +94,23 @@ export function ReportsPage() {
     },
   });
 
-  // Query helper entities for modal dropdowns
+  // Query helper entities for sheet dropdowns
   const { data: teams = [] } = useQuery({
     queryKey: queryKeys.teams.all(),
     queryFn: () => teamsService.getAll(),
-    enabled: isGenerateModalOpen && newReportScope === 'TEAM',
+    enabled: isGenerateSheetOpen && newReportScope === 'TEAM',
   });
 
   const { data: projects = [] } = useQuery({
     queryKey: queryKeys.projects.all(),
     queryFn: () => projectsService.getAll(),
-    enabled: isGenerateModalOpen && newReportScope === 'PROJECT',
+    enabled: isGenerateSheetOpen && newReportScope === 'PROJECT',
   });
 
   const { data: members = [] } = useQuery({
     queryKey: ['members'],
     queryFn: () => membersService.getAll(),
-    enabled: isGenerateModalOpen && newReportScope === 'DEVELOPER',
+    enabled: isGenerateSheetOpen && newReportScope === 'DEVELOPER',
   });
 
   // Create mutation
@@ -94,13 +118,18 @@ export function ReportsPage() {
     mutationFn: (payload: any) => reportsService.create(payload, newReportFormat),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() });
-      setIsGenerateModalOpen(false);
-      setModalError(null);
+      setIsGenerateSheetOpen(false);
+      setSheetError(null);
       setNewReportTitle('');
+      toast.success('Report generation initiated', {
+        description: `Export queued as ${newReportFormat.toUpperCase()}. It will download once ready.`,
+      });
     },
     onError: (err: any) => {
       const msg = err.response?.data?.message || err.message || 'Failed to generate report';
-      setModalError(Array.isArray(msg) ? msg.join(', ') : msg);
+      const formatted = Array.isArray(msg) ? msg.join(', ') : msg;
+      setSheetError(formatted);
+      toast.error('Failed to start report generation', { description: formatted });
     },
   });
 
@@ -109,6 +138,12 @@ export function ReportsPage() {
     mutationFn: (id: string) => reportsService.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() });
+      toast.success('Report deleted successfully');
+    },
+    onError: (err: any) => {
+      toast.error('Failed to delete report', {
+        description: err?.message || 'Please try again later',
+      });
     },
   });
 
@@ -117,6 +152,7 @@ export function ReportsPage() {
     mutationFn: (id: string) => reportsService.retry(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() });
+      toast.info('Report retry triggered');
     },
   });
 
@@ -149,7 +185,7 @@ export function ReportsPage() {
     });
   }, [reportsList, scopeFilter, formatFilter, searchQuery]);
 
-  // Handle actual browser download of file
+  // Handle browser file download
   const handleDownload = async (report: Report) => {
     try {
       setDownloadingId(report.id);
@@ -160,14 +196,18 @@ export function ReportsPage() {
       const a = document.createElement('a');
       a.href = url;
       const ext = (report.type || 'PDF').toLowerCase();
-      a.download = report.filename || `${report.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
+      const filename = report.filename || `${report.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       a.remove();
       window.URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${filename}`);
     } catch (e: any) {
       console.error('Failed to download report', e);
-      alert('Failed to download report: ' + (e?.message || 'File not ready'));
+      toast.error('Failed to download report', {
+        description: e?.message || 'File artifact not available',
+      });
     } finally {
       setDownloadingId(null);
     }
@@ -179,12 +219,13 @@ export function ReportsPage() {
     }
   };
 
-  const handleRetry = (id: string) => {
-    retryMutation.mutate(id);
+  const handleCopyId = (id: string) => {
+    navigator.clipboard.writeText(id);
+    toast.success('Report ID copied to clipboard');
   };
 
-  // Open modal and seed defaults
-  const openGenerateModal = () => {
+  // Open sheet and seed defaults
+  const openGenerateSheet = () => {
     const today = new Date();
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(today.getDate() - 30);
@@ -199,14 +240,12 @@ export function ReportsPage() {
     setSelectedTeamId('');
     setSelectedProjectId('');
     setSelectedDeveloperId('');
-    setModalError(null);
-    setIsGenerateModalOpen(true);
+    setSheetError(null);
+    setIsGenerateSheetOpen(true);
   };
 
-  const handleScopeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const scope = e.target.value as ReportScope;
+  const handleScopeChange = (scope: ReportScope) => {
     setNewReportScope(scope);
-
     switch (scope) {
       case 'ORGANIZATION':
         setNewReportTitle('Monthly Executive Quality Report');
@@ -226,15 +265,15 @@ export function ReportsPage() {
   // Submit report generation
   const handleGenerate = (e: React.FormEvent) => {
     e.preventDefault();
-    setModalError(null);
+    setSheetError(null);
 
     if (!newReportTitle.trim()) {
-      setModalError('Report title is required');
+      setSheetError('Report title is required');
       return;
     }
 
     if (!dateRange.start || !dateRange.end) {
-      setModalError('Start and end dates are required');
+      setSheetError('Start and end dates are required');
       return;
     }
 
@@ -242,22 +281,22 @@ export function ReportsPage() {
     const endDate = new Date(dateRange.end);
 
     if (endDate <= startDate) {
-      setModalError('End date must be strictly after start date');
+      setSheetError('End date must be strictly after start date');
       return;
     }
 
     if (newReportScope === 'TEAM' && !selectedTeamId) {
-      setModalError('Please select a team for team-scoped reports');
+      setSheetError('Please select a team for team-scoped reports');
       return;
     }
 
     if (newReportScope === 'PROJECT' && !selectedProjectId) {
-      setModalError('Please select a project for project-scoped reports');
+      setSheetError('Please select a project for project-scoped reports');
       return;
     }
 
     if (newReportScope === 'DEVELOPER' && !selectedDeveloperId) {
-      setModalError('Please select a developer for developer-scoped reports');
+      setSheetError('Please select a developer for developer-scoped reports');
       return;
     }
 
@@ -275,25 +314,10 @@ export function ReportsPage() {
     createMutation.mutate(payload);
   };
 
-  const getScopeIcon = (scope?: string) => {
-    switch (scope) {
-      case 'ORGANIZATION':
-        return <Shield className="h-5 w-5 text-indigo-500" />;
-      case 'TEAM':
-        return <Users className="h-5 w-5 text-blue-500" />;
-      case 'PROJECT':
-        return <Layers className="h-5 w-5 text-emerald-500" />;
-      case 'DEVELOPER':
-        return <Clock className="h-5 w-5 text-amber-500" />;
-      default:
-        return <FileText className="h-5 w-5 text-slate-500" />;
-    }
-  };
-
   const getScopeDescription = (scope: ReportScope) => {
     switch (scope) {
       case 'ORGANIZATION':
-        return 'High-level executive summary of organization engineering health, velocity, and quality scores.';
+        return 'High-level executive summary of organizational engineering health, velocity, and quality scores.';
       case 'TEAM':
         return 'Detailed team-level velocity metrics, code quality trends, and pull request turnaround.';
       case 'PROJECT':
@@ -304,7 +328,7 @@ export function ReportsPage() {
   };
 
   const scopeTabs = [
-    { value: 'ALL', label: 'All Reports' },
+    { value: 'ALL', label: 'All Scopes' },
     { value: 'ORGANIZATION', label: 'Organization' },
     { value: 'TEAM', label: 'Team' },
     { value: 'PROJECT', label: 'Project' },
@@ -312,66 +336,63 @@ export function ReportsPage() {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Header */}
       <PageHeader
         title="Engineering Reports"
-        description="Generate, view, and export executive quality reports, DQS analytics, and velocity metrics."
+        description="Audit, monitor, and export executive quality summaries, DQS telemetry, and sprint velocity."
         action={
-          <Button onClick={openGenerateModal} className="gap-2 shadow-sm cursor-pointer">
-            <Plus className="h-4 w-4 shrink-0" /> Generate Report
+          <Button onClick={openGenerateSheet} className="gap-2 shadow-xs cursor-pointer">
+            <Plus className="h-4 w-4 shrink-0" /> New Report
           </Button>
         }
       />
 
-      {/* Info Banner */}
-      <Card className="bg-gradient-to-r from-slate-50 via-blue-50/50 to-indigo-50/40 dark:from-slate-900 dark:via-blue-950/40 dark:to-indigo-950/30 border-blue-100 dark:border-blue-900/60 shadow-xs">
-        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-              <Calendar className="h-5 w-5" />
-            </div>
-            <div>
-              <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
-                Asynchronous Background Report Generator Active
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                PDF and CSV compilation jobs run worker-side with automated progress tracking and instant download.
-              </p>
-            </div>
+      {/* Unified Enterprise Toolbar */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-card border border-border rounded-xl p-2.5 shadow-xs">
+        {/* Left: Search Bar & Scope Pills */}
+        <div className="flex flex-wrap items-center gap-2.5">
+          <div className="relative w-full sm:w-64">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Filter by report title or file..."
+              className="w-full h-9 pl-9 pr-3 bg-background border border-input rounded-lg text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
+            />
           </div>
-          <Button
-            variant="outline"
-            onClick={openGenerateModal}
-            className="shrink-0 text-xs sm:text-sm shadow-xs font-medium cursor-pointer"
-          >
-            Create New Export
-          </Button>
-        </CardContent>
-      </Card>
 
-      {/* Controls Bar: Scope Tabs, Format Toggle, and Search */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border pb-4">
-        <Tabs value={scopeFilter} onValueChange={setScopeFilter} className="w-full lg:w-auto">
-          <TabsList className="w-full sm:w-auto flex overflow-x-auto justify-start h-10 p-1">
+          {/* Scope Filters */}
+          <div className="inline-flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/40 h-9">
             {scopeTabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="min-w-fit px-3.5 py-1.5 text-xs font-medium">
+              <button
+                key={tab.value}
+                type="button"
+                onClick={() => setScopeFilter(tab.value)}
+                className={`h-8 px-2.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
+                  scopeFilter === tab.value
+                    ? 'bg-background text-foreground shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
                 {tab.label}
-              </TabsTrigger>
+              </button>
             ))}
-          </TabsList>
-        </Tabs>
+          </div>
+        </div>
 
-        <div className="flex items-center gap-3 flex-wrap justify-between lg:justify-end">
-          {/* Format pills */}
-          <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60 h-10">
+        {/* Right: Format Pills, Counter & Actions */}
+        <div className="flex items-center gap-2 justify-between lg:justify-end">
+          <div className="inline-flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/40 h-9">
             {(['ALL', 'PDF', 'CSV'] as const).map((fmt) => (
               <button
                 key={fmt}
                 type="button"
                 onClick={() => setFormatFilter(fmt)}
-                className={`h-8 px-3 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
+                className={`h-8 px-2.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
                   formatFilter === fmt
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs font-semibold'
+                    ? 'bg-background text-foreground shadow-xs font-semibold'
                     : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
@@ -380,360 +401,411 @@ export function ReportsPage() {
             ))}
           </div>
 
-          {/* Search input */}
-          <div className="relative w-48 sm:w-60">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search reports..."
-              className="w-full h-10 pl-9 pr-3 bg-background border border-input rounded-lg text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
-            />
+          <div className="text-[11px] font-mono tabular-nums text-muted-foreground px-2">
+            {filteredReports.length} {filteredReports.length === 1 ? 'record' : 'records'}
           </div>
 
-          <Badge variant="secondary" className="h-10 px-3 text-xs font-normal shrink-0">
-            Showing {filteredReports.length} {filteredReports.length === 1 ? 'report' : 'reports'}
-          </Badge>
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={() => reportsQuery.refetch()}
+            disabled={reportsQuery.isFetching}
+            className="h-9 w-9 text-muted-foreground hover:text-foreground cursor-pointer"
+            title="Refresh Data"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${reportsQuery.isFetching ? 'animate-spin' : ''}`} />
+          </Button>
         </div>
       </div>
 
-      {/* Reports Grid */}
+      {/* High-Density Data Table */}
       <QueryState isLoading={reportsQuery.isLoading} error={reportsQuery.error} onRetry={() => reportsQuery.refetch()}>
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-          {filteredReports.map((report: Report) => {
-            const scope = report.scope || 'ORGANIZATION';
-            const isCompleted = report.status === 'COMPLETED';
-            const isProcessing = report.status === 'PROCESSING' || report.status === 'PENDING';
-            const isFailed = report.status === 'FAILED';
+        <div className="border border-border/80 rounded-xl overflow-hidden bg-card shadow-xs">
+          <Table>
+            <TableHeader>
+              <TableRow className="h-10 hover:bg-transparent">
+                <TableHead className="w-[340px]">Report Name</TableHead>
+                <TableHead className="w-[130px]">Scope</TableHead>
+                <TableHead className="w-[190px]">Period</TableHead>
+                <TableHead className="w-[90px]">Size</TableHead>
+                <TableHead className="w-[130px]">Created</TableHead>
+                <TableHead className="w-[120px]">Status</TableHead>
+                <TableHead className="w-[90px] text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredReports.map((report: Report) => {
+                const isCompleted = report.status === 'COMPLETED';
+                const isProcessing = report.status === 'PROCESSING' || report.status === 'PENDING';
+                const isFailed = report.status === 'FAILED';
+                const isPdf = (report.type || 'PDF').toUpperCase() === 'PDF';
 
-            return (
-              <Card
-                key={report.id}
-                className="flex h-full flex-col justify-between group hover:shadow-md transition-all border-border"
-              >
-                <CardHeader className="p-5 pb-3">
-                  <div className="flex items-start gap-3.5">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
-                      {getScopeIcon(scope)}
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <CardTitle
-                        className="text-base font-semibold truncate group-hover:text-primary transition-colors"
-                        title={report.title}
-                      >
-                        {report.title}
-                      </CardTitle>
-                      <CardDescription className="line-clamp-2 text-xs text-muted-foreground leading-relaxed">
-                        {report.description || getScopeDescription(scope as ReportScope)}
-                      </CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="px-5 py-0 flex-1 space-y-3">
-                  <div className="bg-slate-50/80 dark:bg-slate-900/60 rounded-xl p-3.5 space-y-2.5 text-xs border border-slate-100 dark:border-slate-800/80">
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground">Format & Scope</span>
-                      <div className="flex items-center gap-1.5">
-                        <Badge
-                          variant="outline"
-                          className={`text-[10px] font-bold tracking-wider ${
-                            report.type === 'CSV'
-                              ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800'
-                              : 'bg-indigo-50 dark:bg-indigo-950/40 text-indigo-600 dark:text-indigo-400 border-indigo-300 dark:border-indigo-800'
+                return (
+                  <TableRow key={report.id} className="group">
+                    {/* Report Name & Type Icon */}
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-3">
+                        <div
+                          className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
+                            isPdf
+                              ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200/60 dark:border-rose-900/60'
+                              : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-900/60'
                           }`}
                         >
-                          {report.type}
-                        </Badge>
-                        <Badge variant="outline" className="text-[10px] bg-slate-100 dark:bg-slate-800">
-                          {scope}
-                        </Badge>
-                      </div>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Calendar className="h-3.5 w-3.5 shrink-0" /> Period
-                      </span>
-                      <span className="font-medium text-foreground">
-                        {report.startDate
-                          ? `${new Date(report.startDate).toLocaleDateString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                            })} - ${new Date(report.endDate || '').toLocaleDateString(undefined, {
-                              month: 'short',
-                              day: 'numeric',
-                              year: 'numeric',
-                            })}`
-                          : 'Last 30 Days'}
-                      </span>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                      <span className="text-muted-foreground flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5 shrink-0" /> Status
-                      </span>
-                      <div>
-                        {isCompleted && (
-                          <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium text-xs">
-                            <CheckCircle className="h-3.5 w-3.5 shrink-0" /> Ready ({formatBytes(report.fileSize)})
+                          {isPdf ? (
+                            <FileText className="h-3.5 w-3.5" />
+                          ) : (
+                            <FileSpreadsheet className="h-3.5 w-3.5" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <span
+                            className="font-medium text-foreground hover:underline cursor-pointer truncate block text-xs"
+                            title={report.title}
+                            onClick={() => isCompleted && handleDownload(report)}
+                          >
+                            {report.title}
                           </span>
-                        )}
-                        {isProcessing && (
-                          <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium text-xs animate-pulse">
-                            <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" /> Generating...
-                          </span>
-                        )}
-                        {isFailed && (
-                          <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-medium text-xs">
-                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Generation Failed
-                          </span>
-                        )}
+                          {report.filename && (
+                            <span className="text-[11px] font-mono text-muted-foreground truncate block">
+                              {report.filename}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </TableCell>
 
-                    {isFailed && report.errorMessage && (
-                      <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-[11px] text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 leading-relaxed">
-                        {report.errorMessage}
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
+                    {/* Scope Badge */}
+                    <TableCell>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-muted/60 text-muted-foreground border border-border/50">
+                        {report.scope || 'ORGANIZATION'}
+                      </span>
+                    </TableCell>
 
-                <CardFooter className="p-5 pt-3 pb-4 border-t border-border mt-3 flex items-center justify-between">
-                  <div className="text-xs flex flex-col">
-                    <span className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Created</span>
-                    <span className="font-medium text-foreground text-xs mt-0.5">
+                    {/* Period */}
+                    <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {report.startDate
+                        ? `${new Date(report.startDate).toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                          })} – ${new Date(report.endDate || '').toLocaleDateString(undefined, {
+                            month: 'short',
+                            day: 'numeric',
+                            year: 'numeric',
+                          })}`
+                        : 'Last 30 Days'}
+                    </TableCell>
+
+                    {/* Size */}
+                    <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                      {report.fileSize ? formatBytes(report.fileSize) : '—'}
+                    </TableCell>
+
+                    {/* Created */}
+                    <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
                       {new Date(report.createdAt).toLocaleDateString(undefined, {
-                        year: 'numeric',
                         month: 'short',
                         day: 'numeric',
+                        year: 'numeric',
                       })}
-                    </span>
-                  </div>
+                    </TableCell>
 
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
-                      onClick={() => handleDelete(report.id)}
-                      title="Delete Report"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
+                    {/* Status */}
+                    <TableCell>
+                      {isCompleted && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                          Ready
+                        </span>
+                      )}
+                      {isProcessing && (
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                          Compiling
+                        </span>
+                      )}
+                      {isFailed && (
+                        <span
+                          className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-rose-500/10 text-rose-600 dark:text-rose-400 border border-rose-500/20"
+                          title={report.errorMessage || 'Generation error'}
+                        >
+                          <span className="h-1.5 w-1.5 rounded-full bg-rose-500" />
+                          Failed
+                        </span>
+                      )}
+                    </TableCell>
 
-                    {isFailed ? (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleRetry(report.id)}
-                        disabled={retryMutation.isPending}
-                        className="gap-1.5 text-xs text-amber-600 hover:text-amber-700 border-amber-200 dark:border-amber-900/60 cursor-pointer"
-                      >
-                        <RotateCcw className="h-3.5 w-3.5 shrink-0" /> Retry
-                      </Button>
-                    ) : (
-                      <Button
-                        size="sm"
-                        onClick={() => handleDownload(report)}
-                        disabled={!isCompleted || downloadingId === report.id}
-                        className="gap-1.5 text-xs font-medium shadow-xs cursor-pointer"
-                      >
-                        {downloadingId === report.id ? (
-                          <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
-                        ) : (
-                          <Download className="h-3.5 w-3.5 shrink-0" />
+                    {/* Actions */}
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        {isCompleted && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                            onClick={() => handleDownload(report)}
+                            disabled={downloadingId === report.id}
+                            title={`Download ${report.type || 'PDF'}`}
+                          >
+                            {downloadingId === report.id ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
                         )}
-                        {downloadingId === report.id
-                          ? 'Downloading...'
-                          : `Download ${report.type || 'PDF'}`}
-                      </Button>
-                    )}
-                  </div>
-                </CardFooter>
-              </Card>
-            );
-          })}
 
-          {filteredReports.length === 0 && (
-            <div className="col-span-full">
-              <Card className="border-dashed border-2">
-                <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                  <FileText className="h-12 w-12 text-slate-300 dark:text-slate-600 mb-4" />
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">No Reports Found</h3>
-                  <p className="mt-1 text-sm text-slate-500 max-w-sm">
-                    {scopeFilter === 'ALL' && formatFilter === 'ALL' && !searchQuery
-                      ? "You haven't generated any reports yet."
-                      : 'No reports match your current filter and search criteria.'}
-                  </p>
-                  <Button onClick={openGenerateModal} className="mt-6 gap-2 cursor-pointer" variant="outline">
-                    <Plus className="h-4 w-4" /> Generate Report
-                  </Button>
-                </CardContent>
-              </Card>
-            </div>
-          )}
+                        {isFailed && (
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-7 w-7 text-amber-600 hover:text-amber-700 cursor-pointer"
+                            onClick={() => retryMutation.mutate(report.id)}
+                            disabled={retryMutation.isPending}
+                            title="Retry compilation"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {isCompleted && (
+                              <DropdownMenuItem onClick={() => handleDownload(report)}>
+                                <Download className="h-3.5 w-3.5 mr-2" /> Download file
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuItem onClick={() => handleCopyId(report.id)}>
+                              <Copy className="h-3.5 w-3.5 mr-2" /> Copy report ID
+                            </DropdownMenuItem>
+                            {isFailed && (
+                              <DropdownMenuItem onClick={() => retryMutation.mutate(report.id)}>
+                                <RotateCcw className="h-3.5 w-3.5 mr-2" /> Retry generation
+                              </DropdownMenuItem>
+                            )}
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => handleDelete(report.id)}
+                              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                            >
+                              <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete report
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+
+              {filteredReports.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={7} className="h-48 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-2">
+                      <FileText className="h-8 w-8 text-muted-foreground/40" />
+                      <p className="text-xs font-medium text-foreground">No reports found</p>
+                      <p className="text-[11px] text-muted-foreground max-w-sm">
+                        {scopeFilter === 'ALL' && formatFilter === 'ALL' && !searchQuery
+                          ? 'Generate your first executive report to begin auditing quality telemetry.'
+                          : 'No generated reports match your current filter parameters.'}
+                      </p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={openGenerateSheet}
+                        className="mt-2 gap-1.5 text-xs cursor-pointer"
+                      >
+                        <Plus className="h-3.5 w-3.5" /> New Report
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
       </QueryState>
 
-      {/* Generate Report Modal */}
-      <Modal isOpen={isGenerateModalOpen} onClose={() => setIsGenerateModalOpen(false)} title="Generate New Report">
-        <form onSubmit={handleGenerate} className="space-y-4">
-          {modalError && (
-            <div className="p-3 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900 text-rose-600 dark:text-rose-400 text-xs flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{modalError}</span>
-            </div>
-          )}
+      {/* Slide-Over Drawer (Sheet) for Report Generation */}
+      <Sheet open={isGenerateSheetOpen} onOpenChange={setIsGenerateSheetOpen}>
+        <SheetContent side="right" className="flex flex-col h-full w-full sm:max-w-lg">
+          <SheetHeader>
+            <SheetTitle>Generate Engineering Report</SheetTitle>
+            <SheetDescription>
+              Compile automated quality metrics, DQS benchmarks, and velocity telemetry.
+            </SheetDescription>
+          </SheetHeader>
 
-          <Input
-            label="Report Title"
-            value={newReportTitle}
-            onChange={(e) => setNewReportTitle(e.target.value)}
-            placeholder="e.g. Monthly Executive Quality Report"
-            required
-            autoFocus
-          />
+          <form onSubmit={handleGenerate} className="flex-1 flex flex-col justify-between overflow-y-auto pt-4 space-y-4">
+            <div className="space-y-4">
+              {sheetError && (
+                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{sheetError}</span>
+                </div>
+              )}
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">
-                Report Scope
-              </label>
-              <select
-                value={newReportScope}
-                onChange={handleScopeChange}
-                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
-              >
-                <option value="ORGANIZATION">Organization-Wide</option>
-                <option value="TEAM">Team Specific</option>
-                <option value="PROJECT">Project Specific</option>
-                <option value="DEVELOPER">Developer Specific</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">
-                Export Format
-              </label>
-              <select
-                value={newReportFormat}
-                onChange={(e) => setNewReportFormat(e.target.value as 'pdf' | 'csv')}
-                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
-              >
-                <option value="pdf">PDF Document (.pdf)</option>
-                <option value="csv">CSV Spreadsheet (.csv)</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Conditional Scope Selector */}
-          {newReportScope === 'TEAM' && (
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">
-                Select Team
-              </label>
-              <select
-                value={selectedTeamId}
-                onChange={(e) => setSelectedTeamId(e.target.value)}
+              {/* Title */}
+              <Input
+                label="Report Title"
+                value={newReportTitle}
+                onChange={(e) => setNewReportTitle(e.target.value)}
+                placeholder="e.g. Monthly Executive Quality Report"
                 required
-                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
+                autoFocus
+              />
+
+              {/* Scope & Format Custom Selects */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Report Scope</label>
+                  <Select
+                    value={newReportScope}
+                    onValueChange={(val) => handleScopeChange(val as ReportScope)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select scope" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ORGANIZATION">Organization-Wide</SelectItem>
+                      <SelectItem value="TEAM">Team Specific</SelectItem>
+                      <SelectItem value="PROJECT">Project Specific</SelectItem>
+                      <SelectItem value="DEVELOPER">Developer Specific</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Export Format</label>
+                  <Select
+                    value={newReportFormat}
+                    onValueChange={(val) => setNewReportFormat(val as 'pdf' | 'csv')}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pdf">PDF Document (.pdf)</SelectItem>
+                      <SelectItem value="csv">CSV Spreadsheet (.csv)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Conditional Entity Selectors */}
+              {newReportScope === 'TEAM' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Select Team</label>
+                  <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a team" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {teams.map((t: any) => (
+                        <SelectItem key={t.id} value={t.id}>
+                          {t.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {newReportScope === 'PROJECT' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Select Project</label>
+                  <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects.map((p: any) => (
+                        <SelectItem key={p.id} value={p.id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {newReportScope === 'DEVELOPER' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-foreground">Select Developer</label>
+                  <Select value={selectedDeveloperId} onValueChange={setSelectedDeveloperId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a developer" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {members.map((m: any) => (
+                        <SelectItem key={m.user.id} value={m.user.id}>
+                          {m.user.name || m.user.email} ({m.role})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+
+              {/* Date Ranges */}
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label="Start Date"
+                  type="date"
+                  value={dateRange.start}
+                  onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                  required
+                />
+                <Input
+                  label="End Date"
+                  type="date"
+                  value={dateRange.end}
+                  onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                  required
+                />
+              </div>
+
+              {/* Scope Detail Callout */}
+              <div className="rounded-lg border border-border/60 bg-muted/40 p-3.5 space-y-1 text-xs">
+                <div className="font-semibold text-foreground flex items-center gap-1.5">
+                  <FileText className="h-3.5 w-3.5 text-primary" /> Scope Parameters
+                </div>
+                <p className="text-muted-foreground leading-relaxed">
+                  {getScopeDescription(newReportScope)}
+                </p>
+              </div>
+            </div>
+
+            <SheetFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsGenerateSheetOpen(false)}
+                className="cursor-pointer"
               >
-                <option value="">-- Choose a Team --</option>
-                {teams.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {newReportScope === 'PROJECT' && (
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">
-                Select Project
-              </label>
-              <select
-                value={selectedProjectId}
-                onChange={(e) => setSelectedProjectId(e.target.value)}
-                required
-                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                isLoading={createMutation.isPending}
+                className="gap-2 font-medium cursor-pointer shadow-xs"
               >
-                <option value="">-- Choose a Project --</option>
-                {projects.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          {newReportScope === 'DEVELOPER' && (
-            <div>
-              <label className="block text-xs font-semibold text-foreground mb-1.5">
-                Select Developer
-              </label>
-              <select
-                value={selectedDeveloperId}
-                onChange={(e) => setSelectedDeveloperId(e.target.value)}
-                required
-                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
-              >
-                <option value="">-- Choose a Developer --</option>
-                {members.map((m) => (
-                  <option key={m.user.id} value={m.user.id}>
-                    {m.user.name || m.user.email} ({m.role})
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <Input
-              label="Start Date"
-              type="date"
-              value={dateRange.start}
-              onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-              required
-            />
-
-            <Input
-              label="End Date"
-              type="date"
-              value={dateRange.end}
-              onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-              required
-            />
-          </div>
-
-          <div className="bg-blue-50/80 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 p-3.5 rounded-lg flex items-start gap-3 mt-4 text-xs">
-            <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
-            <div>
-              <p className="font-semibold text-blue-950 dark:text-blue-200">Report Scope Contents</p>
-              <p className="text-blue-700 dark:text-blue-300 mt-0.5 leading-relaxed">{getScopeDescription(newReportScope)}</p>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border mt-5">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => setIsGenerateModalOpen(false)}
-              className="cursor-pointer"
-            >
-              Cancel
-            </Button>
-            <Button type="submit" isLoading={createMutation.isPending} className="gap-2 font-medium cursor-pointer shadow-xs">
-              <FileText className="h-4 w-4 shrink-0" /> Generate {newReportFormat.toUpperCase()}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+                <FileText className="h-4 w-4 shrink-0" />
+                Compile {newReportFormat.toUpperCase()}
+              </Button>
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }
