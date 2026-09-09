@@ -73,11 +73,17 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
 
   async onModuleInit() {
     await this.$connect();
+    try {
+      await this.pool.query('SELECT 1');
+    } catch {
+      // Ignore if database is still starting
+    }
 
-    // Initialize pool size gauge immediately to configured pool capacity
+    // Initialize pool metrics immediately
     if (this.metricsService) {
       const maxPoolSize = (this.pool as any).options?.max || 20;
       this.metricsService.dbConnectionPoolSize.set(maxPoolSize);
+      this.metricsService.dbConnectionPoolOpen.set(this.pool.totalCount);
       this.metricsService.dbConnectionPoolActive.set(0);
     }
 
@@ -103,6 +109,7 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       if (!this.metricsService) return;
       const maxPoolSize = (this.pool as any).options?.max || 20;
       this.metricsService.dbConnectionPoolSize.set(maxPoolSize);
+      this.metricsService.dbConnectionPoolOpen.set(this.pool.totalCount);
 
       // If pg has active checked out clients outside of tracked in-flight queries
       const pgActive = Math.max(0, this.pool.totalCount - this.pool.idleCount);
