@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useUIStore } from '@/stores/uiStore'
 import { Sun, Moon, ArrowRight, Menu, X, Sparkles } from 'lucide-react'
+import { LogoIcon } from '@/components/ui/Logo'
 
 export default function LandingHeader() {
   const { theme, setTheme } = useUIStore()
@@ -20,9 +21,7 @@ export default function LandingHeader() {
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Brand Logo */}
         <Link to="/" className="flex items-center gap-2.5 group">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-white font-bold text-lg shadow-md shadow-blue-500/20 group-hover:scale-105 transition-transform">
-            S
-          </div>
+          <LogoIcon size={36} variant="solid" className="group-hover:scale-105 transition-transform shadow-md shadow-blue-500/20" />
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
               <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">

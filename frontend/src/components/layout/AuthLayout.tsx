@@ -1,5 +1,6 @@
 import { Outlet, Link } from 'react-router-dom'
 import { ShieldCheck, BarChart3, GitPullRequest } from 'lucide-react'
+import { Logo } from '@/components/ui/Logo'
 
 const features = [
   {
@@ -29,11 +30,8 @@ export function AuthLayout() {
 
         {/* Logo Header */}
         <div className="relative z-10">
-          <Link to="/" className="inline-flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 font-bold text-xl text-white shadow-lg shadow-blue-500/20">
-              S
-            </div>
-            <span className="text-xl font-bold tracking-tight text-white">SQDIS</span>
+          <Link to="/" className="inline-flex items-center">
+            <Logo size="lg" variant="solid" />
           </Link>
         </div>
 

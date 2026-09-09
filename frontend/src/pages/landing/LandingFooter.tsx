@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { Github, Twitter, Linkedin } from 'lucide-react'
+import { Logo } from '@/components/ui/Logo'
 
 export default function LandingFooter() {
   return (
@@ -8,13 +9,8 @@ export default function LandingFooter() {
         <div className="grid grid-cols-2 md:grid-cols-5 gap-8 lg:gap-12">
           {/* Col 1: Brand */}
           <div className="col-span-2 space-y-4">
-            <Link to="/" className="flex items-center gap-2.5">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-base">
-                S
-              </div>
-              <span className="font-bold text-slate-900 dark:text-white text-lg tracking-tight">
-                SQDIS
-              </span>
+            <Link to="/" className="inline-flex items-center">
+              <Logo size="md" variant="solid" showSubtitle={false} />
             </Link>
             <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed">
               Software Quality Intelligence & Developer Insights System. Empowering engineering teams to measure quality, eliminate technical debt, and ship software with confidence.
