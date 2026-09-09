@@ -10,8 +10,19 @@ __pycache__/
 *.py[cod]
 *.pyo
 
-# ML Model files
+# ML Model files & weights
 data/models/*.pkl
+data/weights/*.pkl
+*.pkl
+
+# Large benchmark datasets (CSV files)
+data/**/*.csv
+data/*.csv
+data/defect_datasets/
+
+# Local cache & runtime telemetry
+data/ast_cache/
+data/telemetry/
 
 # Test coverage
 .coverage
