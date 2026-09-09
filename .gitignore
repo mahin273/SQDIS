@@ -8,6 +8,17 @@ backend/src/modules/dashboard/dashboard.service.spec.ts
 # Agent workspace
 .agents/
 
+# Large ML datasets and model weights
+ml-service/data/**/*.csv
+ml-service/data/*.csv
+ml-service/data/defect_datasets/
+ml-service/data/ast_cache/
+ml-service/data/telemetry/
+ml-service/data/models/*.pkl
+ml-service/data/weights/*.pkl
+*.pkl
+
+
 # Ignore all markdown files except README.md
 *.md
 !README.md
