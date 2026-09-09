@@ -3,7 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
-import { PrismaService } from './prisma/prisma.service.js';
+import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { OrganizationsModule } from './modules/organizations/organizations.module.js';
 import { AlertsModule } from './modules/alerts/alerts.module.js';
@@ -29,6 +29,7 @@ import { ReviewsModule } from './modules/reviews/reviews.module.js';
 import { ScoresModule } from './modules/scores/scores.module.js';
 import { SprintsModule } from './modules/sprints/sprints.module.js';
 import { TeamsModule } from './modules/teams/teams.module.js';
+import { DevelopersModule } from './modules/developers/developers.module.js';
 
 /**
  * Root Application Module
@@ -77,8 +78,10 @@ import { TeamsModule } from './modules/teams/teams.module.js';
     ScoresModule,
     SprintsModule,
     TeamsModule,
+    DevelopersModule,
+    PrismaModule,
   ],
   controllers: [AppController],
-  providers: [AppService, PrismaService],
+  providers: [AppService],
 })
 export class AppModule {}

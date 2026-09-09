@@ -594,7 +594,7 @@ export class ScoresService {
    * @returns The enqueued job
    */
   async enqueueScoreCalculation(data: ScoreJobData) {
-    const jobId = `${data.type}-${data.entityId}`;
+    const jobId = `${data.type}-${data.entityId}-${Date.now()}`;
 
     this.logger.debug(
       `Enqueuing ${data.type.toUpperCase()} score calculation for ${data.entityId}`,
@@ -602,6 +602,8 @@ export class ScoresService {
 
     return this.scoreQueue.add(data.type, data, {
       jobId,
+      removeOnComplete: true,
+      removeOnFail: 100,
     });
   }
 

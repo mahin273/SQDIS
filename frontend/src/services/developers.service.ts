@@ -6,7 +6,14 @@ export const developersService = {
    * Get all developers for the organization
    */
   async getAll(): Promise<Developer[]> {
-    // The developers endpoint is accessed via leaderboard or org members
+    try {
+      const response = await api.get<Developer[]>('/developers');
+      if (Array.isArray(response.data) && response.data.length > 0) {
+        return response.data;
+      }
+    } catch (e) {
+      // Fallback to leaderboard endpoint
+    }
     const response = await api.get<any>('/leaderboard', { params: { limit: 100 } });
     const raw = response.data;
     const entries = Array.isArray(raw)

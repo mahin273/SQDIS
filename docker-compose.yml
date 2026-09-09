@@ -208,19 +208,53 @@ services:
     networks:
       - sqdis-network
 
+  # cAdvisor Compatibility Bridge for modern Docker containerd snapshotter
+  cadvisor-compat:
+    image: docker:cli
+    container_name: sqdis-cadvisor-compat
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /var/lib/docker:/var/lib/docker
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        sync_mounts() {
+          for id in $$(docker ps -a -q --no-trunc); do
+            mkdir -p "/var/lib/docker/image/overlayfs/layerdb/mounts/$$id"
+            if [ ! -f "/var/lib/docker/image/overlayfs/layerdb/mounts/$$id/mount-id" ]; then
+              echo "dummy" > "/var/lib/docker/image/overlayfs/layerdb/mounts/$$id/mount-id"
+            fi
+          done
+        }
+        sync_mounts
+        docker events --filter 'event=start' | while read -r line; do
+          sync_mounts
+        done
+    networks:
+      - sqdis-network
+
   # cAdvisor for Container Metrics
   cadvisor:
-    image: gcr.io/cadvisor/cadvisor:v0.47.2
+    image: gcr.io/cadvisor/cadvisor:v0.49.1
     container_name: sqdis-cadvisor
     restart: always
     volumes:
       - /:/rootfs:ro
       - /var/run:/var/run:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
       - /sys:/sys:ro
+      - /sys/fs/cgroup:/sys/fs/cgroup:ro
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
+    privileged: true
+    command:
+      - '-disable_metrics=disk,diskIO'
     ports:
       - "8080:8080"
+    depends_on:
+      - cadvisor-compat
     networks:
       - sqdis-network
 

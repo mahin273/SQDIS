@@ -29,6 +29,7 @@ export class MetricsService implements OnModuleInit {
   public readonly dbQueriesTotal: Counter;
   public readonly dbQueryDuration: Histogram;
   public readonly dbConnectionPoolSize: Gauge;
+  public readonly dbConnectionPoolOpen: Gauge;
   public readonly dbConnectionPoolActive: Gauge;
 
   // Redis Metrics
@@ -102,6 +103,12 @@ export class MetricsService implements OnModuleInit {
     this.dbConnectionPoolSize = new Gauge({
       name: 'sqdis_db_connection_pool_size',
       help: 'Database connection pool size',
+      registers: [this.registry],
+    });
+
+    this.dbConnectionPoolOpen = new Gauge({
+      name: 'sqdis_db_connection_pool_open',
+      help: 'Number of open TCP connections allocated in the pool',
       registers: [this.registry],
     });
 

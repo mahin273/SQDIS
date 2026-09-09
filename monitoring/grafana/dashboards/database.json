@@ -23,7 +23,7 @@
   "panels": [
     {
       "id": 1,
-      "title": "Active DB Connections",
+      "title": "In-Flight DB Queries",
       "type": "gauge",
       "datasource": {
         "type": "prometheus",
@@ -31,7 +31,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
+        "w": 6,
         "x": 0,
         "y": 0
       },
@@ -44,7 +44,7 @@
           "editorMode": "code",
           "expr": "sqdis_db_connection_pool_active",
           "instant": true,
-          "legendFormat": "Active Connections",
+          "legendFormat": "In-Flight",
           "range": false,
           "refId": "A"
         }
@@ -55,6 +55,7 @@
             "mode": "thresholds"
           },
           "mappings": [],
+          "max": 20,
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -64,11 +65,11 @@
               },
               {
                 "color": "orange",
-                "value": 15
+                "value": 12
               },
               {
                 "color": "red",
-                "value": 25
+                "value": 18
               }
             ]
           }
@@ -90,7 +91,79 @@
     },
     {
       "id": 2,
-      "title": "DB Connection Pool Size",
+      "title": "Open Pool Connections",
+      "type": "gauge",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "Prometheus"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "Prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sqdis_db_connection_pool_open",
+          "instant": true,
+          "legendFormat": "Connected Sockets",
+          "range": false,
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "mappings": [],
+          "max": 20,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              },
+              {
+                "color": "green",
+                "value": 2
+              },
+              {
+                "color": "orange",
+                "value": 16
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true,
+        "text": {}
+      }
+    },
+    {
+      "id": 7,
+      "title": "Pool Max Capacity",
       "type": "stat",
       "datasource": {
         "type": "prometheus",
@@ -98,8 +171,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 8,
+        "w": 6,
+        "x": 12,
         "y": 0
       },
       "targets": [
@@ -149,8 +222,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 8,
-        "x": 16,
+        "w": 6,
+        "x": 18,
         "y": 0
       },
       "targets": [

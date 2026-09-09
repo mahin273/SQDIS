@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MetricsService } from '../../metrics';
 
 /**
  * Classification result from ML service
@@ -55,7 +56,10 @@ export class MlClientService {
   private readonly logger = new Logger(MlClientService.name);
   private readonly mlServiceUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() @Inject(MetricsService) private readonly metricsService?: MetricsService,
+  ) {
     this.mlServiceUrl = this.configService.get<string>('ML_SERVICE_URL', 'http://localhost:8000');
   }
 
@@ -75,6 +79,7 @@ export class MlClientService {
     additions?: number,
     deletions?: number,
   ): Promise<ClassificationResult | null> {
+    const startTime = performance.now();
     try {
       const payload: ClassifyRequest = {
         commit_message: commitMessage,
@@ -98,13 +103,19 @@ export class MlClientService {
 
       if (!response.ok) {
         this.logger.warn(`ML service classification failed with status ${response.status}`);
+        this.metricsService?.mlPredictionErrors.inc({ model_type: 'classification', error_type: `http_${response.status}` });
         return null;
       }
 
       const result = await response.json();
+      const duration = (performance.now() - startTime) / 1000;
+      this.metricsService?.mlPredictionsTotal.inc({ model_type: 'classification', model_version: 'v1' });
+      this.metricsService?.mlPredictionDuration.observe({ model_type: 'classification' }, duration);
+
       return result as ClassificationResult;
     } catch (error) {
       this.logger.warn(`Failed to classify commit: ${error}`);
+      this.metricsService?.mlPredictionErrors.inc({ model_type: 'classification', error_type: 'network_error' });
       // Return null to allow commit processing to continue without classification
       return null;
     }
@@ -191,6 +202,7 @@ export class MlClientService {
     timeOfDay: number,
     churnRatio: number,
   ): Promise<AnomalyDetectionResult | null> {
+    const startTime = performance.now();
     try {
       const payload: AnomalyDetectRequest = {
         commit_id: commitId,
@@ -212,13 +224,20 @@ export class MlClientService {
 
       if (!response.ok) {
         this.logger.warn(`ML service anomaly detection failed with status ${response.status}`);
+        this.metricsService?.mlPredictionErrors.inc({ model_type: 'anomaly', error_type: `http_${response.status}` });
         return null;
       }
 
       const result = await response.json();
+      const duration = (performance.now() - startTime) / 1000;
+      const version = result.model_version || 'v1';
+      this.metricsService?.mlPredictionsTotal.inc({ model_type: 'anomaly', model_version: version });
+      this.metricsService?.mlPredictionDuration.observe({ model_type: 'anomaly' }, duration);
+
       return result as AnomalyDetectionResult;
     } catch (error) {
       this.logger.warn(`Failed to detect anomaly: ${error}`);
+      this.metricsService?.mlPredictionErrors.inc({ model_type: 'anomaly', error_type: 'network_error' });
       // Return null to allow commit processing to continue without anomaly detection
       return null;
     }

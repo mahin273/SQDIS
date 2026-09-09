@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { MetricsService } from '../../metrics';
 
 /**
  * DQS features for ML prediction
@@ -101,7 +102,10 @@ export class ScoresMlClientService {
   private readonly logger = new Logger(ScoresMlClientService.name);
   private readonly mlServiceUrl: string;
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    @Optional() @Inject(MetricsService) private readonly metricsService?: MetricsService,
+  ) {
     this.mlServiceUrl = this.configService.get<string>('ML_SERVICE_URL', 'http://localhost:8000');
   }
 
@@ -119,6 +123,7 @@ export class ScoresMlClientService {
     developerId: string,
     features: DQSFeatures,
   ): Promise<DQSPredictionResult | null> {
+    const startTime = performance.now();
     try {
       const payload: DQSPredictRequest = {
         developer_id: developerId,
@@ -144,10 +149,22 @@ export class ScoresMlClientService {
         this.logger.warn(
           `ML service DQS prediction failed with status ${response.status}. Falling back to local heuristic.`,
         );
-        return this.predictDQSHeuristic(features, developerId);
+        this.metricsService?.mlPredictionErrors.inc({ model_type: 'dqs', error_type: `http_${response.status}` });
+        const fallback = this.predictDQSHeuristic(features, developerId);
+        const duration = (performance.now() - startTime) / 1000;
+        this.metricsService?.mlPredictionsTotal.inc({ model_type: 'dqs', model_version: 'heuristic' });
+        this.metricsService?.mlPredictionDuration.observe({ model_type: 'dqs' }, duration);
+        this.metricsService?.dqsScoreDistribution.observe(fallback.score);
+        return fallback;
       }
 
       const result = await response.json();
+      const duration = (performance.now() - startTime) / 1000;
+      const version = result.model_version || 'v1';
+
+      this.metricsService?.mlPredictionsTotal.inc({ model_type: 'dqs', model_version: version });
+      this.metricsService?.mlPredictionDuration.observe({ model_type: 'dqs' }, duration);
+      this.metricsService?.dqsScoreDistribution.observe(result.score);
 
       this.logger.debug(
         `DQS prediction for ${developerId}: score=${result.score}, model=${result.model_version}`,
@@ -162,7 +179,13 @@ export class ScoresMlClientService {
       this.logger.warn(
         `Failed to predict DQS: ${error?.message || error}. Falling back to local heuristic.`,
       );
-      return this.predictDQSHeuristic(features, developerId);
+      this.metricsService?.mlPredictionErrors.inc({ model_type: 'dqs', error_type: 'network_error' });
+      const fallback = this.predictDQSHeuristic(features, developerId);
+      const duration = (performance.now() - startTime) / 1000;
+      this.metricsService?.mlPredictionsTotal.inc({ model_type: 'dqs', model_version: 'heuristic' });
+      this.metricsService?.mlPredictionDuration.observe({ model_type: 'dqs' }, duration);
+      this.metricsService?.dqsScoreDistribution.observe(fallback.score);
+      return fallback;
     }
   }
 
@@ -251,6 +274,7 @@ export class ScoresMlClientService {
     features: SQSFeatures,
     modules?: ModuleMetrics[],
   ): Promise<SQSPredictionResult | null> {
+    const startTime = performance.now();
     try {
       const payload: SQSPredictRequest = {
         project_id: projectId,
@@ -286,10 +310,22 @@ export class ScoresMlClientService {
         this.logger.warn(
           `ML service SQS prediction failed with status ${response.status}. Falling back to local heuristic.`,
         );
-        return this.predictSQSHeuristic(features, projectId, modules);
+        this.metricsService?.mlPredictionErrors.inc({ model_type: 'sqs', error_type: `http_${response.status}` });
+        const fallback = this.predictSQSHeuristic(features, projectId, modules);
+        const duration = (performance.now() - startTime) / 1000;
+        this.metricsService?.mlPredictionsTotal.inc({ model_type: 'sqs', model_version: 'heuristic' });
+        this.metricsService?.mlPredictionDuration.observe({ model_type: 'sqs' }, duration);
+        this.metricsService?.sqsScoreDistribution.observe(fallback.score);
+        return fallback;
       }
 
       const result = await response.json();
+      const duration = (performance.now() - startTime) / 1000;
+      const version = result.model_version || 'v1';
+
+      this.metricsService?.mlPredictionsTotal.inc({ model_type: 'sqs', model_version: version });
+      this.metricsService?.mlPredictionDuration.observe({ model_type: 'sqs' }, duration);
+      this.metricsService?.sqsScoreDistribution.observe(result.score);
 
       this.logger.debug(
         `SQS prediction for ${projectId}: score=${result.score}, model=${result.model_version}`,
@@ -305,7 +341,13 @@ export class ScoresMlClientService {
       this.logger.warn(
         `Failed to predict SQS: ${error?.message || error}. Falling back to local heuristic.`,
       );
-      return this.predictSQSHeuristic(features, projectId, modules);
+      this.metricsService?.mlPredictionErrors.inc({ model_type: 'sqs', error_type: 'network_error' });
+      const fallback = this.predictSQSHeuristic(features, projectId, modules);
+      const duration = (performance.now() - startTime) / 1000;
+      this.metricsService?.mlPredictionsTotal.inc({ model_type: 'sqs', model_version: 'heuristic' });
+      this.metricsService?.mlPredictionDuration.observe({ model_type: 'sqs' }, duration);
+      this.metricsService?.sqsScoreDistribution.observe(fallback.score);
+      return fallback;
     }
   }
 

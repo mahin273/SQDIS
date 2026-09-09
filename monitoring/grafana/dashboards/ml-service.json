@@ -161,7 +161,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "sum(rate(sqdis_ml_prediction_errors_total[5m]))",
+          "expr": "sum(rate(sqdis_ml_prediction_errors_total[5m])) or vector(0)",
           "legendFormat": "Errors/sec",
           "refId": "A"
         }
@@ -172,6 +172,7 @@
             "mode": "thresholds"
           },
           "mappings": [],
+          "noValue": "0",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -445,6 +446,7 @@
             "lineInterpolation": "smooth",
             "lineWidth": 2
           },
+          "noValue": "0",
           "unit": "reqps"
         },
         "overrides": []
