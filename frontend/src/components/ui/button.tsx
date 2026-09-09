@@ -67,7 +67,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     if (asChild && React.isValidElement(children)) {
       return React.cloneElement(children as React.ReactElement<{ className?: string }>, {
         className: cn(
-          'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer',
+          'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer whitespace-nowrap',
           variantClasses[variant],
           sizeClasses[size],
           className
@@ -80,7 +80,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         ref={ref}
         disabled={disabled || isLoading}
         className={cn(
-          'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer',
+          'inline-flex items-center justify-center font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 select-none cursor-pointer whitespace-nowrap',
           variantClasses[variant],
           sizeClasses[size],
           className
@@ -88,12 +88,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {isLoading ? (
-          <Spinner size={size === 'sm' ? 'sm' : 'md'} className="text-current" />
+          <Spinner size={size === 'sm' ? 'sm' : 'md'} className="text-current shrink-0" />
         ) : (
-          leftIcon
+          leftIcon && <span className="inline-flex shrink-0 items-center">{leftIcon}</span>
         )}
-        {children && <span>{children}</span>}
-        {!isLoading && rightIcon}
+        {children}
+        {!isLoading && rightIcon && <span className="inline-flex shrink-0 items-center">{rightIcon}</span>}
       </button>
     )
   }

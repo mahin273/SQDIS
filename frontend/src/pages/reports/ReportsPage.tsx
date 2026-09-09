@@ -318,23 +318,23 @@ export function ReportsPage() {
         description="Generate, view, and export executive quality reports, DQS analytics, and velocity metrics."
         action={
           <Button onClick={openGenerateModal} className="gap-2 shadow-sm cursor-pointer">
-            <Plus className="h-4 w-4" /> Generate Report
+            <Plus className="h-4 w-4 shrink-0" /> Generate Report
           </Button>
         }
       />
 
       {/* Info Banner */}
-      <Card className="bg-gradient-to-r from-slate-50 to-blue-50 dark:from-slate-900 dark:to-blue-950 border-blue-100 dark:border-blue-900 shadow-sm">
-        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="bg-blue-100 dark:bg-blue-900/60 p-2.5 rounded-xl">
-              <Calendar className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+      <Card className="bg-gradient-to-r from-slate-50 via-blue-50/50 to-indigo-50/40 dark:from-slate-900 dark:via-blue-950/40 dark:to-indigo-950/30 border-blue-100 dark:border-blue-900/60 shadow-xs">
+        <CardContent className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/60 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+              <Calendar className="h-5 w-5" />
             </div>
             <div>
               <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm sm:text-base">
                 Asynchronous Background Report Generator Active
               </h3>
-              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-muted-foreground mt-0.5">
                 PDF and CSV compilation jobs run worker-side with automated progress tracking and instant download.
               </p>
             </div>
@@ -342,7 +342,7 @@ export function ReportsPage() {
           <Button
             variant="outline"
             onClick={openGenerateModal}
-            className="shrink-0 bg-white dark:bg-slate-800 text-xs sm:text-sm cursor-pointer"
+            className="shrink-0 text-xs sm:text-sm shadow-xs font-medium cursor-pointer"
           >
             Create New Export
           </Button>
@@ -350,28 +350,29 @@ export function ReportsPage() {
       </Card>
 
       {/* Controls Bar: Scope Tabs, Format Toggle, and Search */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-4">
-        <Tabs value={scopeFilter} onValueChange={setScopeFilter} className="w-full md:w-auto">
-          <TabsList className="w-full md:w-auto flex overflow-x-auto justify-start">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 border-b border-border pb-4">
+        <Tabs value={scopeFilter} onValueChange={setScopeFilter} className="w-full lg:w-auto">
+          <TabsList className="w-full sm:w-auto flex overflow-x-auto justify-start h-10 p-1">
             {scopeTabs.map((tab) => (
-              <TabsTrigger key={tab.value} value={tab.value} className="min-w-fit cursor-pointer text-xs">
+              <TabsTrigger key={tab.value} value={tab.value} className="min-w-fit px-3.5 py-1.5 text-xs font-medium">
                 {tab.label}
               </TabsTrigger>
             ))}
           </TabsList>
         </Tabs>
 
-        <div className="flex items-center gap-3 flex-wrap justify-between md:justify-end">
+        <div className="flex items-center gap-3 flex-wrap justify-between lg:justify-end">
           {/* Format pills */}
-          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg text-xs">
+          <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1 rounded-lg border border-slate-200/60 dark:border-slate-700/60 h-10">
             {(['ALL', 'PDF', 'CSV'] as const).map((fmt) => (
               <button
                 key={fmt}
+                type="button"
                 onClick={() => setFormatFilter(fmt)}
-                className={`px-2.5 py-1 rounded-md font-medium transition-colors cursor-pointer ${
+                className={`h-8 px-3 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
                   formatFilter === fmt
-                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-200'
+                    ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-xs font-semibold'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {fmt}
@@ -381,19 +382,19 @@ export function ReportsPage() {
 
           {/* Search input */}
           <div className="relative w-48 sm:w-60">
-            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search reports..."
-              className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              className="w-full h-10 pl-9 pr-3 bg-background border border-input rounded-lg text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors"
             />
           </div>
 
-          <div className="text-xs text-slate-500 font-medium">
+          <Badge variant="secondary" className="h-10 px-3 text-xs font-normal shrink-0">
             Showing {filteredReports.length} {filteredReports.length === 1 ? 'report' : 'reports'}
-          </div>
+          </Badge>
         </div>
       </div>
 
@@ -409,33 +410,31 @@ export function ReportsPage() {
             return (
               <Card
                 key={report.id}
-                className="flex h-full flex-col justify-between group hover:shadow-md transition-shadow border-slate-200 dark:border-slate-800"
+                className="flex h-full flex-col justify-between group hover:shadow-md transition-all border-border"
               >
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3">
-                      <div className="mt-1 bg-slate-100 dark:bg-slate-800 p-2.5 rounded-xl shrink-0">
-                        {getScopeIcon(scope)}
-                      </div>
-                      <div className="space-y-1">
-                        <CardTitle
-                          className="text-base font-semibold line-clamp-1 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors"
-                          title={report.title}
-                        >
-                          {report.title}
-                        </CardTitle>
-                        <CardDescription className="line-clamp-2 text-xs text-slate-500">
-                          {report.description || getScopeDescription(scope as ReportScope)}
-                        </CardDescription>
-                      </div>
+                <CardHeader className="p-5 pb-3">
+                  <div className="flex items-start gap-3.5">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center shrink-0">
+                      {getScopeIcon(scope)}
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <CardTitle
+                        className="text-base font-semibold truncate group-hover:text-primary transition-colors"
+                        title={report.title}
+                      >
+                        {report.title}
+                      </CardTitle>
+                      <CardDescription className="line-clamp-2 text-xs text-muted-foreground leading-relaxed">
+                        {report.description || getScopeDescription(scope as ReportScope)}
+                      </CardDescription>
                     </div>
                   </div>
                 </CardHeader>
 
-                <CardContent className="py-0 flex-1 space-y-3">
-                  <div className="bg-slate-50 dark:bg-slate-900/60 rounded-lg p-3 space-y-2 text-xs border border-slate-100 dark:border-slate-800/80">
+                <CardContent className="px-5 py-0 flex-1 space-y-3">
+                  <div className="bg-slate-50/80 dark:bg-slate-900/60 rounded-xl p-3.5 space-y-2.5 text-xs border border-slate-100 dark:border-slate-800/80">
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-500">Format & Scope</span>
+                      <span className="text-muted-foreground">Format & Scope</span>
                       <div className="flex items-center gap-1.5">
                         <Badge
                           variant="outline"
@@ -454,10 +453,10 @@ export function ReportsPage() {
                     </div>
 
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-500 flex items-center gap-1">
-                        <Calendar className="h-3 w-3" /> Period
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Calendar className="h-3.5 w-3.5 shrink-0" /> Period
                       </span>
-                      <span className="font-medium text-slate-700 dark:text-slate-300">
+                      <span className="font-medium text-foreground">
                         {report.startDate
                           ? `${new Date(report.startDate).toLocaleDateString(undefined, {
                               month: 'short',
@@ -472,40 +471,40 @@ export function ReportsPage() {
                     </div>
 
                     <div className="flex justify-between items-center">
-                      <span className="text-slate-500 flex items-center gap-1">
-                        <Clock className="h-3 w-3" /> Status
+                      <span className="text-muted-foreground flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5 shrink-0" /> Status
                       </span>
                       <div>
                         {isCompleted && (
-                          <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400 font-medium text-xs">
-                            <CheckCircle className="h-3.5 w-3.5" /> Ready ({formatBytes(report.fileSize)})
+                          <span className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium text-xs">
+                            <CheckCircle className="h-3.5 w-3.5 shrink-0" /> Ready ({formatBytes(report.fileSize)})
                           </span>
                         )}
                         {isProcessing && (
-                          <span className="flex items-center gap-1 text-blue-600 dark:text-blue-400 font-medium text-xs animate-pulse">
-                            <RefreshCw className="h-3.5 w-3.5 animate-spin" /> Generating...
+                          <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium text-xs animate-pulse">
+                            <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" /> Generating...
                           </span>
                         )}
                         {isFailed && (
-                          <span className="flex items-center gap-1 text-rose-600 dark:text-rose-400 font-medium text-xs">
-                            <AlertTriangle className="h-3.5 w-3.5" /> Generation Failed
+                          <span className="flex items-center gap-1.5 text-rose-600 dark:text-rose-400 font-medium text-xs">
+                            <AlertTriangle className="h-3.5 w-3.5 shrink-0" /> Generation Failed
                           </span>
                         )}
                       </div>
                     </div>
 
                     {isFailed && report.errorMessage && (
-                      <div className="p-2 rounded bg-rose-50 dark:bg-rose-950/40 text-[11px] text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900">
+                      <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 text-[11px] text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900 leading-relaxed">
                         {report.errorMessage}
                       </div>
                     )}
                   </div>
                 </CardContent>
 
-                <CardFooter className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-4 flex items-center justify-between">
-                  <div className="text-xs text-slate-500">
-                    <span className="block text-[10px] uppercase tracking-wider text-slate-400">Created</span>
-                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                <CardFooter className="p-5 pt-3 pb-4 border-t border-border mt-3 flex items-center justify-between">
+                  <div className="text-xs flex flex-col">
+                    <span className="text-[10px] uppercase font-semibold tracking-wider text-muted-foreground">Created</span>
+                    <span className="font-medium text-foreground text-xs mt-0.5">
                       {new Date(report.createdAt).toLocaleDateString(undefined, {
                         year: 'numeric',
                         month: 'short',
@@ -518,7 +517,7 @@ export function ReportsPage() {
                     <Button
                       size="icon"
                       variant="ghost"
-                      className="h-8 w-8 text-slate-400 hover:text-rose-600 cursor-pointer"
+                      className="h-8 w-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors cursor-pointer"
                       onClick={() => handleDelete(report.id)}
                       title="Delete Report"
                     >
@@ -531,21 +530,21 @@ export function ReportsPage() {
                         variant="outline"
                         onClick={() => handleRetry(report.id)}
                         disabled={retryMutation.isPending}
-                        className="gap-1.5 text-xs text-amber-600 hover:text-amber-700 cursor-pointer"
+                        className="gap-1.5 text-xs text-amber-600 hover:text-amber-700 border-amber-200 dark:border-amber-900/60 cursor-pointer"
                       >
-                        <RotateCcw className="h-3.5 w-3.5" /> Retry
+                        <RotateCcw className="h-3.5 w-3.5 shrink-0" /> Retry
                       </Button>
                     ) : (
                       <Button
                         size="sm"
                         onClick={() => handleDownload(report)}
                         disabled={!isCompleted || downloadingId === report.id}
-                        className="gap-1.5 text-xs cursor-pointer"
+                        className="gap-1.5 text-xs font-medium shadow-xs cursor-pointer"
                       >
                         {downloadingId === report.id ? (
-                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <RefreshCw className="h-3.5 w-3.5 shrink-0 animate-spin" />
                         ) : (
-                          <Download className="h-3.5 w-3.5" />
+                          <Download className="h-3.5 w-3.5 shrink-0" />
                         )}
                         {downloadingId === report.id
                           ? 'Downloading...'
@@ -600,13 +599,13 @@ export function ReportsPage() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Report Scope
               </label>
               <select
                 value={newReportScope}
                 onChange={handleScopeChange}
-                className="w-full h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
               >
                 <option value="ORGANIZATION">Organization-Wide</option>
                 <option value="TEAM">Team Specific</option>
@@ -616,16 +615,16 @@ export function ReportsPage() {
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Export Format
               </label>
               <select
                 value={newReportFormat}
                 onChange={(e) => setNewReportFormat(e.target.value as 'pdf' | 'csv')}
-                className="w-full h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
               >
-                <option value="pdf">PDF Document (Formatted with charts)</option>
-                <option value="csv">CSV Spreadsheet (Raw metric data)</option>
+                <option value="pdf">PDF Document (.pdf)</option>
+                <option value="csv">CSV Spreadsheet (.csv)</option>
               </select>
             </div>
           </div>
@@ -633,14 +632,14 @@ export function ReportsPage() {
           {/* Conditional Scope Selector */}
           {newReportScope === 'TEAM' && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Select Team
               </label>
               <select
                 value={selectedTeamId}
                 onChange={(e) => setSelectedTeamId(e.target.value)}
                 required
-                className="w-full h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
               >
                 <option value="">-- Choose a Team --</option>
                 {teams.map((t) => (
@@ -654,14 +653,14 @@ export function ReportsPage() {
 
           {newReportScope === 'PROJECT' && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Select Project
               </label>
               <select
                 value={selectedProjectId}
                 onChange={(e) => setSelectedProjectId(e.target.value)}
                 required
-                className="w-full h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
               >
                 <option value="">-- Choose a Project --</option>
                 {projects.map((p) => (
@@ -675,14 +674,14 @@ export function ReportsPage() {
 
           {newReportScope === 'DEVELOPER' && (
             <div>
-              <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+              <label className="block text-xs font-semibold text-foreground mb-1.5">
                 Select Developer
               </label>
               <select
                 value={selectedDeveloperId}
                 onChange={(e) => setSelectedDeveloperId(e.target.value)}
                 required
-                className="w-full h-10 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
+                className="w-full h-10 rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-colors cursor-pointer"
               >
                 <option value="">-- Choose a Developer --</option>
                 {members.map((m) => (
@@ -694,7 +693,7 @@ export function ReportsPage() {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <Input
               label="Start Date"
               type="date"
@@ -712,15 +711,15 @@ export function ReportsPage() {
             />
           </div>
 
-          <div className="bg-blue-50 dark:bg-blue-950/30 p-3 rounded-lg flex items-start gap-3 mt-4 text-xs">
-            <FileText className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+          <div className="bg-blue-50/80 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 p-3.5 rounded-lg flex items-start gap-3 mt-4 text-xs">
+            <FileText className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
             <div>
-              <p className="font-semibold text-blue-900 dark:text-blue-200">Report Scope Contents</p>
-              <p className="text-blue-700 dark:text-blue-300 mt-0.5">{getScopeDescription(newReportScope)}</p>
+              <p className="font-semibold text-blue-950 dark:text-blue-200">Report Scope Contents</p>
+              <p className="text-blue-700 dark:text-blue-300 mt-0.5 leading-relaxed">{getScopeDescription(newReportScope)}</p>
             </div>
           </div>
 
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-end gap-3 pt-4 border-t border-border mt-5">
             <Button
               type="button"
               variant="outline"
@@ -729,8 +728,8 @@ export function ReportsPage() {
             >
               Cancel
             </Button>
-            <Button type="submit" isLoading={createMutation.isPending} className="gap-2 cursor-pointer">
-              <FileText className="h-4 w-4" /> Generate {newReportFormat.toUpperCase()}
+            <Button type="submit" isLoading={createMutation.isPending} className="gap-2 font-medium cursor-pointer shadow-xs">
+              <FileText className="h-4 w-4 shrink-0" /> Generate {newReportFormat.toUpperCase()}
             </Button>
           </div>
         </form>
