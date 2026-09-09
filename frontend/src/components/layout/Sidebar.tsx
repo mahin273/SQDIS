@@ -34,6 +34,7 @@ import {
   Rocket,
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
+import { Logo, LogoIcon } from '@/components/ui/Logo'
 
 const MAIN_NAV_LABELS = [
   'Dashboard',
@@ -127,25 +128,12 @@ export function Sidebar() {
       )}
     >
       {/* Brand Header */}
-      <div className="flex h-16 items-center justify-between border-b border-slate-200 dark:border-slate-800 px-4 shrink-0">
-        {!sidebarCollapsed && (
-          <div className="flex items-center gap-2.5 overflow-hidden">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-lg shadow-sm">
-              S
-            </div>
-            <div className="flex flex-col overflow-hidden">
-              <span className="font-bold text-slate-900 dark:text-slate-100 text-base tracking-tight truncate">
-                SQDIS
-              </span>
-              <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 uppercase tracking-wider truncate">
-                Quality Intelligence
-              </span>
-            </div>
-          </div>
-        )}
-        {sidebarCollapsed && (
-          <div className="mx-auto flex h-9 w-9 items-center justify-center rounded-lg bg-blue-600 text-white font-bold text-lg shadow-sm">
-            S
+      <div className="flex h-16 items-center justify-between border-b border-border px-4 shrink-0">
+        {!sidebarCollapsed ? (
+          <Logo size="md" />
+        ) : (
+          <div className="mx-auto flex items-center justify-center">
+            <LogoIcon size={32} />
           </div>
         )}
 
