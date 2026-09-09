@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils'
 
 export interface LogoIconProps extends React.SVGProps<SVGSVGElement> {
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | number
-  variant?: 'obsidian' | 'solid' | 'glyph'
+  variant?: 'neural' | 'solid' | 'glyph'
   className?: string
 }
 
@@ -17,7 +17,7 @@ const sizeMap = {
 
 export function LogoIcon({
   size = 'md',
-  variant = 'obsidian',
+  variant = 'neural',
   className,
   ...props
 }: LogoIconProps) {
@@ -27,88 +27,67 @@ export function LogoIcon({
     <svg
       width={dimension}
       height={dimension}
-      viewBox="0 0 48 48"
+      viewBox="0 0 64 64"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      className={cn('shrink-0 select-none', className)}
+      className={cn('shrink-0 select-none transition-transform', className)}
       {...props}
     >
       <defs>
-        <linearGradient id="sqdis-obsidian-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#18181b" />
-          <stop offset="100%" stopColor="#09090b" />
-        </linearGradient>
-        <linearGradient id="sqdis-obsidian-border" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.3" />
-        </linearGradient>
-        <linearGradient id="sqdis-solid-bg" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#4f46e5" />
-          <stop offset="50%" stopColor="#3b82f6" />
+        <linearGradient id="sqdis-n2-rim" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#ec4899" />
+          <stop offset="50%" stopColor="#8b5cf6" />
           <stop offset="100%" stopColor="#06b6d4" />
         </linearGradient>
-        <linearGradient id="sqdis-glyph-stroke" x1="0%" y1="0%" x2="100%" y2="100%">
-          <stop offset="0%" stopColor="#818cf8" />
-          <stop offset="45%" stopColor="#6366f1" />
-          <stop offset="100%" stopColor="#06b6d4" />
-        </linearGradient>
+        <radialGradient id="sqdis-n2-aura" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#000000" stopOpacity="0" />
+        </radialGradient>
       </defs>
 
-      {variant === 'obsidian' && (
-        <rect
-          x="2.5"
-          y="2.5"
-          width="43"
-          height="43"
-          rx="12"
-          fill="url(#sqdis-obsidian-bg)"
-          stroke="url(#sqdis-obsidian-border)"
-          strokeWidth="1.5"
-        />
-      )}
+      {/* Ambient Neural Glow */}
+      <circle cx="32" cy="31" r="28" fill="url(#sqdis-n2-aura)" />
 
-      {variant === 'solid' && (
-        <rect
-          x="2.5"
-          y="2.5"
-          width="43"
-          height="43"
-          rx="12"
-          fill="url(#sqdis-solid-bg)"
-        />
-      )}
-
-      {/* S & Q Telemetry Ribbon */}
-      <path
-        d="M 31 14.5 C 31 12 28.5 10.5 24 10.5 C 18 10.5 14.5 13.5 14.5 17.5 C 14.5 22 18.5 23.5 24 24.5 C 29.5 25.5 33.5 27 33.5 31.5 C 33.5 36 29.5 37.5 24 37.5 C 18 37.5 14.5 34.5 14.5 31"
-        stroke={variant === 'solid' ? '#ffffff' : 'url(#sqdis-glyph-stroke)'}
-        strokeWidth="4"
-        strokeLinecap="round"
-        strokeLinejoin="round"
+      {/* Outer Hexagonal Data Boundary */}
+      <polygon
+        points="32,8 52,19.5 52,42.5 32,54 12,42.5 12,19.5"
+        stroke="url(#sqdis-n2-rim)"
+        strokeWidth="2"
+        strokeDasharray="4 3"
+        opacity="0.75"
       />
 
-      {/* Q Diagnostic Vector */}
-      <path
-        d="M 26.5 27 L 35.5 36"
-        stroke={variant === 'solid' ? '#a5f3fc' : '#06b6d4'}
-        strokeWidth="4"
-        strokeLinecap="round"
-      />
+      {/* Internal Weighted Tensor Vectors */}
+      <line x1="32" y1="8" x2="32" y2="31" stroke="#a855f7" strokeWidth="2" />
+      <line x1="52" y1="19.5" x2="32" y2="31" stroke="#6366f1" strokeWidth="2" />
+      <line x1="52" y1="42.5" x2="32" y2="31" stroke="#38bdf8" strokeWidth="2" />
+      <line x1="32" y1="54" x2="32" y2="31" stroke="#06b6d4" strokeWidth="2" />
+      <line x1="12" y1="42.5" x2="32" y2="31" stroke="#8b5cf6" strokeWidth="2" />
+      <line x1="12" y1="19.5" x2="32" y2="31" stroke="#ec4899" strokeWidth="2" />
 
-      {/* Quality Core Telemetry Node */}
-      <circle
-        cx="24"
-        cy="24"
-        r="2"
-        fill={variant === 'solid' ? '#a5f3fc' : '#38bdf8'}
-      />
+      {/* Inner Dynamic Diamond Facets (AST Logic Cells) */}
+      <polygon points="32,16 44,24 32,32 20,24" fill="#6366f1" opacity="0.65" />
+      <polygon points="20,24 32,32 32,46 20,38" fill="#4338ca" opacity="0.85" />
+      <polygon points="44,24 32,32 32,46 44,38" fill="#06b6d4" opacity="0.75" />
+
+      {/* Peripheral Input Synapses */}
+      <circle cx="32" cy="8" r="3.5" fill="#ec4899" />
+      <circle cx="52" cy="19.5" r="3" fill="#a855f7" />
+      <circle cx="52" cy="42.5" r="3" fill="#38bdf8" />
+      <circle cx="32" cy="54" r="3.5" fill="#06b6d4" />
+      <circle cx="12" cy="42.5" r="3" fill="#8b5cf6" />
+      <circle cx="12" cy="19.5" r="3" fill="#ec4899" />
+
+      {/* Central Quality Focal Core (The Verified Star) */}
+      <circle cx="32" cy="31" r="5" fill="#ffffff" />
+      <circle cx="32" cy="31" r="2.5" fill="#38bdf8" />
     </svg>
   )
 }
 
 export interface LogoProps {
   size?: 'sm' | 'md' | 'lg'
-  variant?: 'obsidian' | 'solid' | 'glyph'
+  variant?: 'neural' | 'solid' | 'glyph'
   showSubtitle?: boolean
   inverted?: boolean
   className?: string
@@ -116,20 +95,20 @@ export interface LogoProps {
 
 export function Logo({
   size = 'md',
-  variant = 'obsidian',
+  variant = 'neural',
   showSubtitle = true,
   inverted = false,
   className,
 }: LogoProps) {
-  const iconSize = size === 'sm' ? 28 : size === 'lg' ? 42 : 36
+  const iconSize = size === 'sm' ? 28 : size === 'lg' ? 44 : 36
   const isWhiteText = inverted || variant === 'solid'
 
   const titleClass =
     size === 'sm'
-      ? 'text-sm font-bold'
+      ? 'text-sm font-bold tracking-tight'
       : size === 'lg'
-        ? 'text-xl font-extrabold'
-        : 'text-base font-bold'
+        ? 'text-xl font-extrabold tracking-tight'
+        : 'text-base font-bold tracking-tight'
   const subClass =
     size === 'sm'
       ? 'text-[8px] font-semibold tracking-wider'
@@ -143,7 +122,7 @@ export function Logo({
       <div className="flex flex-col min-w-0 leading-tight">
         <span
           className={cn(
-            'tracking-tight font-sans',
+            'font-sans',
             isWhiteText ? 'text-white' : 'text-foreground',
             titleClass
           )}
