@@ -447,6 +447,146 @@ class PythonTaintTracker(ast.NodeVisitor):
         return "unresolved_variable"
 
 
+# ---------------------------------------------------------------------------
+# Polyglot Tree-sitter AST Engine (TypeScript, JavaScript)
+# ---------------------------------------------------------------------------
+_TS_PARSER = None
+_TSX_PARSER = None
+_JS_PARSER = None
+_TS_LANG = None
+_JS_LANG = None
+_TS_BRANCH_QUERY = None
+_JS_BRANCH_QUERY = None
+
+
+def _init_tree_sitter():
+    global _TS_PARSER, _TSX_PARSER, _JS_PARSER, _TS_LANG, _JS_LANG, _TS_BRANCH_QUERY, _JS_BRANCH_QUERY
+    if _TS_PARSER is not None:
+        return True
+    try:
+        import warnings
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", category=FutureWarning)
+            from tree_sitter_languages import get_parser, get_language
+            _TS_PARSER = get_parser("typescript")
+            _TSX_PARSER = get_parser("tsx")
+            _JS_PARSER = get_parser("javascript")
+            _TS_LANG = get_language("typescript")
+            _JS_LANG = get_language("javascript")
+
+            query_scm = """
+            [
+                (if_statement)
+                (for_statement)
+                (for_in_statement)
+                (while_statement)
+                (do_statement)
+                (catch_clause)
+                (ternary_expression)
+                (switch_case)
+                (binary_expression operator: "&&")
+                (binary_expression operator: "||")
+                (binary_expression operator: "??")
+            ] @branch
+            """
+            _TS_BRANCH_QUERY = _TS_LANG.query(query_scm)
+            _JS_BRANCH_QUERY = _JS_LANG.query(query_scm)
+        logger.info("Successfully initialized Tree-sitter polyglot AST engine.")
+        return True
+    except Exception as e:
+        logger.warning(f"Tree-sitter initialization failed ({e}). Lexical fallback will be used.")
+        return False
+
+
+def _calculate_tree_sitter_complexity(content: str, path: str) -> Optional[ComplexityResult]:
+    """Calculates compiler-grade Cyclomatic & Cognitive Complexity and MI via Tree-sitter CST."""
+    if not _init_tree_sitter():
+        return None
+
+    try:
+        is_tsx = path.endswith((".tsx", ".jsx"))
+        is_ts = path.endswith((".ts", ".tsx"))
+        parser = _TSX_PARSER if is_tsx else (_TS_PARSER if is_ts else _JS_PARSER)
+        query = _TS_BRANCH_QUERY if is_ts else _JS_BRANCH_QUERY
+
+        raw_bytes = bytes(content, "utf8")
+        tree = parser.parse(raw_bytes)
+        root = tree.root_node
+
+        # 1. Cyclomatic Complexity M = 1 + captures
+        captures = query.captures(root)
+        cc = 1 + len(captures)
+
+        # 2. Cognitive Complexity via AST nesting depth traversal
+        cog = 0
+
+        def walk_cog(node, nesting):
+            nonlocal cog
+            increments_nesting = node.type in [
+                "if_statement", "for_statement", "for_in_statement",
+                "while_statement", "do_statement", "catch_clause"
+            ]
+            is_bool_op = node.type == "binary_expression" and any(
+                c.type in ["&&", "||", "??"] for c in node.children
+            )
+
+            added = 0
+            new_nesting = nesting
+            if increments_nesting:
+                added = 1 + nesting
+                new_nesting = nesting + 1
+            elif is_bool_op:
+                added = 1
+
+            cog += added
+            for child in node.children:
+                walk_cog(child, new_nesting if increments_nesting else nesting)
+
+        walk_cog(root, 0)
+
+        # 3. Halstead Metric Extraction from AST Terminals
+        operators = []
+        operands = []
+
+        def extract_halstead(node):
+            if node.child_count == 0:
+                text = node.text.decode("utf8", errors="ignore").strip()
+                if text and text not in [";", "(", ")", "{", "}", ":", ","]:
+                    if node.type in ["identifier", "number", "string", "true", "false", "null", "undefined"]:
+                        operands.append(text)
+                    else:
+                        operators.append(text)
+            for child in node.children:
+                extract_halstead(child)
+
+        extract_halstead(root)
+        length = max(1, len(operators) + len(operands))
+        vocab = max(1, len(set(operators)) + len(set(operands)))
+        volume = length * math.log2(vocab)
+
+        loc = max(1, len([l for l in content.splitlines() if l.strip()]))
+
+        # 4. Maintainability Index (Microsoft Formula)
+        mi = 171.0 - (5.2 * math.log(max(1.0, volume))) - (0.23 * cc) - (16.2 * math.log(loc))
+        mi = round(max(0.0, min(100.0, mi)), 2)
+
+        remediation_minutes = 0
+        if mi < 50.0 or cc > 15 or cog > 15:
+            remediation_minutes = int(max(0, cc - 10) * 10 + max(0, cog - 10) * 10 + max(0.0, 60.0 - mi) * 2)
+
+        return ComplexityResult(
+            path=path,
+            cyclomatic_complexity=cc,
+            cognitive_complexity=cog,
+            maintainability_index=mi,
+            duplicate_blocks=[],
+            remediation_minutes=remediation_minutes
+        )
+    except Exception as e:
+        logger.warning(f"Tree-sitter parsing error on {path}: {e}. Falling back to lexical scan.")
+        return None
+
+
 class CodeQualityAnalyzer:
 
     """Core analysis engine for parsing code complexity, security, duplication, ownership, and hotspots."""
@@ -611,6 +751,9 @@ class CodeQualityAnalyzer:
 
     def _calculate_javascript_typescript_complexity(self, content: str, path: str) -> ComplexityResult:
         """Deep lexical/AST complexity parser for JavaScript and TypeScript source files."""
+        ts_res = _calculate_tree_sitter_complexity(content, path)
+        if ts_res is not None:
+            return ts_res
         # Strip comments
         clean_lines = []
         in_multiline = False
