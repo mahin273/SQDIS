@@ -46,19 +46,30 @@ class DQSModel:
 
     def load_model(self) -> bool:
         """Attempt to load the pre-trained model and explainer from disk."""
-        if os.path.exists(self.model_path):
-            try:
-                with open(self.model_path, "rb") as f:
-                    data = pickle.load(f)
-                    self.model = data.get("model")
-                    self.explainer = data.get("explainer")
-                    self.version = data.get("version", self.version)
-                logger.info(f"Successfully loaded DQS model from {self.model_path}")
-                return True
-            except Exception as e:
-                logger.error(f"Failed to load DQS model from {self.model_path}: {e}")
-        else:
-            logger.warning(f"DQS model path {self.model_path} not found. Operating in fallback mode.")
+        candidate_paths = [
+            self.model_path,
+            os.path.join(os.path.dirname(__file__), "..", "weights", "dqs_model.pkl"),
+            "data/models/dqs_model.pkl"
+        ]
+        for path in candidate_paths:
+            if os.path.exists(path):
+                try:
+                    with open(path, "rb") as f:
+                        data = pickle.load(f)
+                        self.model = data.get("model")
+                        self.explainer = data.get("explainer")
+                        self.version = data.get("version", self.version)
+                    if self.explainer is None and self.model is not None:
+                        try:
+                            import shap
+                            self.explainer = shap.TreeExplainer(self.model)
+                        except Exception as expl_err:
+                            logger.warning(f"Could not initialize TreeExplainer on-the-fly: {expl_err}")
+                    logger.info(f"Successfully loaded DQS model from {path}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to load DQS model from {path}: {e}")
+        logger.warning(f"DQS model paths not found. Operating in fallback mode.")
         return False
 
     def _predict_heuristic(self, features: DQSFeatures) -> float:
@@ -158,10 +169,22 @@ class DQSModel:
                 # Compute SHAP values
                 shap_values = []
                 if self.explainer is not None:
-                    shap_outs = self.explainer(X)
+                    try:
+                        shap_outs = self.explainer(X)
+                        if hasattr(shap_outs, "values"):
+                            impacts = shap_outs.values[0]
+                        else:
+                            impacts = shap_outs[0]
+                    except Exception:
+                        try:
+                            impacts = self.explainer.shap_values(X)[0]
+                        except Exception:
+                            import shap
+                            self.explainer = shap.TreeExplainer(self.model)
+                            impacts = self.explainer(X).values[0]
                     for i, name in enumerate(self.FEATURE_NAMES):
                         val = X[0][i]
-                        impact = float(shap_outs.values[0][i])
+                        impact = float(impacts[i])
                         shap_values.append(SHAPValue(feature=name, value=float(val), impact=round(impact, 2)))
                 else:
                     # Fallback to simulated SHAP if explainer failed

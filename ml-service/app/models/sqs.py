@@ -35,18 +35,23 @@ class SQSModel:
 
     def load_model(self) -> bool:
         """Attempt to load the pre-trained SQS model from disk."""
-        if os.path.exists(self.model_path):
-            try:
-                with open(self.model_path, "rb") as f:
-                    data = pickle.load(f)
-                    self.model = data.get("model")
-                    self.version = data.get("version", self.version)
-                logger.info(f"Successfully loaded SQS model from {self.model_path}")
-                return True
-            except Exception as e:
-                logger.error(f"Failed to load SQS model from {self.model_path}: {e}")
-        else:
-            logger.warning(f"SQS model path {self.model_path} not found. Operating in fallback mode.")
+        candidate_paths = [
+            self.model_path,
+            os.path.join(os.path.dirname(__file__), "..", "weights", "sqs_model.pkl"),
+            "data/models/sqs_model.pkl"
+        ]
+        for path in candidate_paths:
+            if os.path.exists(path):
+                try:
+                    with open(path, "rb") as f:
+                        data = pickle.load(f)
+                        self.model = data.get("model")
+                        self.version = data.get("version", self.version)
+                    logger.info(f"Successfully loaded SQS model from {path}")
+                    return True
+                except Exception as e:
+                    logger.error(f"Failed to load SQS model from {path}: {e}")
+        logger.warning(f"SQS model paths not found. Operating in fallback mode.")
         return False
 
     def _predict_heuristic(self, features: SQSFeatures) -> float:
