@@ -32,6 +32,7 @@ import {
   GitPullRequest,
   Timer,
   Rocket,
+  BrainCircuit,
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Logo, LogoIcon } from '@/components/ui/Logo'
@@ -39,6 +40,7 @@ import { Logo, LogoIcon } from '@/components/ui/Logo'
 const MAIN_NAV_LABELS = [
   'Dashboard',
   'Quality Scores',
+  'Code Intelligence',
   'Projects',
   'Teams',
   'Developers',
@@ -65,6 +67,7 @@ const SECONDARY_NAV_LABELS = [
 const iconMap: Record<string, React.ReactNode> = {
   Dashboard: <LayoutDashboard className="h-5 w-5" />,
   'Quality Scores': <LineChart className="h-5 w-5" />,
+  'Code Intelligence': <BrainCircuit className="h-5 w-5" />,
   Developers: <Code2 className="h-5 w-5" />,
   Leaderboard: <Trophy className="h-5 w-5" />,
   Commits: <GitCommit className="h-5 w-5" />,
