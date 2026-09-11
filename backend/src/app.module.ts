@@ -30,6 +30,8 @@ import { ScoresModule } from './modules/scores/scores.module.js';
 import { SprintsModule } from './modules/sprints/sprints.module.js';
 import { TeamsModule } from './modules/teams/teams.module.js';
 import { DevelopersModule } from './modules/developers/developers.module.js';
+import { CodeIntelligenceModule } from './modules/code-intelligence/code-intelligence.module.js';
+
 
 /**
  * Root Application Module
@@ -79,6 +81,7 @@ import { DevelopersModule } from './modules/developers/developers.module.js';
     SprintsModule,
     TeamsModule,
     DevelopersModule,
+    CodeIntelligenceModule,
     PrismaModule,
   ],
   controllers: [AppController],

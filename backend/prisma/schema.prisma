@@ -1450,3 +1450,51 @@ enum ExportStatus {
   COMPLETED
   FAILED
 }
+
+// ==================== CODE INTELLIGENCE & DEFECT PREDICTION ====================
+
+model DefectPrediction {
+  id                String   @id @default(uuid())
+  organizationId    String?
+  repositoryId      String?
+  commitSha         String?
+  filePath          String?
+  defectProbability Float
+  riskLevel         String   // "LOW", "MODERATE", "HIGH"
+  isDefectProne     Boolean  @default(false)
+  metricsAnalyzed   Json?
+  topRiskDrivers    String[]
+  modelVersion      String
+  benchmark         String?
+  createdAt         DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([repositoryId])
+  @@index([commitSha])
+  @@index([isDefectProne])
+  @@index([createdAt])
+  @@map("defect_predictions")
+}
+
+model TeamBusFactorSnapshot {
+  id                 String   @id @default(uuid())
+  organizationId     String?
+  teamId             String?
+  projectId          String?
+  repositoryName     String
+  overallBusFactor   Int
+  averageGini        Float
+  totalModules       Int
+  criticalSilosCount Int
+  vulnerableCount    Int
+  resilientCount     Int
+  moduleDetails      Json
+  createdAt          DateTime @default(now())
+
+  @@index([organizationId])
+  @@index([teamId])
+  @@index([projectId])
+  @@index([createdAt])
+  @@map("team_bus_factor_snapshots")
+}
+
