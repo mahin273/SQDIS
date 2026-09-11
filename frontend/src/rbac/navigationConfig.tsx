@@ -13,6 +13,7 @@ export const NAV_CONFIG: NavItemConfig[] = [
   // Core Intelligence & Insights
   { label: 'Dashboard', path: '/dashboard' },
   { label: 'Quality Scores', path: '/scores' },
+  { label: 'Code Intelligence', path: '/code-intelligence' },
   { label: 'Projects', path: '/projects', requiredPermission: 'projects:view' },
   { label: 'Teams', path: '/teams', requiredPermission: 'teams:view' },
   { label: 'Developers', path: '/developers' },

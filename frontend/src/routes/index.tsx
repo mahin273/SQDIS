@@ -44,6 +44,9 @@ const RealTimeAuditMonitorPage = lazy(() => import('@/pages/audit').then((m) => 
 const EmailVerificationPage = lazy(() => import('@/pages/auth/EmailVerificationPage').then((m) => ({ default: m.EmailVerificationPage })))
 const ScoresPage = lazy(() => import('@/pages/scores/ScoresPage').then((m) => ({ default: m.ScoresPage })))
 const OrgMembersPage = lazy(() => import('@/pages/members/OrgMembersPage').then((m) => ({ default: m.OrgMembersPage })))
+const CodeIntelligencePage = lazy(() => import('@/pages/code-intelligence/CodeIntelligencePage').then((m) => ({ default: m.CodeIntelligencePage })))
+
+
 
 const ForbiddenPage = lazy(() => import('@/pages/ForbiddenPage').then((m) => ({ default: m.ForbiddenPage })))
 const NotFoundPage = lazy(() => import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })))
@@ -87,6 +90,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/scores', element: <ScoresPage /> },
+          { path: '/code-intelligence', element: <CodeIntelligencePage /> },
           { path: '/teams', element: <TeamsPage /> },
           { path: '/teams/:id', element: <TeamDetailPage /> },
           { path: '/projects', element: <ProjectsPage /> },
