@@ -2,7 +2,7 @@ from fastapi import FastAPI, Response, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.config import get_settings
-from app.routers import health, classification, anomaly, sentiment, sqs, dqs, code_quality, telemetry
+from app.routers import health, classification, anomaly, sentiment, sqs, dqs, code_quality, telemetry, defect
 
 # Load settings once at startup
 settings = get_settings()
@@ -34,6 +34,7 @@ app.include_router(sqs.router)
 app.include_router(dqs.router)
 app.include_router(code_quality.router)
 app.include_router(telemetry.router)
+app.include_router(defect.router)
 
 # V1 Route Aliases for backwards compatibility and benchmark testing
 v1_router = APIRouter(prefix="/api/v1", tags=["API v1 Compatibility"])
@@ -42,6 +43,8 @@ v1_router.add_api_route("/dqs/explain", dqs.explain_dqs, methods=["POST"])
 v1_router.add_api_route("/dqs/model-info", dqs.get_dqs_model_info, methods=["GET"])
 v1_router.add_api_route("/sqs/predict", sqs.predict_sqs, methods=["POST"])
 v1_router.add_api_route("/sqs/model-info", sqs.get_sqs_model_info, methods=["GET"])
+v1_router.add_api_route("/defects/predict", defect.predict_defect_risk, methods=["POST"])
+v1_router.add_api_route("/defects/model-info", defect.get_defect_model_info, methods=["GET"])
 app.include_router(v1_router)
 
 
