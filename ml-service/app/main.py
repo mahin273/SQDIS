@@ -45,6 +45,7 @@ v1_router.add_api_route("/dqs/model-info", dqs.get_dqs_model_info, methods=["GET
 v1_router.add_api_route("/sqs/predict", sqs.predict_sqs, methods=["POST"])
 v1_router.add_api_route("/sqs/model-info", sqs.get_sqs_model_info, methods=["GET"])
 v1_router.add_api_route("/defects/predict", defect.predict_defect_risk, methods=["POST"])
+v1_router.add_api_route("/defects/predict-module", defect.predict_module_defect, methods=["POST"])
 v1_router.add_api_route("/defects/model-info", defect.get_defect_model_info, methods=["GET"])
 v1_router.add_api_route("/code-quality/analyze", code_quality.analyze_code, methods=["POST"])
 v1_router.add_api_route("/test-impact", test_impact.analyze_test_impact, methods=["POST"])
