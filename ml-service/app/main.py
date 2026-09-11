@@ -2,7 +2,7 @@ from fastapi import FastAPI, Response, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.config import get_settings
-from app.routers import health, classification, anomaly, sentiment, sqs, dqs, code_quality, telemetry, defect, test_impact
+from app.routers import health, classification, anomaly, sentiment, sqs, dqs, code_quality, telemetry, defect, test_impact, knowledge_silo
 
 # Load settings once at startup
 settings = get_settings()
@@ -36,6 +36,7 @@ app.include_router(code_quality.router)
 app.include_router(telemetry.router)
 app.include_router(defect.router)
 app.include_router(test_impact.router)
+app.include_router(knowledge_silo.router)
 
 # V1 Route Aliases for backwards compatibility and benchmark testing
 v1_router = APIRouter(prefix="/api/v1", tags=["API v1 Compatibility"])
@@ -50,6 +51,7 @@ v1_router.add_api_route("/defects/model-info", defect.get_defect_model_info, met
 v1_router.add_api_route("/code-quality/analyze", code_quality.analyze_code, methods=["POST"])
 v1_router.add_api_route("/test-impact", test_impact.analyze_test_impact, methods=["POST"])
 v1_router.add_api_route("/canary-analysis", telemetry.analyze_canary_regression, methods=["POST"])
+v1_router.add_api_route("/teams/bus-factor", knowledge_silo.analyze_team_bus_factor, methods=["POST"])
 app.include_router(v1_router)
 
 
