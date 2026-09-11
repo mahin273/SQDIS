@@ -48,6 +48,7 @@ v1_router.add_api_route("/defects/predict", defect.predict_defect_risk, methods=
 v1_router.add_api_route("/defects/model-info", defect.get_defect_model_info, methods=["GET"])
 v1_router.add_api_route("/code-quality/analyze", code_quality.analyze_code, methods=["POST"])
 v1_router.add_api_route("/test-impact", test_impact.analyze_test_impact, methods=["POST"])
+v1_router.add_api_route("/canary-analysis", telemetry.analyze_canary_regression, methods=["POST"])
 app.include_router(v1_router)
 
 

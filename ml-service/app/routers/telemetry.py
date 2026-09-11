@@ -2,6 +2,8 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Dict, Any, Optional
 from app.utils.telemetry import log_override_telemetry
+from app.schemas.canary import CanaryAnalysisRequest, CanaryAnalysisResult
+from app.models.canary_detector import canary_detector
 import logging
 
 logger = logging.getLogger(__name__)
@@ -43,3 +45,36 @@ async def submit_override(request: OverrideRequest) -> OverrideResponse:
             status_code=500,
             detail=f"Failed to log override: {str(e)}"
         )
+
+
+@router.post("/telemetry/canary-analysis", response_model=CanaryAnalysisResult)
+async def analyze_canary_regression(request: CanaryAnalysisRequest) -> CanaryAnalysisResult:
+    """
+    Run automated Canary Performance Regression analysis.
+    Queries Prometheus TSDB for P95 latency, 5xx error rate, and RSS memory usage,
+    detecting performance regressions against pre-deployment baselines.
+    """
+    try:
+        result = canary_detector.analyze(request)
+        return result
+    except Exception as e:
+        logger.error(f"Canary regression analysis failed: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Canary regression analysis failed: {str(e)}"
+        )
+
+
+@router.get("/telemetry/canary-info")
+async def get_canary_info():
+    """Returns configuration and thresholds for canary regression analysis."""
+    return {
+        "engine": "SQDIS Automated Canary Performance Regression Detector",
+        "prometheus_url": canary_detector.DEFAULT_PROMETHEUS_URL,
+        "thresholds": {
+            "latency_warning_threshold_pct": canary_detector.LATENCY_WARNING_THRESHOLD_PCT,
+            "latency_critical_threshold_pct": canary_detector.LATENCY_CRITICAL_THRESHOLD_PCT,
+            "error_rate_critical_threshold": canary_detector.ERROR_RATE_CRITICAL_THRESHOLD,
+            "memory_critical_threshold_pct": canary_detector.MEMORY_CRITICAL_THRESHOLD_PCT
+        }
+    }
