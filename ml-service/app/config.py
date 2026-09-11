@@ -20,12 +20,14 @@ class Settings(BaseSettings):
     anomaly_model_path: str = "data/models/anomaly_model.pkl"
     dqs_model_path: str = "data/models/dqs_model.pkl"
     sqs_model_path: str = "data/models/sqs_model.pkl"
+    defect_model_path: str = "data/models/defect_model.pkl"
 
     # Model Versions
     classification_model_version: str = "1.0.0"
     anomaly_model_version: str = "1.0.0"
     dqs_model_version: str = "1.0.0"
     sqs_model_version: str = "1.0.0"
+    defect_model_version: str = "1.0.0"
 
     # CORS Settings
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
