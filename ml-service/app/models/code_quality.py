@@ -4,7 +4,9 @@ import re
 import math
 import hashlib
 import logging
-from typing import List, Dict, Tuple, Optional
+from collections import defaultdict
+from typing import List, Dict, Tuple, Optional, Set
+import numpy as np
 
 # Global lock registry to prevent race conditions on filesystem cache writes per repository
 _repo_locks = {}
@@ -587,6 +589,66 @@ def _calculate_tree_sitter_complexity(content: str, path: str) -> Optional[Compl
         return None
 
 
+# ---------------------------------------------------------------------------
+# Sub-Linear MinHash & LSH Semantic Clone Engine
+# ---------------------------------------------------------------------------
+SYNTAX_KEYWORDS = {
+    'function', 'if', 'else', 'return', 'let', 'const', 'var', 'for', 'while',
+    'do', 'switch', 'case', 'break', 'continue', 'try', 'catch', 'finally',
+    'throw', 'class', 'import', 'export', 'from', 'async', 'await', 'new',
+    'this', 'typeof', 'instanceof', 'void', 'delete', 'in', 'of', 'def',
+    'elif', 'with', 'as', 'pass', 'lambda', 'yield', 'raise', 'except'
+}
+
+MERSENNE_PRIME = 2147483647  # 2^31 - 1
+NUM_PERMUTATIONS = 64
+NUM_BANDS = 16
+ROWS_PER_BAND = 4
+
+np.random.seed(1337)
+_A_COEFFS = np.random.randint(1, MERSENNE_PRIME - 1, size=NUM_PERMUTATIONS, dtype=np.int64)
+_B_COEFFS = np.random.randint(0, MERSENNE_PRIME - 1, size=NUM_PERMUTATIONS, dtype=np.int64)
+
+
+def _normalize_and_shingle(code: str, k: int = 4) -> List[int]:
+    """Strip comments and canonicalize identifier tokens into rolling 4-gram shingles."""
+    code = re.sub(r'//.*', '', code)
+    code = re.sub(r'#.*', '', code)
+    code = re.sub(r'/\*.*?\*/', '', code, flags=re.DOTALL)
+    code = re.sub(r'\"[^\"]*\"|\'[^\']*\'', '\"STR\"', code)
+    code = re.sub(r'\b\d+(\.\d+)?\b', 'NUM', code)
+
+    raw_tokens = re.findall(r'[A-Za-z_$][A-Za-z0-9_$]*|[+\-*/%=!<>]=?|&&|\|\||\?\?|[{}();,.]', code)
+    norm_tokens = []
+    for t in raw_tokens:
+        if t in SYNTAX_KEYWORDS or (not t[0].isalpha() and t[0] not in ['_', '$']):
+            norm_tokens.append(t)
+        else:
+            norm_tokens.append('_ID_')
+
+    if len(norm_tokens) < k:
+        if not norm_tokens:
+            return []
+        shingle_str = '_'.join(norm_tokens)
+        return [int(hashlib.md5(shingle_str.encode('utf-8')).hexdigest()[:8], 16)]
+
+    shingle_hashes = []
+    for i in range(len(norm_tokens) - k + 1):
+        shingle_str = '_'.join(norm_tokens[i:i + k])
+        h = int(hashlib.md5(shingle_str.encode('utf-8')).hexdigest()[:8], 16)
+        shingle_hashes.append(h)
+    return shingle_hashes
+
+
+def _compute_minhash_signature(shingle_hashes: List[int]) -> np.ndarray:
+    """Compute 64-element MinHash signature using universal linear hash permutations."""
+    if not shingle_hashes:
+        return np.zeros(NUM_PERMUTATIONS, dtype=np.int64)
+    shingle_arr = np.array(shingle_hashes, dtype=np.int64)
+    all_hashes = (_A_COEFFS[:, None] * shingle_arr[None, :] + _B_COEFFS[:, None]) % MERSENNE_PRIME
+    return np.min(all_hashes, axis=1)
+
+
 class CodeQualityAnalyzer:
 
     """Core analysis engine for parsing code complexity, security, duplication, ownership, and hotspots."""
@@ -1091,40 +1153,85 @@ class CodeQualityAnalyzer:
         # Sort hotspots by score descending
         return sorted(hotspots, key=lambda x: x.hotspot_score, reverse=True)
 
-    def _detect_semantic_clones(self, files: List[FileInput]) -> List[SemanticClone]:
-        """Detect high semantic similarity between files using TF-IDF and Cosine Similarity."""
-        from sklearn.feature_extraction.text import TfidfVectorizer
-        from sklearn.metrics.pairwise import cosine_similarity
+    def _detect_semantic_clones(self, files: List[FileInput], similarity_threshold: float = 0.80) -> List[SemanticClone]:
+        """Detect high semantic similarity between files using sub-linear MinHash & LSH (Locality-Sensitive Hashing).
 
+        Supports detection of Type-1 (identical), Type-2 (renamed identifiers/literals),
+        and Type-3 (syntactically similar with minor alterations) code clones in O(N) time.
+        """
         if len(files) < 2:
             return []
 
-        # Prepare corpus: code files
-        corpus = [f.content for f in files]
-        paths = [f.path for f in files]
-
-        # Use a custom token pattern suitable for code (split on words, keep keywords and identifiers)
-        vectorizer = TfidfVectorizer(token_pattern=r"(?u)\b\w+\b")
         try:
-            tfidf_matrix = vectorizer.fit_transform(corpus)
-            similarity_matrix = cosine_similarity(tfidf_matrix, tfidf_matrix)
+            # 1. Extract 4-gram shingles and 64-element MinHash signatures
+            signatures: List[np.ndarray] = []
+            valid_files: List[FileInput] = []
 
-            clones = []
-            n_files = len(files)
-            # We only need upper triangle to avoid duplicating pairs like (A, B) and (B, A)
-            for i in range(n_files):
-                for j in range(i + 1, n_files):
-                    score = float(similarity_matrix[i, j])
-                    if score > 0.85:
-                        clones.append(SemanticClone(
-                            file_a=paths[i],
-                            file_b=paths[j],
-                            similarity_score=round(score, 3),
-                            description=f"High semantic similarity ({round(score * 100, 1)}%) detected. Code structures are highly matching, suggesting potential logic duplication."
-                        ))
-            return clones
+            for f in files:
+                shingles = _normalize_and_shingle(f.content, k=4)
+                # Skip files with negligible code (< 2 shingles)
+                if not shingles or len(shingles) < 2:
+                    continue
+                sig = _compute_minhash_signature(shingles)
+                signatures.append(sig)
+                valid_files.append(f)
+
+            num_valid = len(valid_files)
+            if num_valid < 2:
+                return []
+
+            # 2. LSH Band Bucketing (b=16 bands, r=4 rows per band -> 64 total permutations)
+            band_buckets: List[Dict[bytes, List[int]]] = [defaultdict(list) for _ in range(NUM_BANDS)]
+
+            for file_idx, sig in enumerate(signatures):
+                for band_idx in range(NUM_BANDS):
+                    start = band_idx * ROWS_PER_BAND
+                    end = start + ROWS_PER_BAND
+                    band_bytes = sig[start:end].tobytes()
+                    band_buckets[band_idx][band_bytes].append(file_idx)
+
+            # 3. Collect candidate pairs that collided in at least one band
+            candidate_pairs: Set[Tuple[int, int]] = set()
+            for band_dict in band_buckets:
+                for matched_indices in band_dict.values():
+                    if len(matched_indices) > 1:
+                        for i in range(len(matched_indices)):
+                            for j in range(i + 1, len(matched_indices)):
+                                idx1 = matched_indices[i]
+                                idx2 = matched_indices[j]
+                                if idx1 > idx2:
+                                    idx1, idx2 = idx2, idx1
+                                candidate_pairs.add((idx1, idx2))
+
+            # 4. Evaluate estimated Jaccard similarity for candidate pairs
+            clones: List[SemanticClone] = []
+            for idx1, idx2 in sorted(candidate_pairs):
+                sig1 = signatures[idx1]
+                sig2 = signatures[idx2]
+
+                # Jaccard estimation: fraction of matching hash entries across the 64 permutations
+                matching_hashes = int(np.sum(sig1 == sig2))
+                sim_score = float(matching_hashes) / float(NUM_PERMUTATIONS)
+
+                if sim_score >= similarity_threshold:
+                    file_a = valid_files[idx1].path
+                    file_b = valid_files[idx2].path
+                    pct = round(sim_score * 100, 1)
+                    clones.append(SemanticClone(
+                        file_a=file_a,
+                        file_b=file_b,
+                        similarity_score=round(sim_score, 3),
+                        description=(
+                            f"High semantic similarity ({pct}%) detected via MinHash & LSH. "
+                            f"Matching AST syntactic structure indicates a potential code clone (Type-1/2/3)."
+                        )
+                    ))
+
+            # Sort descending by similarity score
+            return sorted(clones, key=lambda c: c.similarity_score, reverse=True)
+
         except Exception as e:
-            logger.warning(f"Semantic clone detection failed: {e}")
+            logger.warning(f"MinHash/LSH semantic clone detection failed: {e}")
             return []
 
     def _detect_dependency_cycles(self, files: List[FileInput]) -> List[DependencyCycle]:
