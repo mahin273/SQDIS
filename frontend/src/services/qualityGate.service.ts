@@ -35,6 +35,33 @@ export interface EvaluateQualityGatePayload {
   files?: string[];
 }
 
+export interface QualityGatePolicy {
+  id?: string;
+  repositoryId: string;
+  warningDefectProbability: number;
+  blockedDefectProbability: number;
+  warningComplexity: number;
+  blockedComplexity: number;
+  blockOnSecurity: boolean;
+  enableBotComment: boolean;
+  enableCommitStatus: boolean;
+  strictBranchProtection: boolean;
+  isCustom?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface UpdateQualityGatePolicyPayload {
+  warningDefectProbability?: number;
+  blockedDefectProbability?: number;
+  warningComplexity?: number;
+  blockedComplexity?: number;
+  blockOnSecurity?: boolean;
+  enableBotComment?: boolean;
+  enableCommitStatus?: boolean;
+  strictBranchProtection?: boolean;
+}
+
 export const qualityGateService = {
   /**
    * Retrieve the latest Quality Gate evaluation for a given PR.
@@ -52,6 +79,30 @@ export const qualityGateService = {
   async evaluate(payload: EvaluateQualityGatePayload): Promise<QualityGateResult> {
     const response = await api.post<QualityGateResult>(
       '/github/quality-gate/evaluate-pr',
+      payload
+    );
+    return response.data;
+  },
+
+  /**
+   * Retrieve effective Quality Gate policy for a repository.
+   */
+  async getPolicy(repositoryId: string): Promise<QualityGatePolicy> {
+    const response = await api.get<QualityGatePolicy>(
+      `/github/quality-gate/policy/${repositoryId}`
+    );
+    return response.data;
+  },
+
+  /**
+   * Upsert custom Quality Gate policy thresholds for a repository.
+   */
+  async updatePolicy(
+    repositoryId: string,
+    payload: UpdateQualityGatePolicyPayload
+  ): Promise<QualityGatePolicy> {
+    const response = await api.put<QualityGatePolicy>(
+      `/github/quality-gate/policy/${repositoryId}`,
       payload
     );
     return response.data;

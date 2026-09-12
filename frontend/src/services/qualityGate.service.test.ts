@@ -6,6 +6,7 @@ vi.mock('./api', () => ({
   api: {
     get: vi.fn(),
     post: vi.fn(),
+    put: vi.fn(),
   },
 }));
 
@@ -59,5 +60,50 @@ describe('qualityGateService', () => {
 
     expect(api.post).toHaveBeenCalledWith('/github/quality-gate/evaluate-pr', payload);
     expect(result).toEqual(mockEvaluated);
+  });
+
+  it('fetches effective policy for a repository', async () => {
+    const mockPolicy = {
+      repositoryId: 'repo-1',
+      warningDefectProbability: 0.35,
+      blockedDefectProbability: 0.6,
+      warningComplexity: 12,
+      blockedComplexity: 20,
+      blockOnSecurity: true,
+      enableBotComment: true,
+      enableCommitStatus: true,
+      strictBranchProtection: false,
+      isCustom: true,
+    };
+    vi.mocked(api.get).mockResolvedValueOnce({ data: mockPolicy });
+
+    const result = await qualityGateService.getPolicy('repo-1');
+
+    expect(api.get).toHaveBeenCalledWith('/github/quality-gate/policy/repo-1');
+    expect(result).toEqual(mockPolicy);
+  });
+
+  it('updates policy thresholds for a repository', async () => {
+    const payload = {
+      warningDefectProbability: 0.3,
+      blockedDefectProbability: 0.55,
+      warningComplexity: 10,
+      blockedComplexity: 18,
+      strictBranchProtection: true,
+    };
+    const mockUpdated = {
+      repositoryId: 'repo-1',
+      ...payload,
+      blockOnSecurity: true,
+      enableBotComment: true,
+      enableCommitStatus: true,
+      isCustom: true,
+    };
+    vi.mocked(api.put).mockResolvedValueOnce({ data: mockUpdated });
+
+    const result = await qualityGateService.updatePolicy('repo-1', payload);
+
+    expect(api.put).toHaveBeenCalledWith('/github/quality-gate/policy/repo-1', payload);
+    expect(result).toEqual(mockUpdated);
   });
 });

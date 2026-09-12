@@ -1,9 +1,37 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
 import { Octokit } from '@octokit/rest';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GitHubService } from '../github.service';
 import { CodeIntelligenceService } from '../../code-intelligence/code-intelligence.service';
 import { QualityGateStatus } from '@prisma/client';
+import { UpdateQualityGatePolicyDto } from '../dto/update-quality-gate-policy.dto';
+
+export const DEFAULT_QUALITY_GATE_POLICY = {
+  warningDefectProbability: 0.4,
+  blockedDefectProbability: 0.65,
+  warningComplexity: 15,
+  blockedComplexity: 25,
+  blockOnSecurity: true,
+  enableBotComment: true,
+  enableCommitStatus: true,
+  strictBranchProtection: false,
+};
+
+export interface QualityGatePolicyResult {
+  id?: string;
+  repositoryId: string;
+  warningDefectProbability: number;
+  blockedDefectProbability: number;
+  warningComplexity: number;
+  blockedComplexity: number;
+  blockOnSecurity: boolean;
+  enableBotComment: boolean;
+  enableCommitStatus: boolean;
+  strictBranchProtection: boolean;
+  isCustom: boolean;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
 
 export interface EvaluatePrQualityGateOptions {
   repositoryId: string;
@@ -315,17 +343,33 @@ export class PrQualityGateBotService {
         this.logger.warn(`Test Impact Analysis failed: ${err.message}`);
       }
 
-      // 9. Evaluate Quality Gate Decision Thresholds
-      if (defectProbability > 0.65 || maxComplexity > 25 || criticalSecurityCount > 0) {
+      // 9. Evaluate Quality Gate Decision Thresholds against effective policy
+      const policy = await this.getPolicy(repository.id);
+      const shouldBlockSecurity = policy.blockOnSecurity && criticalSecurityCount > 0;
+
+      if (
+        defectProbability >= policy.blockedDefectProbability ||
+        maxComplexity >= policy.blockedComplexity ||
+        shouldBlockSecurity
+      ) {
         status = QualityGateStatus.BLOCKED;
-      } else if (defectProbability >= 0.4 || maxComplexity > 15) {
+      } else if (
+        defectProbability >= policy.warningDefectProbability ||
+        maxComplexity >= policy.warningComplexity
+      ) {
         status = QualityGateStatus.WARNING;
       } else {
         status = QualityGateStatus.PASSED;
       }
     }
 
-    const githubStatusState = status === QualityGateStatus.BLOCKED ? 'failure' : 'success';
+    const effectivePolicy = await this.getPolicy(repository.id);
+    const githubStatusState: 'success' | 'failure' =
+      status === QualityGateStatus.BLOCKED
+        ? 'failure'
+        : status === QualityGateStatus.WARNING && effectivePolicy.strictBranchProtection
+          ? 'failure'
+          : 'success';
 
     // 10. Generate Markdown Summary (Zero Buzzwords)
     const summaryMarkdown = this.formatMarkdownSummary({
@@ -342,11 +386,12 @@ export class PrQualityGateBotService {
       securityViolations,
       complexityViolations,
       isDocsOrConfigOnly,
+      policy: effectivePolicy,
     });
 
     // 11. Idempotently Post or Update GitHub PR Comment
     let githubCommentId: number | null = null;
-    if (octokit) {
+    if (octokit && effectivePolicy.enableBotComment) {
       try {
         const { data: comments } = await octokit.rest.issues.listComments({
           owner,
@@ -387,7 +432,7 @@ export class PrQualityGateBotService {
       }
 
       // 12. Set GitHub Commit Status Check
-      if (headCommitSha && headCommitSha !== 'HEAD') {
+      if (effectivePolicy.enableCommitStatus && headCommitSha && headCommitSha !== 'HEAD') {
         try {
           const pct = Math.round(defectProbability * 100);
           const desc =
@@ -455,6 +500,121 @@ export class PrQualityGateBotService {
   }
 
   /**
+   * Retrieve effective Quality Gate policy for a repository (with fallback to default standards).
+   */
+  async getPolicy(repositoryId: string): Promise<QualityGatePolicyResult> {
+    let policy: any = null;
+    if (this.prisma.qualityGatePolicy?.findUnique) {
+      try {
+        policy = await this.prisma.qualityGatePolicy.findUnique({
+          where: { repositoryId },
+        });
+      } catch (err) {
+        this.logger.warn(`Failed to fetch quality gate policy: ${err.message}`);
+      }
+    }
+
+    if (!policy) {
+      return {
+        repositoryId,
+        ...DEFAULT_QUALITY_GATE_POLICY,
+        isCustom: false,
+      };
+    }
+
+    return {
+      ...policy,
+      isCustom: true,
+    };
+  }
+
+  /**
+   * Upsert custom Quality Gate policy thresholds for a repository.
+   */
+  async upsertPolicy(
+    repositoryId: string,
+    dto: UpdateQualityGatePolicyDto,
+  ): Promise<QualityGatePolicyResult> {
+    const repository = await this.prisma.repository.findUnique({
+      where: { id: repositoryId },
+    });
+
+    if (!repository) {
+      throw new NotFoundException(`Repository with ID ${repositoryId} not found`);
+    }
+
+    const current = await this.getPolicy(repositoryId);
+    const warningDefect = dto.warningDefectProbability ?? current.warningDefectProbability;
+    const blockedDefect = dto.blockedDefectProbability ?? current.blockedDefectProbability;
+    if (warningDefect > blockedDefect) {
+      throw new BadRequestException(
+        'Warning defect probability cannot exceed blocked defect probability',
+      );
+    }
+
+    const warningCC = dto.warningComplexity ?? current.warningComplexity;
+    const blockedCC = dto.blockedComplexity ?? current.blockedComplexity;
+    if (warningCC > blockedCC) {
+      throw new BadRequestException(
+        'Warning complexity threshold cannot exceed blocked complexity threshold',
+      );
+    }
+
+    const policy = await this.prisma.qualityGatePolicy.upsert({
+      where: { repositoryId },
+      create: {
+        repositoryId,
+        warningDefectProbability:
+          dto.warningDefectProbability ?? DEFAULT_QUALITY_GATE_POLICY.warningDefectProbability,
+        blockedDefectProbability:
+          dto.blockedDefectProbability ?? DEFAULT_QUALITY_GATE_POLICY.blockedDefectProbability,
+        warningComplexity:
+          dto.warningComplexity ?? DEFAULT_QUALITY_GATE_POLICY.warningComplexity,
+        blockedComplexity:
+          dto.blockedComplexity ?? DEFAULT_QUALITY_GATE_POLICY.blockedComplexity,
+        blockOnSecurity: dto.blockOnSecurity ?? DEFAULT_QUALITY_GATE_POLICY.blockOnSecurity,
+        enableBotComment:
+          dto.enableBotComment ?? DEFAULT_QUALITY_GATE_POLICY.enableBotComment,
+        enableCommitStatus:
+          dto.enableCommitStatus ?? DEFAULT_QUALITY_GATE_POLICY.enableCommitStatus,
+        strictBranchProtection:
+          dto.strictBranchProtection ?? DEFAULT_QUALITY_GATE_POLICY.strictBranchProtection,
+      },
+      update: {
+        ...(dto.warningDefectProbability !== undefined && {
+          warningDefectProbability: dto.warningDefectProbability,
+        }),
+        ...(dto.blockedDefectProbability !== undefined && {
+          blockedDefectProbability: dto.blockedDefectProbability,
+        }),
+        ...(dto.warningComplexity !== undefined && {
+          warningComplexity: dto.warningComplexity,
+        }),
+        ...(dto.blockedComplexity !== undefined && {
+          blockedComplexity: dto.blockedComplexity,
+        }),
+        ...(dto.blockOnSecurity !== undefined && {
+          blockOnSecurity: dto.blockOnSecurity,
+        }),
+        ...(dto.enableBotComment !== undefined && {
+          enableBotComment: dto.enableBotComment,
+        }),
+        ...(dto.enableCommitStatus !== undefined && {
+          enableCommitStatus: dto.enableCommitStatus,
+        }),
+        ...(dto.strictBranchProtection !== undefined && {
+          strictBranchProtection: dto.strictBranchProtection,
+        }),
+      },
+    });
+
+    return {
+      ...policy,
+      isCustom: true,
+    };
+  }
+
+  /**
    * Retrieve the latest quality gate evaluation for a given PR.
    */
   async getLatestEvaluation(repositoryId: string, prNumber: number) {
@@ -497,6 +657,12 @@ export class PrQualityGateBotService {
     securityViolations: string[];
     complexityViolations: string[];
     isDocsOrConfigOnly: boolean;
+    policy?: {
+      warningDefectProbability: number;
+      blockedDefectProbability: number;
+      warningComplexity: number;
+      blockedComplexity: number;
+    };
   }): string {
     const badge =
       params.status === QualityGateStatus.PASSED
@@ -506,6 +672,10 @@ export class PrQualityGateBotService {
           : '🔴 **BLOCKED**';
 
     const probPct = (params.defectProbability * 100).toFixed(1);
+    const warnDefectPct = ((params.policy?.warningDefectProbability ?? 0.4) * 100).toFixed(0);
+    const blockDefectPct = ((params.policy?.blockedDefectProbability ?? 0.65) * 100).toFixed(0);
+    const warnCC = params.policy?.warningComplexity ?? 15;
+    const blockCC = params.policy?.blockedComplexity ?? 25;
 
     let md = `## 🛡️ SQDIS Quality Gate: ${badge}\n\n`;
     md += `${QUALITY_GATE_MARKER}\n\n`;
@@ -520,8 +690,8 @@ export class PrQualityGateBotService {
     md += `### 📊 Code Health Summary\n\n`;
     md += `| Quality Metric | Measured Value | Threshold / Status |\n`;
     md += `| :--- | :--- | :--- |\n`;
-    md += `| **Defect Probability** | \`${probPct}%\` (${params.riskLevel} Risk) | ${params.defectProbability > 0.65 ? '❌ Exceeds 65%' : params.defectProbability >= 0.4 ? '⚠️ Moderate (40-65%)' : '✅ Within limits (< 40%)'} |\n`;
-    md += `| **Peak Cyclomatic Complexity** | \`${params.maxComplexity}\` (\`${params.hotspotFile}\`) | ${params.maxComplexity > 25 ? '❌ Exceeds 25' : params.maxComplexity > 15 ? '⚠️ Elevated (16-25)' : '✅ Acceptable (≤ 15)'} |\n`;
+    md += `| **Defect Probability** | \`${probPct}%\` (${params.riskLevel} Risk) | ${params.defectProbability >= (params.policy?.blockedDefectProbability ?? 0.65) ? `❌ Exceeds ${blockDefectPct}%` : params.defectProbability >= (params.policy?.warningDefectProbability ?? 0.4) ? `⚠️ Moderate (${warnDefectPct}-${blockDefectPct}%)` : `✅ Within limits (< ${warnDefectPct}%)`} |\n`;
+    md += `| **Peak Cyclomatic Complexity** | \`${params.maxComplexity}\` (\`${params.hotspotFile}\`) | ${params.maxComplexity >= blockCC ? `❌ Exceeds ${blockCC}` : params.maxComplexity >= warnCC ? `⚠️ Elevated (${warnCC}-${blockCC})` : `✅ Acceptable (< ${warnCC})`} |\n`;
     md += `| **Impacted Test Suites** | \`${params.impactedTestsCount}\` suites required | ℹ️ Targeted verification |\n`;
     md += `| **CI Test Time Saved** | \`${params.prunedPercentage.toFixed(1)}%\` pruned (~${params.estimatedTimeSaved}s) | ⚡ Accelerated build |\n\n`;
 

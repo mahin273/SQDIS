@@ -40,7 +40,7 @@ export { githubService } from './github.service';
 export { scoresService } from './scores.service';
 export { codeIntelligenceService } from './codeIntelligence.service';
 export { qualityGateService } from './qualityGate.service';
-export type { QualityGateResult, QualityGateStatus, EvaluateQualityGatePayload } from './qualityGate.service';
+export type { QualityGateResult, QualityGateStatus, EvaluateQualityGatePayload, QualityGatePolicy, UpdateQualityGatePolicyPayload } from './qualityGate.service';
 export type { RepositoryHotspot, CommitRiskItem, TeamBusFactorResponse, ModuleBusFactorResult, TestImpactResponse, TestImpactResult, AstDefectResponse, CommitRiskResponse } from './codeIntelligence.service';
 
 // Backward-compatible exports for existing code using old naming

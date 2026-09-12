@@ -47,6 +47,7 @@ import { UpdateWebhookEnabledDto } from './dto/update-webhook-enabled.dto';
 import { TestWebhookDto } from './dto/test-webhook.dto';
 import { UpdateRateLimitDto } from './dto/update-rate-limit.dto';
 import { EvaluatePrQualityGateDto } from './dto/evaluate-pr-quality-gate.dto';
+import { UpdateQualityGatePolicyDto } from './dto/update-quality-gate-policy.dto';
 import { PrQualityGateBotService } from './services/pr-quality-gate-bot.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -996,6 +997,42 @@ export class GitHubController {
     this.validateOrganizationContext(organizationId);
     const parsedPr = parseInt(prNumber, 10);
     return this.prQualityGateBotService.getLatestEvaluation(repositoryId, parsedPr);
+  }
+
+  /**
+   * Retrieve effective Quality Gate policy for a repository
+   */
+  @Get('quality-gate/policy/:repositoryId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get effective quality gate policy for a repository',
+  })
+  async getQualityGatePolicy(
+    @Param('repositoryId') repositoryId: string,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    this.validateOrganizationContext(organizationId);
+    return this.prQualityGateBotService.getPolicy(repositoryId);
+  }
+
+  /**
+   * Upsert Quality Gate policy thresholds for a repository
+   */
+  @Put('quality-gate/policy/:repositoryId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
+  @ApiOperation({
+    summary: 'Configure quality gate policy thresholds for a repository',
+  })
+  async updateQualityGatePolicy(
+    @Param('repositoryId') repositoryId: string,
+    @Body() dto: UpdateQualityGatePolicyDto,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    this.validateOrganizationContext(organizationId);
+    return this.prQualityGateBotService.upsertPolicy(repositoryId, dto);
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Shield,
@@ -15,6 +15,8 @@ import {
   Activity,
   Code2,
   FileText,
+  Sliders,
+  Save,
 } from 'lucide-react';
 import {
   Sheet,
@@ -25,9 +27,14 @@ import {
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/components/ui/toast';
-import { qualityGateService, type QualityGateResult } from '@/services/qualityGate.service';
+import {
+  qualityGateService,
+  type QualityGateResult,
+  type QualityGatePolicy,
+} from '@/services/qualityGate.service';
 import { DefectRiskGauge } from '@/pages/code-intelligence/components/DefectRiskGauge';
 
 interface PrQualityGateDrawerProps {
@@ -51,8 +58,18 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'overview' | 'test-impact' | 'bot-report'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'test-impact' | 'bot-report' | 'policy'>('overview');
   const [copied, setCopied] = useState(false);
+
+  // Policy form state
+  const [warningDefectPct, setWarningDefectPct] = useState(40);
+  const [blockedDefectPct, setBlockedDefectPct] = useState(65);
+  const [warningComplexity, setWarningComplexity] = useState(15);
+  const [blockedComplexity, setBlockedComplexity] = useState(25);
+  const [blockOnSecurity, setBlockOnSecurity] = useState(true);
+  const [enableBotComment, setEnableBotComment] = useState(true);
+  const [enableCommitStatus, setEnableCommitStatus] = useState(true);
+  const [strictBranchProtection, setStrictBranchProtection] = useState(false);
 
   const isEnabled = isOpen && !!repositoryId && typeof prNumber === 'number' && prNumber > 0;
 
@@ -65,6 +82,28 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
     queryFn: () => qualityGateService.getLatest(repositoryId!, prNumber!),
     enabled: isEnabled,
   });
+
+  const {
+    data: policy,
+    isLoading: isPolicyLoading,
+  } = useQuery({
+    queryKey: ['quality-gate-policy', repositoryId],
+    queryFn: () => qualityGateService.getPolicy(repositoryId!),
+    enabled: isOpen && !!repositoryId,
+  });
+
+  useEffect(() => {
+    if (policy) {
+      setWarningDefectPct(Math.round(policy.warningDefectProbability * 100));
+      setBlockedDefectPct(Math.round(policy.blockedDefectProbability * 100));
+      setWarningComplexity(policy.warningComplexity);
+      setBlockedComplexity(policy.blockedComplexity);
+      setBlockOnSecurity(policy.blockOnSecurity);
+      setEnableBotComment(policy.enableBotComment);
+      setEnableCommitStatus(policy.enableCommitStatus);
+      setStrictBranchProtection(policy.strictBranchProtection);
+    }
+  }, [policy]);
 
   const evaluateMutation = useMutation({
     mutationFn: () =>
@@ -85,6 +124,30 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
     },
   });
 
+  const updatePolicyMutation = useMutation({
+    mutationFn: () =>
+      qualityGateService.updatePolicy(repositoryId!, {
+        warningDefectProbability: warningDefectPct / 100,
+        blockedDefectProbability: blockedDefectPct / 100,
+        warningComplexity,
+        blockedComplexity,
+        blockOnSecurity,
+        enableBotComment,
+        enableCommitStatus,
+        strictBranchProtection,
+      }),
+    onSuccess: (savedPolicy: QualityGatePolicy) => {
+      queryClient.setQueryData(['quality-gate-policy', repositoryId], savedPolicy);
+      queryClient.invalidateQueries({ queryKey: ['quality-gate', repositoryId] });
+      toast('Quality Gate policy updated successfully', { type: 'success' });
+    },
+    onError: (error: any) => {
+      const message =
+        error?.response?.data?.message || error?.message || 'Failed to update policy';
+      toast(message, { type: 'error' });
+    },
+  });
+
   const handleCopyMarkdown = () => {
     if (!gate?.summaryMarkdown) return;
     navigator.clipboard.writeText(gate.summaryMarkdown);
@@ -99,7 +162,7 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
         return {
           icon: <ShieldCheck className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />,
           title: 'Quality Gate Passed',
-          subtitle: 'All statistical defect and complexity metrics are within safe operational thresholds.',
+          subtitle: 'All defect and complexity metrics are within configured policy thresholds.',
           border: 'border-emerald-200 dark:border-emerald-900/60 bg-emerald-50/70 dark:bg-emerald-950/20 text-emerald-900 dark:text-emerald-200',
         };
       case 'WARNING':
@@ -113,7 +176,7 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
         return {
           icon: <ShieldAlert className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0" />,
           title: 'Quality Gate Blocked',
-          subtitle: 'Critical risk or severe complexity hotspot found. Resolution required before merging.',
+          subtitle: 'Changeset exceeds safety thresholds. Recommended to resolve issues before merging.',
           border: 'border-rose-200 dark:border-rose-900/60 bg-rose-50/70 dark:bg-rose-950/20 text-rose-900 dark:text-rose-200',
         };
       default:
@@ -128,6 +191,10 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
 
   const banner = getStatusBanner(gate?.status);
   const isBusy = evaluateMutation.isPending || (isFetching && !isLoading);
+  const effectiveWarnDefectPct = Math.round((policy?.warningDefectProbability ?? 0.4) * 100);
+  const effectiveBlockDefectPct = Math.round((policy?.blockedDefectProbability ?? 0.65) * 100);
+  const effectiveWarnCC = policy?.warningComplexity ?? 15;
+  const effectiveBlockCC = policy?.blockedComplexity ?? 25;
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -168,7 +235,7 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
             </div>
 
             <SheetDescription className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              Automated defect probability, complexity hotspots, and targeted test suite recommendations.
+              Automated defect risk, complexity hotspots, and test suite execution requirements.
             </SheetDescription>
           </SheetHeader>
 
@@ -179,7 +246,7 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                 PR #{prNumber}
               </span>
               <span>•</span>
-              <span className="truncate max-w-[280px]" title={prTitle}>
+              <span className="truncate max-w-[260px]" title={prTitle}>
                 {prTitle || 'Pull Request'}
               </span>
               {authorName && (
@@ -198,7 +265,7 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
               className="h-8 gap-1.5 text-xs font-medium cursor-pointer"
             >
               <RefreshCw className={`w-3.5 h-3.5 ${isBusy ? 'animate-spin text-blue-600' : ''}`} />
-              {isBusy ? 'Evaluating...' : 'Re-evaluate Quality Gate'}
+              {isBusy ? 'Evaluating...' : 'Re-evaluate'}
             </Button>
           </div>
         </div>
@@ -254,10 +321,14 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                 onValueChange={(val) => setActiveTab(val as any)}
                 className="w-full"
               >
-                <TabsList className="w-full grid grid-cols-3">
-                  <TabsTrigger value="overview">Health Overview</TabsTrigger>
+                <TabsList className="w-full grid grid-cols-4">
+                  <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="test-impact">Test Impact</TabsTrigger>
                   <TabsTrigger value="bot-report">Bot Report</TabsTrigger>
+                  <TabsTrigger value="policy" className="gap-1">
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>Policy</span>
+                  </TabsTrigger>
                 </TabsList>
 
                 {/* TAB 1: OVERVIEW */}
@@ -281,7 +352,7 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                         </p>
                       </div>
                       <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800/80 pt-2">
-                        Threshold: &lt; 40% Target
+                        Target: &lt; {effectiveWarnDefectPct}%
                       </div>
                     </div>
 
@@ -298,15 +369,15 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                           {gate.maxComplexity}
                         </div>
                         <p className="text-[11px] font-medium text-slate-500">
-                          {gate.maxComplexity > 25
-                            ? 'Critical Hotspot'
-                            : gate.maxComplexity > 15
+                          {gate.maxComplexity >= effectiveBlockCC
+                            ? 'Exceeds Policy Limit'
+                            : gate.maxComplexity >= effectiveWarnCC
                             ? 'Moderate Hotspot'
                             : 'Clean Branching'}
                         </p>
                       </div>
                       <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800/80 pt-2">
-                        Threshold: ≤ 15 Target
+                        Target: ≤ {effectiveWarnCC}
                       </div>
                     </div>
 
@@ -359,11 +430,11 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                             Risk Assessment
                           </span>
                           <p className="text-slate-500 leading-relaxed">
-                            {gate.defectProbability > 0.65
-                              ? 'This pull request carries elevated defect risk exceeding policy thresholds. Focused code review and targeted unit test verification are recommended.'
-                              : gate.defectProbability >= 0.4
-                              ? 'Moderate defect probability detected. Review code modifications carefully before approval.'
-                              : 'Defect risk is well within acceptable limits. Changeset demonstrates low risk profile.'}
+                            {gate.defectProbability >= (policy?.blockedDefectProbability ?? 0.65)
+                              ? `This pull request carries elevated defect risk exceeding the repository block policy (${effectiveBlockDefectPct}%). Focused code review is required.`
+                              : gate.defectProbability >= (policy?.warningDefectProbability ?? 0.4)
+                              ? `Moderate defect probability detected (above ${effectiveWarnDefectPct}% warning threshold). Review modifications carefully.`
+                              : 'Defect risk is well within configured policy bounds.'}
                           </p>
                         </div>
 
@@ -399,18 +470,20 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                         <div className="space-y-0.5">
                           <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             <span>Defect Probability Risk</span>
-                            <span className="text-slate-400 font-normal">(&lt; 40% target)</span>
+                            <span className="text-slate-400 font-normal">
+                              (&lt; {effectiveWarnDefectPct}% target)
+                            </span>
                           </div>
                           <p className="text-slate-500">
-                            Computed from changeset file entropy, churn, and author historical patterns.
+                            Evaluated from changeset file entropy, churn, and author historical patterns.
                           </p>
                         </div>
                         <div className="text-right shrink-0">
                           <span
                             className={`font-bold ${
-                              gate.defectProbability > 0.65
+                              gate.defectProbability >= (policy?.blockedDefectProbability ?? 0.65)
                                 ? 'text-rose-600'
-                                : gate.defectProbability >= 0.4
+                                : gate.defectProbability >= (policy?.warningDefectProbability ?? 0.4)
                                 ? 'text-amber-600'
                                 : 'text-emerald-600'
                             }`}
@@ -425,7 +498,9 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                         <div className="space-y-0.5">
                           <div className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                             <span>Peak Cyclomatic Complexity</span>
-                            <span className="text-slate-400 font-normal">(≤ 15 target)</span>
+                            <span className="text-slate-400 font-normal">
+                              (≤ {effectiveWarnCC} target)
+                            </span>
                           </div>
                           <p className="text-slate-500">
                             Evaluated across modified code methods via AST syntax parsing.
@@ -434,9 +509,9 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                         <div className="text-right shrink-0">
                           <span
                             className={`font-bold ${
-                              gate.maxComplexity > 25
+                              gate.maxComplexity >= effectiveBlockCC
                                 ? 'text-rose-600'
-                                : gate.maxComplexity > 15
+                                : gate.maxComplexity >= effectiveWarnCC
                                 ? 'text-amber-600'
                                 : 'text-emerald-600'
                             }`}
@@ -573,6 +648,201 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                   <pre className="p-4 rounded-xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto whitespace-pre-wrap leading-relaxed max-h-[420px] border border-slate-800">
                     {gate.summaryMarkdown || 'No markdown report available.'}
                   </pre>
+                </TabsContent>
+
+                {/* TAB 4: POLICY & RULES */}
+                <TabsContent value="policy" className="mt-4 space-y-5">
+                  <div className="flex items-center justify-between p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
+                    <div>
+                      <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                        Repository Compliance Policy
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Define automated merge blocking and warning thresholds for this repository.
+                      </p>
+                    </div>
+
+                    <Badge variant={policy?.isCustom ? 'default' : 'secondary'}>
+                      {policy?.isCustom ? 'Custom Policy' : 'Default Standards'}
+                    </Badge>
+                  </div>
+
+                  {/* Defect Probability Rules */}
+                  <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4">
+                    <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Defect Risk Limits (%)
+                    </h5>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">
+                          Warning Threshold (%)
+                        </label>
+                        <Input
+                          type="number"
+                          min={5}
+                          max={90}
+                          value={warningDefectPct}
+                          onChange={(e) => setWarningDefectPct(Number(e.target.value))}
+                          className="h-9"
+                        />
+                        <span className="text-[11px] text-slate-400 mt-1 block">
+                          Triggers WARNING status when defect risk exceeds this rate.
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">
+                          Blocked Threshold (%)
+                        </label>
+                        <Input
+                          type="number"
+                          min={10}
+                          max={95}
+                          value={blockedDefectPct}
+                          onChange={(e) => setBlockedDefectPct(Number(e.target.value))}
+                          className="h-9"
+                        />
+                        <span className="text-[11px] text-slate-400 mt-1 block">
+                          Strictly BLOCKS pull requests with defect risk at or above this rate.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Complexity Rules */}
+                  <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4">
+                    <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Peak Cyclomatic Complexity Limits
+                    </h5>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">
+                          Warning Complexity
+                        </label>
+                        <Input
+                          type="number"
+                          min={5}
+                          max={50}
+                          value={warningComplexity}
+                          onChange={(e) => setWarningComplexity(Number(e.target.value))}
+                          className="h-9"
+                        />
+                        <span className="text-[11px] text-slate-400 mt-1 block">
+                          Flags methods with elevated branching complexity.
+                        </span>
+                      </div>
+
+                      <div>
+                        <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block mb-1">
+                          Blocked Complexity
+                        </label>
+                        <Input
+                          type="number"
+                          min={10}
+                          max={100}
+                          value={blockedComplexity}
+                          onChange={(e) => setBlockedComplexity(Number(e.target.value))}
+                          className="h-9"
+                        />
+                        <span className="text-[11px] text-slate-400 mt-1 block">
+                          Blocks changesets containing critical complexity hotspots.
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Enforcement Options */}
+                  <div className="p-5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-3">
+                    <h5 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Automation & Enforcement
+                    </h5>
+
+                    <div className="space-y-3 text-xs">
+                      <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+                        <div>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 block">
+                            Block on Security Vulnerabilities
+                          </span>
+                          <span className="text-slate-500 text-[11px]">
+                            Immediately block merge on critical security issues.
+                          </span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={blockOnSecurity}
+                          onChange={(e) => setBlockOnSecurity(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+                        <div>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 block">
+                            Post GitHub Bot Comments
+                          </span>
+                          <span className="text-slate-500 text-[11px]">
+                            Automatically post and update analysis summaries in PR thread.
+                          </span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={enableBotComment}
+                          onChange={(e) => setEnableBotComment(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+                        <div>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 block">
+                            Publish Commit Status Checks
+                          </span>
+                          <span className="text-slate-500 text-[11px]">
+                            Send commit check states to GitHub for branch protection rules.
+                          </span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={enableCommitStatus}
+                          onChange={(e) => setEnableCommitStatus(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
+
+                      <label className="flex items-center justify-between p-2 rounded-lg hover:bg-slate-50 dark:hover:bg-slate-800/50 cursor-pointer">
+                        <div>
+                          <span className="font-semibold text-slate-800 dark:text-slate-200 block">
+                            Strict Branch Protection
+                          </span>
+                          <span className="text-slate-500 text-[11px]">
+                            Treat WARNING status as CI failure to strictly halt PR merge.
+                          </span>
+                        </div>
+                        <input
+                          type="checkbox"
+                          checked={strictBranchProtection}
+                          onChange={(e) => setStrictBranchProtection(e.target.checked)}
+                          className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                        />
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Save Button */}
+                  <div className="pt-2">
+                    <Button
+                      onClick={() => updatePolicyMutation.mutate()}
+                      disabled={updatePolicyMutation.isPending || isPolicyLoading}
+                      className="w-full gap-2 cursor-pointer"
+                    >
+                      <Save className="w-4 h-4" />
+                      {updatePolicyMutation.isPending
+                        ? 'Saving Policy...'
+                        : 'Save Policy Thresholds'}
+                    </Button>
+                  </div>
                 </TabsContent>
               </Tabs>
             </div>

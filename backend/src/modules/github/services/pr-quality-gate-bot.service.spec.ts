@@ -37,6 +37,10 @@ describe('PrQualityGateBotService', () => {
         create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'gate-uuid-1', createdAt: new Date(), ...data })),
         findFirst: jest.fn().mockResolvedValue({ id: 'gate-uuid-1', status: QualityGateStatus.PASSED }),
       },
+      qualityGatePolicy: {
+        findUnique: jest.fn().mockResolvedValue(null),
+        upsert: jest.fn().mockImplementation(({ create, update }) => Promise.resolve({ id: 'policy-1', ...create, ...update })),
+      },
     };
 
     mockGitHubService = {
@@ -275,5 +279,122 @@ describe('PrQualityGateBotService', () => {
         orderBy: { createdAt: 'desc' },
       }),
     );
+  });
+
+  describe('Policy Configuration', () => {
+    it('returns default policy when no custom policy is configured', async () => {
+      mockPrisma.qualityGatePolicy.findUnique.mockResolvedValueOnce(null);
+
+      const policy = await service.getPolicy('repo-uuid-1');
+      expect(policy.isCustom).toBe(false);
+      expect(policy.warningDefectProbability).toBe(0.4);
+      expect(policy.blockedDefectProbability).toBe(0.65);
+      expect(policy.warningComplexity).toBe(15);
+      expect(policy.blockedComplexity).toBe(25);
+      expect(policy.blockOnSecurity).toBe(true);
+    });
+
+    it('returns custom policy when record exists in database', async () => {
+      mockPrisma.qualityGatePolicy.findUnique.mockResolvedValueOnce({
+        id: 'pol-custom-1',
+        repositoryId: 'repo-uuid-1',
+        warningDefectProbability: 0.25,
+        blockedDefectProbability: 0.50,
+        warningComplexity: 10,
+        blockedComplexity: 18,
+        blockOnSecurity: true,
+        enableBotComment: true,
+        enableCommitStatus: true,
+        strictBranchProtection: true,
+      });
+
+      const policy = await service.getPolicy('repo-uuid-1');
+      expect(policy.isCustom).toBe(true);
+      expect(policy.warningDefectProbability).toBe(0.25);
+      expect(policy.blockedDefectProbability).toBe(0.50);
+      expect(policy.warningComplexity).toBe(10);
+      expect(policy.blockedComplexity).toBe(18);
+      expect(policy.strictBranchProtection).toBe(true);
+    });
+
+    it('upserts policy thresholds and throws error if warning exceeds blocked', async () => {
+      await expect(
+        service.upsertPolicy('repo-uuid-1', {
+          warningDefectProbability: 0.8,
+          blockedDefectProbability: 0.5,
+        }),
+      ).rejects.toThrow('Warning defect probability cannot exceed blocked defect probability');
+
+      await expect(
+        service.upsertPolicy('repo-uuid-1', {
+          warningComplexity: 30,
+          blockedComplexity: 20,
+        }),
+      ).rejects.toThrow('Warning complexity threshold cannot exceed blocked complexity threshold');
+    });
+
+    it('successfully upserts valid custom policy', async () => {
+      mockPrisma.qualityGatePolicy.upsert.mockResolvedValueOnce({
+        id: 'pol-custom-saved',
+        repositoryId: 'repo-uuid-1',
+        warningDefectProbability: 0.3,
+        blockedDefectProbability: 0.55,
+        warningComplexity: 12,
+        blockedComplexity: 20,
+        blockOnSecurity: true,
+        enableBotComment: false,
+        enableCommitStatus: true,
+        strictBranchProtection: true,
+      });
+
+      const result = await service.upsertPolicy('repo-uuid-1', {
+        warningDefectProbability: 0.3,
+        blockedDefectProbability: 0.55,
+        warningComplexity: 12,
+        blockedComplexity: 20,
+        enableBotComment: false,
+        strictBranchProtection: true,
+      });
+
+      expect(mockPrisma.qualityGatePolicy.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { repositoryId: 'repo-uuid-1' },
+        }),
+      );
+      expect(result.warningDefectProbability).toBe(0.3);
+      expect(result.blockedDefectProbability).toBe(0.55);
+      expect(result.enableBotComment).toBe(false);
+    });
+
+    it('evaluates status against custom policy thresholds', async () => {
+      // Mock strict policy: defect >= 0.20 is BLOCKED
+      mockPrisma.qualityGatePolicy.findUnique.mockResolvedValue({
+        id: 'pol-strict',
+        repositoryId: 'repo-uuid-1',
+        warningDefectProbability: 0.10,
+        blockedDefectProbability: 0.20,
+        warningComplexity: 8,
+        blockedComplexity: 12,
+        blockOnSecurity: true,
+        enableBotComment: true,
+        enableCommitStatus: true,
+        strictBranchProtection: true,
+      });
+
+      mockCodeIntelligenceService.predictCommitRisk.mockResolvedValueOnce({
+        defect_probability: 0.22, // Would be PASSED under default 0.40, but BLOCKED under custom 0.20
+        risk_level: 'LOW',
+        is_defect_prone: false,
+        top_risk_drivers: ['Custom policy test'],
+      });
+
+      const result = await service.evaluateAndReport({
+        repositoryId: 'repo-uuid-1',
+        prNumber: 55,
+        filesOverride: [{ path: 'src/core.ts', content: 'export const x = 1;' }],
+      });
+
+      expect(result.status).toBe(QualityGateStatus.BLOCKED);
+    });
   });
 });
