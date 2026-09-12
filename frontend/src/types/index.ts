@@ -211,6 +211,7 @@ export interface TopRepository {
   sqs: number;
   coverage?: number;
   commitCount: number;
+  commits?: number;
   lastActivity?: string;
 }
 
@@ -804,10 +805,19 @@ export interface Commit {
   authorEmail: string;
   authorName: string;
   authorId?: string;
+  developerId?: string;
+  developer?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  };
   repositoryId: string;
   repository?: Repository;
   branch: string;
   committedAt: string;
+  linesAdded?: number;
+  linesDeleted?: number;
   insertions: number;
   deletions: number;
   filesChanged: number;
@@ -834,8 +844,11 @@ export interface CommitStats {
   totalCommits: number;
   totalInsertions: number;
   totalDeletions: number;
-  avgFilesChanged: number;
-  commitsByType: Record<string, number>;
+  totalLinesAdded?: number;
+  totalLinesDeleted?: number;
+  avgFilesChanged?: number;
+  commitsByType?: Record<string, number>;
+  classificationBreakdown?: Record<string, number>;
   topAuthors: Array<{
     authorId: string;
     name: string;
@@ -1581,8 +1594,9 @@ export interface DqsScore {
   score: number;
   trend: number;
   codeQuality: number;
-  reviewSpeed: number;
+  reviewSpeed: number | null;
   bugFixRate: number;
+  coverage?: number;
   modelVersion?: string;
   calculatedAt?: string;
   shapValues?: Record<string, number>;

@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
+import { ScoresService } from '../scores/scores.service';
 
 export interface DeveloperDto {
   id: string;
@@ -49,7 +50,10 @@ export interface DeveloperStatsDto {
 export class DevelopersService {
   private readonly logger = new Logger(DevelopersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scoresService: ScoresService,
+  ) {}
 
   /**
    * Get all developers in an organization
@@ -79,25 +83,40 @@ export class DevelopersService {
       orderBy: { joinedAt: 'asc' },
     });
 
-    return members.map((member) => {
-      const user = member.user;
-      const activeTeam = user.teamMemberships[0]?.team;
-      const latestDqs = user.dqsScores[0]?.score ?? null;
+    return Promise.all(
+      members.map(async (member) => {
+        const user = member.user;
+        const activeTeam = user.teamMemberships[0]?.team;
+        let latestDqs = user.dqsScores[0]?.score ?? null;
+        let lastActive = user.dqsScores[0]?.calculatedAt || null;
 
-      return {
-        id: user.id,
-        name: user.name || user.email.split('@')[0],
-        email: user.email,
-        avatarUrl: user.avatarUrl,
-        role: member.role,
-        teamId: activeTeam?.id || null,
-        team: activeTeam || null,
-        dqs: latestDqs,
-        dqsTrend: null,
-        lastActive: user.dqsScores[0]?.calculatedAt || null,
-        status: 'ACTIVE',
-      };
-    });
+        if (latestDqs === null) {
+          try {
+            const calculated = await this.scoresService.calculateDQS(user.id, organizationId);
+            if (calculated && calculated.score !== null) {
+              latestDqs = calculated.score;
+              lastActive = new Date();
+            }
+          } catch (error) {
+            this.logger.warn(`Failed to auto-evaluate DQS for developer ${user.id}: ${error}`);
+          }
+        }
+
+        return {
+          id: user.id,
+          name: user.name || user.email.split('@')[0],
+          email: user.email,
+          avatarUrl: user.avatarUrl,
+          role: member.role,
+          teamId: activeTeam?.id || null,
+          team: activeTeam || null,
+          dqs: latestDqs,
+          dqsTrend: null,
+          lastActive,
+          status: 'ACTIVE',
+        };
+      }),
+    );
   }
 
   /**
@@ -129,6 +148,20 @@ export class DevelopersService {
 
     const user = member.user;
     const activeTeam = user.teamMemberships[0]?.team;
+    let latestDqs = user.dqsScores[0]?.score ?? null;
+    let lastActive = user.dqsScores[0]?.calculatedAt || null;
+
+    if (latestDqs === null) {
+      try {
+        const calculated = await this.scoresService.calculateDQS(developerId, organizationId);
+        if (calculated && calculated.score !== null) {
+          latestDqs = calculated.score;
+          lastActive = new Date();
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to auto-evaluate DQS for developer ${developerId}: ${error}`);
+      }
+    }
 
     return {
       id: user.id,
@@ -138,9 +171,9 @@ export class DevelopersService {
       role: member.role,
       teamId: activeTeam?.id || null,
       team: activeTeam || null,
-      dqs: user.dqsScores[0]?.score ?? null,
+      dqs: latestDqs,
       dqsTrend: null,
-      lastActive: user.dqsScores[0]?.calculatedAt || null,
+      lastActive,
       status: 'ACTIVE',
     };
   }
@@ -273,7 +306,22 @@ export class DevelopersService {
     }
 
     // 4. Format DQS history points
-    const dqsHistory = dqsScores.map((s) => ({
+    const formattedDqsScores = [...dqsScores];
+    if (formattedDqsScores.length === 0) {
+      try {
+        const calculated = await this.scoresService.calculateDQS(developerId, organizationId);
+        if (calculated && calculated.score !== null) {
+          formattedDqsScores.push({
+            score: calculated.score,
+            calculatedAt: new Date(),
+          });
+        }
+      } catch (error) {
+        this.logger.warn(`Failed to auto-evaluate DQS stats for developer ${developerId}: ${error}`);
+      }
+    }
+
+    const dqsHistory = formattedDqsScores.map((s) => ({
       date: s.calculatedAt.toISOString(),
       score: s.score,
     }));

@@ -58,16 +58,51 @@ export function CommitsPage() {
     return map
   }, [commitsRiskQuery.data])
 
-  const chartData = useMemo(
-    () =>
-      commits.slice(0, 14).reverse().map((commit) => ({
-        date: formatDate(commit.committedAt, { month: 'short', day: 'numeric' }),
-        commits: 1,
-        additions: commit.insertions,
-        deletions: commit.deletions,
-      })),
-    [commits]
-  )
+  const chartData = useMemo(() => {
+    if (!commits || commits.length === 0) return []
+
+    const dayMap = new Map<
+      string,
+      { date: string; rawDate: string; commits: number; additions: number; deletions: number }
+    >()
+
+    commits.forEach((commit) => {
+      if (!commit.committedAt) return
+      const rawDate = new Date(commit.committedAt).toISOString().split('T')[0]
+      const formatted = formatDate(commit.committedAt, { month: 'short', day: 'numeric' })
+      const existing = dayMap.get(rawDate) || {
+        date: formatted,
+        rawDate,
+        commits: 0,
+        additions: 0,
+        deletions: 0,
+      }
+
+      existing.commits += 1
+      existing.additions += commit.linesAdded ?? commit.insertions ?? 0
+      existing.deletions += commit.linesDeleted ?? commit.deletions ?? 0
+      dayMap.set(rawDate, existing)
+    })
+
+    return Array.from(dayMap.values())
+      .sort((a, b) => a.rawDate.localeCompare(b.rawDate))
+      .slice(-14)
+  }, [commits])
+
+  const topAuthors = useMemo(() => {
+    if (statsQuery.data?.topAuthors && statsQuery.data.topAuthors.length > 0) {
+      return statsQuery.data.topAuthors
+    }
+    const authorMap = new Map<string, { authorId: string; name: string; count: number }>()
+    commits.forEach((c) => {
+      const name = c.developer?.name || c.authorName || c.authorEmail?.split('@')[0] || 'Unknown'
+      const key = c.developerId || c.authorEmail || name
+      const cur = authorMap.get(key) || { authorId: key, name, count: 0 }
+      cur.count += 1
+      authorMap.set(key, cur)
+    })
+    return Array.from(authorMap.values()).sort((a, b) => b.count - a.count).slice(0, 6)
+  }, [statsQuery.data?.topAuthors, commits])
 
   return (
     <div className="space-y-6">
@@ -92,12 +127,16 @@ export function CommitsPage() {
         />
         <MetricTile
           label="Insertions"
-          value={formatNumber(statsQuery.data?.totalInsertions ?? 0)}
+          value={formatNumber(
+            statsQuery.data?.totalLinesAdded ?? statsQuery.data?.totalInsertions ?? 0,
+          )}
           icon={<GitPullRequest className="h-5 w-5 text-emerald-500" />}
         />
         <MetricTile
           label="Deletions"
-          value={formatNumber(statsQuery.data?.totalDeletions ?? 0)}
+          value={formatNumber(
+            statsQuery.data?.totalLinesDeleted ?? statsQuery.data?.totalDeletions ?? 0,
+          )}
           icon={<GitPullRequest className="h-5 w-5 text-rose-500" />}
         />
       </div>
@@ -141,12 +180,16 @@ export function CommitsPage() {
               <Card>
                 <CardContent className="space-y-3 p-5">
                   <p className="font-semibold text-slate-950 dark:text-white">Top authors</p>
-                  {(statsQuery.data?.topAuthors ?? []).slice(0, 6).map((author) => (
-                    <div key={author.authorId} className="flex items-center justify-between text-sm">
-                      <span className="truncate text-slate-600 dark:text-slate-300">{author.name}</span>
-                      <Badge variant="secondary">{author.count}</Badge>
-                    </div>
-                  ))}
+                  {topAuthors.length > 0 ? (
+                    topAuthors.slice(0, 6).map((author) => (
+                      <div key={author.authorId} className="flex items-center justify-between text-sm">
+                        <span className="truncate text-slate-600 dark:text-slate-300">{author.name}</span>
+                        <Badge variant="secondary">{author.count}</Badge>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="py-4 text-center text-xs text-slate-400">No author activity found</p>
+                  )}
                 </CardContent>
               </Card>
             </div>

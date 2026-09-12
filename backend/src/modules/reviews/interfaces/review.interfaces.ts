@@ -47,6 +47,7 @@ export interface ReviewQualityMetrics {
 export interface ReviewActivityData {
   date: string;
   reviewCount: number;
+  count?: number;
   avgTurnaroundMinutes: number;
 }
 

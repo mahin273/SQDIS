@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma';
+import { ScoresService } from '../scores/scores.service';
 import { DashboardService } from './dashboard.service';
 
 describe('DashboardService', () => {
@@ -66,7 +67,16 @@ describe('DashboardService', () => {
     };
 
     const module: TestingModule = await Test.createTestingModule({
-      providers: [DashboardService, { provide: PrismaService, useValue: prisma }],
+      providers: [
+        DashboardService,
+        { provide: PrismaService, useValue: prisma },
+        {
+          provide: ScoresService,
+          useValue: {
+            calculateDQS: jest.fn().mockResolvedValue({ score: null }),
+          },
+        },
+      ],
     }).compile();
 
     service = module.get<DashboardService>(DashboardService);
@@ -248,20 +258,24 @@ describe('DashboardService', () => {
       // Dev 1 has DQS 85, 10 commits
       // Dev 2 has DQS 0, 50 commits
       // Dev 3 has DQS 0, 100 commits (should rank above Dev 2 due to secondary sort)
-      prisma.dQSScore.findFirst
-        .mockResolvedValueOnce({ score: 85 })
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce({ score: 0 });
+      prisma.dQSScore.findFirst.mockImplementation(async (args: any) => {
+        if (args?.where?.developerId === 'dev-1') return { score: 85 };
+        if (args?.where?.developerId === 'dev-2') return null;
+        if (args?.where?.developerId === 'dev-3') return { score: 0 };
+        return null;
+      });
 
-      prisma.commit.count
-        .mockResolvedValueOnce(10)
-        .mockResolvedValueOnce(50)
-        .mockResolvedValueOnce(100);
+      prisma.commit.count.mockImplementation(async (args: any) => {
+        if (args?.where?.developerId === 'dev-1') return 10;
+        if (args?.where?.developerId === 'dev-2') return 50;
+        if (args?.where?.developerId === 'dev-3') return 100;
+        return 0;
+      });
 
-      prisma.teamMembership.findFirst
-        .mockResolvedValueOnce({ team: { name: 'Core Team' } })
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
+      prisma.teamMembership.findFirst.mockImplementation(async (args: any) => {
+        if (args?.where?.userId === 'dev-1') return { team: { name: 'Core Team' } };
+        return null;
+      });
 
       const topDevs = await service.getTopDevelopers('org-1', 5);
 

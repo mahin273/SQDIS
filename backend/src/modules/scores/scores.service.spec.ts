@@ -173,7 +173,11 @@ describe('ScoresService', () => {
         triggeredBy: 'commit',
         commitId: 'commit-1',
       },
-      { jobId: `${ScoreJobType.SQS}-project-1` },
+      expect.objectContaining({
+        jobId: expect.stringMatching(new RegExp(`^${ScoreJobType.SQS}-project-1-\\d+$`)),
+        removeOnComplete: true,
+        removeOnFail: 100,
+      }),
     );
   });
 });

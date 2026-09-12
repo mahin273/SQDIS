@@ -994,10 +994,50 @@ export class CommitsService {
       {} as Record<string, number>,
     );
 
+    // Top authors by commit volume
+    let topAuthors: Array<{ authorId: string; name: string; count: number }> = [];
+    try {
+      const authorCounts = await this.prisma.commit.groupBy({
+        by: ['authorEmail', 'authorName', 'developerId'],
+        where,
+        _count: { id: true },
+        orderBy: {
+          _count: {
+            id: 'desc',
+          },
+        },
+        take: 20,
+      });
+
+      const authorMap = new Map<string, { authorId: string; name: string; count: number }>();
+      for (const a of authorCounts) {
+        const key = a.developerId || a.authorEmail || 'unknown';
+        const name = a.authorName || (a.authorEmail ? a.authorEmail.split('@')[0] : 'Unknown');
+        const count =
+          typeof a._count === 'object' && a._count !== null
+            ? (a._count as any).id || 1
+            : Number(a._count) || 1;
+        const existing = authorMap.get(key);
+        if (existing) {
+          existing.count += count;
+        } else {
+          authorMap.set(key, { authorId: key, name, count });
+        }
+      }
+
+      topAuthors = Array.from(authorMap.values())
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 10);
+    } catch (e) {
+      this.logger.warn(`Failed to aggregate top authors: ${e}`);
+    }
+
     return {
       totalCommits,
       totalLinesAdded: aggregates._sum.linesAdded || 0,
       totalLinesDeleted: aggregates._sum.linesDeleted || 0,
+      totalInsertions: aggregates._sum.linesAdded || 0,
+      totalDeletions: aggregates._sum.linesDeleted || 0,
       totalFilesChanged: aggregates._sum.filesChanged || 0,
       averageChurnRatio: aggregates._avg.churnRatio || 0,
       averageLinesAdded: aggregates._avg.linesAdded || 0,
@@ -1005,6 +1045,7 @@ export class CommitsService {
       classificationBreakdown,
       anomalyCount,
       rollingAverages,
+      topAuthors,
     };
   }
 

@@ -89,24 +89,48 @@ export function ScoresPage() {
             <CardContent className="pt-6 space-y-5">
               <div>
                 <div className="flex justify-between text-sm font-medium mb-1">
-                  <span className="text-slate-600 dark:text-slate-400">Code Quality</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">{myScore?.codeQuality ?? 85}%</span>
+                  <span className="text-slate-600 dark:text-slate-400">Test Coverage</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    {myScore?.coverage !== undefined && myScore?.coverage !== null
+                      ? `${Math.round(myScore.coverage)}%`
+                      : '0%'}
+                  </span>
                 </div>
-                <Progress value={myScore?.codeQuality ?? 85} className="h-2" />
+                <Progress value={myScore?.coverage ?? 0} className="h-2" />
+                {(!myScore?.coverage || myScore.coverage === 0) && (
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                    No automated test reports uploaded yet
+                  </p>
+                )}
               </div>
               <div>
                 <div className="flex justify-between text-sm font-medium mb-1">
-                  <span className="text-slate-600 dark:text-slate-400">Review Speed</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">{myScore?.reviewSpeed ?? 78}%</span>
+                  <span className="text-slate-600 dark:text-slate-400">Review & PR Speed</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    {myScore?.reviewSpeed !== null && myScore?.reviewSpeed !== undefined && myScore.reviewSpeed > 0
+                      ? `${myScore.reviewSpeed}%`
+                      : 'N/A'}
+                  </span>
                 </div>
-                <Progress value={myScore?.reviewSpeed ?? 78} className="h-2" />
+                {myScore?.reviewSpeed !== null && myScore?.reviewSpeed !== undefined && myScore.reviewSpeed > 0 ? (
+                  <Progress value={myScore.reviewSpeed} className="h-2" />
+                ) : (
+                  <div
+                    className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800"
+                    title="No peer review or PR turnaround data recorded yet"
+                  />
+                )}
               </div>
               <div>
                 <div className="flex justify-between text-sm font-medium mb-1">
                   <span className="text-slate-600 dark:text-slate-400">Bug Fix Rate</span>
-                  <span className="font-bold text-slate-900 dark:text-slate-100">{myScore?.bugFixRate ?? 92}%</span>
+                  <span className="font-bold text-slate-900 dark:text-slate-100">
+                    {myScore?.bugFixRate !== undefined && myScore?.bugFixRate !== null
+                      ? `${myScore.bugFixRate}%`
+                      : 'N/A'}
+                  </span>
                 </div>
-                <Progress value={myScore?.bugFixRate ?? 92} className="h-2" />
+                <Progress value={myScore?.bugFixRate ?? 0} className="h-2" />
               </div>
             </CardContent>
           </Card>
