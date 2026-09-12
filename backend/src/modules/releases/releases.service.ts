@@ -32,6 +32,7 @@ import {
   GitHubReleaseDetails,
   WorkflowDispatchDetails,
 } from './dto/ship-release.dto';
+import PDFDocument from 'pdfkit';
 
 /**
  * Service for release management
@@ -1040,6 +1041,134 @@ export class ReleasesService {
       webhookHttpStatus,
       dispatchedPayload: dispatchPayload,
     };
+  }
+
+  /**
+   * Export release quality & readiness report as a professional PDF document
+   */
+  async exportPdf(releaseId: string, organizationId: string): Promise<Buffer> {
+    const release = await this.prisma.release.findFirst({
+      where: { id: releaseId, organizationId, isActive: true },
+      include: {
+        organization: { select: { name: true } },
+        sprintAssociations: {
+          include: {
+            sprint: {
+              include: { team: { select: { name: true } } },
+            },
+          },
+        },
+        telemetryAnalyses: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    });
+
+    if (!release) {
+      throw new NotFoundException('Release not found');
+    }
+
+    const readiness = await this.calculateReadiness(releaseId);
+
+    return new Promise((resolve, reject) => {
+      const doc = new PDFDocument({ margin: 50 });
+      const chunks: Buffer[] = [];
+
+      doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+      doc.on('end', () => resolve(Buffer.concat(chunks)));
+      doc.on('error', reject);
+
+      // Title
+      doc.fontSize(22).font('Helvetica-Bold').text('SQDIS Software Release Report', { align: 'center' });
+      doc.moveDown(0.5);
+
+      // Release Header Block
+      doc.fontSize(16).font('Helvetica-Bold').fillColor('#0F172A').text(`Release ${release.version}`);
+      doc.fontSize(10).font('Helvetica').fillColor('#475569');
+      doc.text(`Organization: ${release.organization?.name || 'SQDIS Organization'}`);
+      doc.text(`Target Release Date: ${release.targetDate ? release.targetDate.toISOString().split('T')[0] : 'TBD'}`);
+      if (release.shippedAt) {
+        doc.text(`Shipped Date: ${release.shippedAt.toISOString().split('T')[0]}`);
+      }
+      doc.text(`Status: ${release.isRolledBack ? 'ROLLED BACK' : release.shippedAt ? 'RELEASED / SHIPPED' : 'PLANNED'}`);
+      if (release.description) {
+        doc.text(`Description: ${release.description}`);
+      }
+      doc.text(`Generated At: ${new Date().toISOString()}`);
+      doc.moveDown(0.5);
+
+      // Horizontal Divider
+      doc.moveTo(50, doc.y).lineTo(550, doc.y).strokeColor('#CBD5E1').stroke();
+      doc.moveDown(0.8);
+
+      // 1. Quality & Readiness Breakdown
+      doc.fontSize(13).font('Helvetica-Bold').fillColor('#0F172A').text('1. Quality Readiness Evaluation');
+      doc.moveDown(0.3);
+
+      doc.fontSize(10).font('Helvetica').fillColor('#334155');
+      doc.text(`Overall Readiness Score: ${readiness.score.toFixed(1)}% ${readiness.isAtRisk ? '(FLAGGED AT-RISK)' : '(SAFE TO DEPLOY)'}`);
+      doc.text(`- Bug Resolution Score: ${readiness.bugScore.toFixed(1)}% (Weight: 25%)`);
+      doc.text(`- Test Coverage Score: ${readiness.coverageScore.toFixed(1)}% (Weight: 20%)`);
+      doc.text(`- Developer Quality (DQS): ${readiness.dqsScore.toFixed(1)}% (Weight: 20%)`);
+      doc.text(`- Test Suite Pass Rate: ${readiness.testPassRate.toFixed(1)}% (Weight: 15%)`);
+      if (readiness.hasTelemetry && readiness.telemetryScore !== undefined) {
+        doc.text(`- Operational Telemetry Stability: ${readiness.telemetryScore.toFixed(1)}% (Weight: 20%)`);
+        doc.text(`- Telemetry Verdict: ${readiness.telemetryVerdict || 'HEALTHY'}`);
+        doc.text(`- Deployment Recommendation: ${readiness.telemetryRecommendation || 'PROCEED'}`);
+      }
+      doc.moveDown(0.8);
+
+      // 2. Associated Sprints
+      doc.fontSize(13).font('Helvetica-Bold').fillColor('#0F172A').text('2. Associated Sprints & Delivery Teams');
+      doc.moveDown(0.3);
+
+      const sprints = release.sprintAssociations || [];
+      if (sprints.length > 0) {
+        sprints.forEach((assoc: any, idx: number) => {
+          doc.fontSize(10).font('Helvetica').fillColor('#334155').text(
+            `#${idx + 1} ${assoc.sprint.name} | Team: ${assoc.sprint.team?.name || 'General Team'} | Period: ${assoc.sprint.startDate.toISOString().split('T')[0]} to ${assoc.sprint.endDate.toISOString().split('T')[0]}`
+          );
+        });
+      } else {
+        doc.fontSize(10).font('Helvetica').fillColor('#64748B').text('No sprints associated with this release.');
+      }
+      doc.moveDown(0.8);
+
+      // 3. Canary Telemetry History
+      if (release.telemetryAnalyses && release.telemetryAnalyses.length > 0) {
+        doc.fontSize(13).font('Helvetica-Bold').fillColor('#0F172A').text('3. Canary Telemetry Evaluation History');
+        doc.moveDown(0.3);
+
+        release.telemetryAnalyses.forEach((t: any, idx: number) => {
+          doc.fontSize(10).font('Helvetica').fillColor('#334155').text(
+            `Evaluation #${idx + 1} (${t.serviceName}) — Verdict: ${t.verdict} | P95: ${t.p95BaselineMs.toFixed(1)}ms -> ${t.p95CanaryMs.toFixed(1)}ms (${t.p95DeltaPct.toFixed(1)}%) | Stability: ${t.score.toFixed(0)}/100`
+          );
+        });
+        doc.moveDown(0.8);
+      }
+
+      // 4. Incident & Rollback Details (if any)
+      if (release.isRolledBack) {
+        doc.fontSize(13).font('Helvetica-Bold').fillColor('#DC2626').text('4. Incident Response & Rollback Record');
+        doc.moveDown(0.3);
+        doc.fontSize(10).font('Helvetica').fillColor('#7F1D1D');
+        doc.text(`Rolled Back Timestamp: ${release.rolledBackAt?.toISOString() || 'N/A'}`);
+        doc.text(`Triggered By: ${release.rollbackTriggeredBy || 'System Watchdog'}`);
+        doc.text(`Rollback Reason: ${release.rollbackReason || 'Critical performance regression detected'}`);
+        doc.moveDown(0.8);
+      }
+
+      // Footer
+      doc.fontSize(8).font('Helvetica').fillColor('#94A3B8').text(
+        'Generated by SQDIS (Software Quality & Developer Insight System) • Confidential Engineering Governance Report',
+        50,
+        720,
+        { align: 'center', width: 500 }
+      );
+
+      doc.end();
+    });
   }
 }
 

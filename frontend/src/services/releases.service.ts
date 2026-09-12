@@ -51,6 +51,16 @@ export const releasesService = {
   },
 
   /**
+   * Download release quality and readiness report as PDF (binary blob)
+   */
+  async exportPdf(id: string): Promise<Blob> {
+    const response = await api.get(`/releases/${id}/export/pdf`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  /**
    * Delete release (soft delete)
    */
   async delete(id: string): Promise<void> {

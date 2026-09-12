@@ -276,5 +276,35 @@ describe('ReleasesService', () => {
       );
     });
   });
+
+  describe('exportPdf', () => {
+    it('should throw NotFoundException if release does not exist', async () => {
+      prisma.release.findFirst.mockResolvedValue(null);
+
+      await expect(service.exportPdf('non-existent', 'org-123')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should return a valid Buffer containing PDF binary data', async () => {
+      prisma.release.findFirst.mockResolvedValue({
+        ...mockRelease,
+        organization: { name: 'Test Org' },
+        sprintAssociations: [],
+        telemetryAnalyses: [],
+      } as any);
+
+      prisma.release.findUnique.mockResolvedValue({
+        ...mockRelease,
+        sprintAssociations: [],
+      } as any);
+
+      const pdfBuffer = await service.exportPdf('rel-123', 'org-123');
+
+      expect(Buffer.isBuffer(pdfBuffer)).toBe(true);
+      expect(pdfBuffer.length).toBeGreaterThan(0);
+      expect(pdfBuffer.slice(0, 5).toString('ascii')).toBe('%PDF-');
+    });
+  });
 });
 

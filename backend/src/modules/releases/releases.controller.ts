@@ -9,8 +9,10 @@ import {
   UseGuards,
   HttpCode,
   HttpStatus,
+  Res,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiProduces } from '@nestjs/swagger';
 import { ReleasesService } from './releases.service';
 import { CreateReleaseDto } from './dto/create-release.dto';
 import { UpdateReleaseDto } from './dto/update-release.dto';
@@ -178,6 +180,41 @@ export class ReleasesController {
     ]);
 
     return this.releasesService.shipRelease(id, organizationId, dto, userId);
+  }
+
+  /**
+   * Export release quality & readiness report as a professional PDF
+   */
+  @Get(':id/export/pdf')
+  @ApiOperation({ summary: 'Export release quality and readiness report as PDF' })
+  @ApiParam({ name: 'id', description: 'Release ID' })
+  @ApiProduces('application/pdf')
+  @ApiResponse({
+    status: 200,
+    description: 'PDF report download',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Release not found',
+  })
+  async exportPdf(
+    @Param('id') id: string,
+    @GetUser('organizationId') organizationId: string,
+    @Res() res: Response,
+  ): Promise<void> {
+    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    const release = await this.releasesService.findById(id);
+    const pdfBuffer = await this.releasesService.exportPdf(id, organizationId);
+    const safeVersion = release.version.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const filename = `release-${safeVersion}-report.pdf`;
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': pdfBuffer.length,
+    });
+
+    res.send(pdfBuffer);
   }
 
   /**

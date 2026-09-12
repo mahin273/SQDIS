@@ -21,15 +21,28 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { useToast } from '@/components/ui/toast'
 import { releasesService, repositoriesService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
 import { CanaryTelemetryRadarCard } from './components'
 import type { ReleaseStatus, ShipReleaseRequest, ShipReleaseResponse } from '@/types'
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  window.URL.revokeObjectURL(url)
+}
+
 export function ReleaseDetailPage() {
   const { id } = useParams<{ id: string }>()
   const queryClient = useQueryClient()
+  const { toast } = useToast()
 
   // State for Ship Release Modal & Options
   const [isShipModalOpen, setIsShipModalOpen] = useState(false)
@@ -69,6 +82,18 @@ export function ReleaseDetailPage() {
       setIsShipModalOpen(false)
       queryClient.invalidateQueries({ queryKey: queryKeys.releases.detail(id!) })
       queryClient.invalidateQueries({ queryKey: queryKeys.releases.all() })
+    },
+  })
+
+  const exportPdfMutation = useMutation({
+    mutationFn: () => releasesService.exportPdf(id!),
+    onSuccess: (blob) => {
+      const safeVersion = (release?.version || 'report').replace(/[^a-zA-Z0-9._-]/g, '_')
+      downloadBlob(blob, `release-${safeVersion}-readiness-report.pdf`)
+      toast('Release report downloaded successfully', { type: 'success' })
+    },
+    onError: () => {
+      toast('Failed to download release report. Please try again.', { type: 'error' })
     },
   })
 
@@ -151,7 +176,12 @@ export function ReleaseDetailPage() {
                       <Rocket className="h-4 w-4" /> Ship Release
                     </Button>
                   )}
-                  <Button variant="outline" className="gap-2">
+                  <Button
+                    variant="outline"
+                    className="gap-2"
+                    onClick={() => exportPdfMutation.mutate()}
+                    isLoading={exportPdfMutation.isPending}
+                  >
                     <Download className="h-4 w-4" /> Export Report
                   </Button>
                 </div>
