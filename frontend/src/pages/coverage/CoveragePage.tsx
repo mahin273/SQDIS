@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ShieldCheck, Upload, FileCode2, Loader2, AlertCircle } from 'lucide-react'
+import { ShieldCheck, Upload, FileCode2, Loader2, AlertCircle, Eye, Search } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -13,12 +13,13 @@ import { coverageService, repositoriesService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { formatBytes, formatDate, formatNumber } from '@/lib/utils'
 import { MetricTile, PageHeader, QueryState, formatScore } from '../pageUtils'
-import type { Repository } from '@/types'
+import type { Repository, CoverageReport } from '@/types'
 
 export function CoveragePage() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
 
+  // Upload modal state
   const [isUploadOpen, setIsUploadOpen] = useState(false)
   const [selectedRepoId, setSelectedRepoId] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -28,6 +29,10 @@ export function CoveragePage() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // Inspection modal state
+  const [viewingReportId, setViewingReportId] = useState<string | null>(null)
+  const [moduleSearch, setModuleSearch] = useState('')
+
   const coverageQuery = useQuery({
     queryKey: queryKeys.coverage.all({ page: 1, limit: 50 }),
     queryFn: () => coverageService.getAll({ page: 1, limit: 50 }),
@@ -36,6 +41,13 @@ export function CoveragePage() {
   const repositoriesQuery = useQuery({
     queryKey: queryKeys.repositories.all(),
     queryFn: () => repositoriesService.getAll(),
+  })
+
+  // Detailed report query for the inspection modal
+  const reportDetailQuery = useQuery({
+    queryKey: queryKeys.coverage.detail(viewingReportId ?? ''),
+    queryFn: () => coverageService.getById(viewingReportId!),
+    enabled: !!viewingReportId,
   })
 
   const repositories: Repository[] = repositoriesQuery.data ?? []
@@ -92,12 +104,23 @@ export function CoveragePage() {
   }
 
   const rawCoverage = coverageQuery.data
-  const reports = Array.isArray(rawCoverage) ? rawCoverage : (rawCoverage?.reports ?? [])
+  const reports: CoverageReport[] = Array.isArray(rawCoverage) ? rawCoverage : (rawCoverage?.reports ?? [])
   const completed = reports.filter((report) => report.status === 'COMPLETED')
   const averageCoverage =
     completed.length > 0
       ? completed.reduce((sum, report) => sum + (report.coveragePercentage ?? 0), 0) / completed.length
       : 0
+
+  // Active viewing report
+  const viewingReport = reportDetailQuery.data ?? reports.find((r) => r.id === viewingReportId) ?? null
+
+  // Filtered module list for the inspection modal
+  const filteredModules = useMemo(() => {
+    if (!viewingReport?.modules) return []
+    if (!moduleSearch.trim()) return viewingReport.modules
+    const q = moduleSearch.toLowerCase()
+    return viewingReport.modules.filter((m) => m.modulePath.toLowerCase().includes(q))
+  }, [viewingReport?.modules, moduleSearch])
 
   return (
     <div>
@@ -142,8 +165,12 @@ export function CoveragePage() {
         ) : (
           <div className="grid gap-4">
             {reports.map((report) => (
-              <Card key={report.id}>
-                <CardContent className="grid gap-4 p-5 lg:grid-cols-[1fr_12rem_8rem] lg:items-center">
+              <Card
+                key={report.id}
+                className="hover:border-indigo-400 dark:hover:border-indigo-600 transition-colors cursor-pointer"
+                onClick={() => setViewingReportId(report.id)}
+              >
+                <CardContent className="grid gap-4 p-5 lg:grid-cols-[1fr_12rem_8rem_auto] lg:items-center">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="truncate font-semibold text-slate-950 dark:text-white">
@@ -152,6 +179,11 @@ export function CoveragePage() {
                       <Badge variant={report.status === 'COMPLETED' ? 'success' : report.status === 'FAILED' ? 'danger' : 'secondary'}>
                         {report.status}
                       </Badge>
+                      {report.branch && (
+                        <Badge variant="outline" className="text-xs">
+                          {report.branch}
+                        </Badge>
+                      )}
                     </div>
                     <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
                       {report.format} · {formatBytes(report.fileSize)} · {formatDate(report.createdAt)}
@@ -161,12 +193,170 @@ export function CoveragePage() {
                   <div className="text-sm font-semibold text-slate-950 dark:text-white">
                     {formatNumber(report.linesCovered ?? 0)} / {formatNumber(report.linesTotal ?? 0)}
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      setViewingReportId(report.id)
+                    }}
+                    leftIcon={<Eye className="h-3.5 w-3.5" />}
+                  >
+                    View report
+                  </Button>
                 </CardContent>
               </Card>
             ))}
           </div>
         )}
       </QueryState>
+
+      {/* Report Inspection Modal */}
+      <Modal
+        isOpen={!!viewingReportId}
+        onClose={() => {
+          setViewingReportId(null)
+          setModuleSearch('')
+        }}
+        title={
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="h-5 w-5 text-indigo-500" />
+            <span>Coverage Report Details</span>
+          </div>
+        }
+        description={
+          viewingReport?.repository?.fullName
+            ? `Detailed file breakdown for ${viewingReport.repository.fullName} (${viewingReport.originalFilename})`
+            : viewingReport?.originalFilename
+        }
+        size="lg"
+        footer={
+          <div className="flex justify-between items-center w-full">
+            <span className="text-xs text-slate-500 dark:text-slate-400">
+              {filteredModules.length} file{filteredModules.length === 1 ? '' : 's'} displayed
+            </span>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setViewingReportId(null)
+                setModuleSearch('')
+              }}
+            >
+              Close
+            </Button>
+          </div>
+        }
+      >
+        {reportDetailQuery.isLoading ? (
+          <div className="p-12 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-indigo-500 mb-2" />
+            <p className="text-sm text-slate-500">Loading report breakdown...</p>
+          </div>
+        ) : viewingReport ? (
+          <div className="space-y-5">
+            {/* Quick Metrics Cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Total Coverage</p>
+                <p className="text-lg font-bold text-indigo-600 dark:text-indigo-400">
+                  {formatScore(viewingReport.coveragePercentage ?? 0)}%
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Lines Covered</p>
+                <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400">
+                  {formatNumber(viewingReport.linesCovered ?? 0)}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Total Lines</p>
+                <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                  {formatNumber(viewingReport.linesTotal ?? 0)}
+                </p>
+              </div>
+              <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+                <p className="text-xs text-slate-500 dark:text-slate-400">Format</p>
+                <p className="text-lg font-bold text-slate-700 dark:text-slate-300">
+                  {viewingReport.format}
+                </p>
+              </div>
+            </div>
+
+            {/* Metadata strip */}
+            <div className="text-xs text-slate-500 dark:text-slate-400 flex flex-wrap gap-4 border-b border-slate-100 dark:border-slate-800 pb-3">
+              <span><strong>File:</strong> {viewingReport.originalFilename}</span>
+              <span><strong>Size:</strong> {formatBytes(viewingReport.fileSize)}</span>
+              {viewingReport.branch && <span><strong>Branch:</strong> {viewingReport.branch}</span>}
+              {viewingReport.commitSha && <span><strong>Commit:</strong> <code>{viewingReport.commitSha.slice(0, 7)}</code></span>}
+              <span><strong>Uploaded:</strong> {formatDate(viewingReport.createdAt)}</span>
+            </div>
+
+            {/* Search and Module Breakdown */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  File Breakdown ({viewingReport.modules?.length ?? 0} files)
+                </h4>
+                <div className="relative w-48 sm:w-64">
+                  <Input
+                    placeholder="Filter files..."
+                    value={moduleSearch}
+                    onChange={(e) => setModuleSearch(e.target.value)}
+                    leftIcon={<Search className="h-3.5 w-3.5" />}
+                    className="h-8 text-xs"
+                  />
+                </div>
+              </div>
+
+              {filteredModules.length === 0 ? (
+                <div className="p-8 text-center text-sm text-slate-500 dark:text-slate-400 border border-dashed border-slate-200 dark:border-slate-800 rounded-lg">
+                  {viewingReport.modules && viewingReport.modules.length > 0
+                    ? 'No files matching search criteria.'
+                    : 'No file-level breakdown available in this report.'}
+                </div>
+              ) : (
+                <div className="max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800 border border-slate-200 dark:border-slate-800 rounded-lg">
+                  {filteredModules.map((mod, idx) => {
+                    const pct = mod.coveragePercentage ?? 0
+                    const badgeClass =
+                      pct >= 80
+                        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400'
+                        : pct >= 50
+                        ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-400'
+                        : 'bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400'
+
+                    return (
+                      <div key={mod.id || idx} className="p-3 flex items-center justify-between gap-4 hover:bg-slate-50/50 dark:hover:bg-slate-900/50">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <FileCode2 className="h-4 w-4 text-slate-400 shrink-0" />
+                            <p className="text-xs font-medium text-slate-900 dark:text-slate-100 truncate" title={mod.modulePath}>
+                              {mod.modulePath}
+                            </p>
+                          </div>
+                          <div className="mt-1.5 flex items-center gap-3">
+                            <Progress value={pct} className="h-1.5 flex-1" />
+                            <span className="text-[11px] text-slate-500 shrink-0">
+                              {mod.linesCovered} / {mod.linesTotal} lines
+                            </span>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className={`text-xs font-semibold shrink-0 ${badgeClass}`}>
+                          {formatScore(pct)}%
+                        </Badge>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="p-8 text-center text-sm text-slate-500">
+            Report not found.
+          </div>
+        )}
+      </Modal>
 
       {/* Upload Coverage Report Modal */}
       <Modal
