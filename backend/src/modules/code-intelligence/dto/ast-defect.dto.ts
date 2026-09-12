@@ -3,6 +3,10 @@ import { IsString, IsOptional, IsNumber } from 'class-validator';
 export class AstDefectDto {
   @IsOptional()
   @IsString()
+  repositoryId?: string;
+
+  @IsOptional()
+  @IsString()
   filePath?: string;
 
   @IsOptional()

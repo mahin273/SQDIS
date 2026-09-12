@@ -83,4 +83,31 @@ export class CodeIntelligenceController {
   ) {
     return this.codeIntelligenceService.getBusFactorSnapshots(teamId, limit);
   }
+
+  @Get('repositories/:repositoryId/hotspots')
+  @ApiOperation({ summary: 'Retrieve top complexity & defect hotspots for a repository' })
+  async getRepositoryHotspots(
+    @Param('repositoryId') repositoryId: string,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    return this.codeIntelligenceService.getRepositoryHotspots(repositoryId, limit);
+  }
+
+  @Get('repositories/:repositoryId/commits-risk')
+  @ApiOperation({ summary: 'Retrieve recent commits with JIT defect risk predictions' })
+  async getRepositoryCommitsRisk(
+    @Param('repositoryId') repositoryId: string,
+    @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+  ) {
+    return this.codeIntelligenceService.getRepositoryCommitsRisk(repositoryId, limit);
+  }
+
+  @Post('repositories/:repositoryId/test-impact')
+  @ApiOperation({ summary: 'Analyze test impact for a pull request changed files list' })
+  async getPullRequestTestImpact(
+    @Param('repositoryId') repositoryId: string,
+    @Body('changedFiles') changedFiles: string[],
+  ) {
+    return this.codeIntelligenceService.getPullRequestTestImpact(repositoryId, changedFiles);
+  }
 }

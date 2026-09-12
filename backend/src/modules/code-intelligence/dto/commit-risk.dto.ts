@@ -3,6 +3,10 @@ import { IsString, IsOptional, IsNumber } from 'class-validator';
 export class CommitRiskDto {
   @IsOptional()
   @IsString()
+  repositoryId?: string;
+
+  @IsOptional()
+  @IsString()
   commitSha?: string;
 
   @IsNumber()

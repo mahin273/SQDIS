@@ -11,6 +11,7 @@ import { ScoresModule } from '../scores';
 import { DebtModule } from '../debt';
 import { OnboardingModule } from '../onboarding/onboarding.module';
 import { AlertsModule } from '../alerts/alerts.module';
+import { CodeIntelligenceModule } from '../code-intelligence/code-intelligence.module.js';
 import { CommitQueueModule } from '../../config';
 
 /**
@@ -27,6 +28,7 @@ import { CommitQueueModule } from '../../config';
     forwardRef(() => DebtModule),
     forwardRef(() => OnboardingModule),
     forwardRef(() => AlertsModule),
+    forwardRef(() => CodeIntelligenceModule),
   ],
   controllers: [CommitsController],
   providers: [CommitsService, CommitProcessor, MlClientService],
