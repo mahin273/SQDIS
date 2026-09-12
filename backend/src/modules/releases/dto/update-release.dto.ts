@@ -38,4 +38,12 @@ export class UpdateReleaseDto {
   @IsDateString()
   @IsOptional()
   shippedAt?: string;
+
+  @ApiPropertyOptional({
+    description: 'Release status (PLANNED, IN_PROGRESS, RELEASED, ROLLED_BACK)',
+    example: 'RELEASED',
+  })
+  @IsString()
+  @IsOptional()
+  status?: string;
 }

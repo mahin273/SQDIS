@@ -5,6 +5,12 @@ on:
     branches: [main, master, dev, develop]
   pull_request:
     branches: [main, master, dev, develop]
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version to build and deploy'
+        required: false
+        default: 'latest'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

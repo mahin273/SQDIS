@@ -5,6 +5,8 @@ import type {
   UpdateReleaseRequest,
   AssociateSprintRequest,
   ReleaseReadiness,
+  ShipReleaseRequest,
+  ShipReleaseResponse,
 } from '@/types';
 
 export const releasesService = {
@@ -37,6 +39,24 @@ export const releasesService = {
    */
   async update(id: string, data: UpdateReleaseRequest): Promise<Release> {
     const response = await api.patch<Release>(`/releases/${id}`, data);
+    return response.data;
+  },
+
+  /**
+   * Ship release with optional GitHub Release (Option A) and Actions dispatch (Option B)
+   */
+  async ship(id: string, options?: ShipReleaseRequest): Promise<ShipReleaseResponse> {
+    const response = await api.post<ShipReleaseResponse>(`/releases/${id}/ship`, options || {});
+    return response.data;
+  },
+
+  /**
+   * Download release quality and readiness report as PDF (binary blob)
+   */
+  async exportPdf(id: string): Promise<Blob> {
+    const response = await api.get(`/releases/${id}/export/pdf`, {
+      responseType: 'blob',
+    });
     return response.data;
   },
 

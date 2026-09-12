@@ -44,8 +44,18 @@ export function ReleasesPage() {
     : (rawReleases && typeof rawReleases === 'object' && Array.isArray((rawReleases as any).releases))
     ? (rawReleases as any).releases
     : []
-  const releasedCount = releases.filter((r) => r.status === 'RELEASED').length
-  const pendingCount = releases.filter((r) => r.status === 'DRAFT' || r.status === 'PLANNED' || r.status === 'IN_PROGRESS' || r.status === 'READY').length
+  const resolveReleaseStatus = (r: Release): ReleaseStatus => {
+    if (r.isRolledBack) return 'ROLLED_BACK'
+    if (r.status) return r.status
+    if (r.shippedAt) return 'RELEASED'
+    return 'PLANNED'
+  }
+
+  const releasedCount = releases.filter((r) => resolveReleaseStatus(r) === 'RELEASED').length
+  const pendingCount = releases.filter((r) => {
+    const s = resolveReleaseStatus(r)
+    return s === 'DRAFT' || s === 'PLANNED' || s === 'IN_PROGRESS' || s === 'READY'
+  }).length
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
@@ -98,7 +108,7 @@ export function ReleasesPage() {
                       </h2>
                       <p className="text-xs text-blue-600 dark:text-blue-400">{release.description || 'Release package'}</p>
                     </div>
-                    {getStatusBadge(release.status)}
+                    {getStatusBadge(resolveReleaseStatus(release))}
                   </div>
 
                   <p className="mt-3 text-sm text-slate-600 dark:text-slate-400 line-clamp-2">

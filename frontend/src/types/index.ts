@@ -617,11 +617,47 @@ export interface UpdateReleaseRequest {
   version?: string;
   description?: string;
   status?: ReleaseStatus;
+  shippedAt?: string;
   targetDate?: string;
 }
 
 export interface AssociateSprintRequest {
   sprintId: string;
+}
+
+export interface ShipReleaseRequest {
+  repositoryId?: string;
+  createGitHubRelease?: boolean;
+  tagName?: string;
+  releaseName?: string;
+  releaseNotes?: string;
+  triggerWorkflow?: boolean;
+  workflowFileName?: string;
+  gitRef?: string;
+}
+
+export interface GitHubReleaseDetails {
+  success: boolean;
+  id?: number;
+  tagName?: string;
+  name?: string;
+  htmlUrl?: string;
+  error?: string;
+}
+
+export interface WorkflowDispatchDetails {
+  success: boolean;
+  workflow?: string;
+  ref?: string;
+  actionsUrl?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface ShipReleaseResponse {
+  release: Release;
+  githubRelease?: GitHubReleaseDetails;
+  workflowDispatch?: WorkflowDispatchDetails;
 }
 
 export interface ReleaseReadiness {

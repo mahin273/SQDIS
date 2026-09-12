@@ -237,5 +237,74 @@ describe('ReleasesService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('shipRelease', () => {
+    it('should throw NotFoundException if release does not exist', async () => {
+      prisma.release.findFirst.mockResolvedValue(null);
+
+      await expect(service.shipRelease('non-existent', 'org-123')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw ConflictException if release is already rolled back', async () => {
+      prisma.release.findFirst.mockResolvedValue({
+        ...mockRelease,
+        isRolledBack: true,
+      } as any);
+
+      await expect(service.shipRelease('rel-123', 'org-123')).rejects.toThrow(ConflictException);
+    });
+
+    it('should ship release and update shippedAt timestamp', async () => {
+      prisma.release.findFirst.mockResolvedValue(mockRelease as any);
+      const shippedDate = new Date();
+      prisma.release.update.mockResolvedValue({
+        ...mockRelease,
+        shippedAt: shippedDate,
+      } as any);
+
+      const result = await service.shipRelease('rel-123', 'org-123');
+
+      expect(result.release.status).toBe('RELEASED');
+      expect(result.release.shippedAt).toBeDefined();
+      expect(prisma.release.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'rel-123' },
+          data: expect.objectContaining({ shippedAt: expect.any(Date) }),
+        }),
+      );
+    });
+  });
+
+  describe('exportPdf', () => {
+    it('should throw NotFoundException if release does not exist', async () => {
+      prisma.release.findFirst.mockResolvedValue(null);
+
+      await expect(service.exportPdf('non-existent', 'org-123')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should return a valid Buffer containing PDF binary data', async () => {
+      prisma.release.findFirst.mockResolvedValue({
+        ...mockRelease,
+        organization: { name: 'Test Org' },
+        sprintAssociations: [],
+        telemetryAnalyses: [],
+      } as any);
+
+      prisma.release.findUnique.mockResolvedValue({
+        ...mockRelease,
+        sprintAssociations: [],
+      } as any);
+
+      const pdfBuffer = await service.exportPdf('rel-123', 'org-123');
+
+      expect(Buffer.isBuffer(pdfBuffer)).toBe(true);
+      expect(pdfBuffer.length).toBeGreaterThan(0);
+      expect(pdfBuffer.slice(0, 5).toString('ascii')).toBe('%PDF-');
+    });
+  });
 });
 
