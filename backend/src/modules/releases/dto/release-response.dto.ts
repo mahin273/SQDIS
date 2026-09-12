@@ -59,6 +59,30 @@ export class ReadinessScoreDto {
     example: false,
   })
   isAtRisk!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Operational telemetry stability score component (20% weight if available)',
+    example: 95,
+  })
+  telemetryScore?: number;
+
+  @ApiPropertyOptional({
+    description: 'Latest canary telemetry verdict',
+    example: 'HEALTHY',
+  })
+  telemetryVerdict?: 'HEALTHY' | 'DEGRADED' | 'CRITICAL_REGRESSION';
+
+  @ApiPropertyOptional({
+    description: 'Operational recommendation',
+    example: 'PROCEED',
+  })
+  telemetryRecommendation?: 'PROCEED' | 'MONITOR_CLOSELY' | 'TRIGGER_ROLLBACK';
+
+  @ApiPropertyOptional({
+    description: 'Whether live telemetry analysis has been executed',
+    example: true,
+  })
+  hasTelemetry?: boolean;
 }
 
 /**
@@ -100,4 +124,27 @@ export class ReleaseResponseDto {
     type: ReadinessScoreDto,
   })
   readiness?: ReadinessScoreDto;
+
+  @ApiPropertyOptional({
+    description: 'Whether the release has been rolled back due to failure/incident',
+    example: false,
+  })
+  isRolledBack?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp when rollback was executed',
+  })
+  rolledBackAt?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Reason for rollback',
+    example: 'P95 latency spike detected in canary telemetry',
+  })
+  rollbackReason?: string;
+
+  @ApiPropertyOptional({
+    description: 'User ID who triggered the rollback',
+  })
+  rollbackTriggeredBy?: string;
 }
+

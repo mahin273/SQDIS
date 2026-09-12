@@ -70,6 +70,7 @@ export const createMockPrismaService = () => ({
   sprintReport: createMockModel(),
   release: createMockModel(),
   releaseSprintAssociation: createMockModel(),
+  releaseTelemetryAnalysis: createMockModel(),
   sprintGoal: createMockModel(),
   sprintRetrospective: createMockModel(),
   sprintCarryOver: createMockModel(),
@@ -89,4 +90,6 @@ export const createMockPrismaService = () => ({
   auditLog: createMockModel(),
   auditRetentionPolicy: createMockModel(),
   onboarding: createMockModel(),
+  onboardingChecklistItem: createMockModel(),
+  defectPrediction: createMockModel(),
 });

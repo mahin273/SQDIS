@@ -184,4 +184,26 @@ export const codeIntelligenceService = {
     });
     return resp.data;
   },
+
+  async getRemediationAdvice(
+    payload: import('@/types').RemediationRequest,
+  ): Promise<import('@/types').RemediationResponse> {
+    const resp = await api.post<import('@/types').RemediationResponse>(
+      '/code-intelligence/remediation/advise',
+      payload,
+    );
+    return resp.data;
+  },
+
+  async getRepositoryTreemap(
+    repositoryId: string,
+    params?: import('@/types').TreemapQuery,
+  ): Promise<import('@/types').RepositoryTreemapResponse> {
+    const resp = await api.get<import('@/types').RepositoryTreemapResponse>(
+      `/code-intelligence/repositories/${repositoryId}/treemap`,
+      { params },
+    );
+    return resp.data;
+  },
 };
+

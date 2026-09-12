@@ -16,6 +16,14 @@ import { CreateReleaseDto } from './dto/create-release.dto';
 import { UpdateReleaseDto } from './dto/update-release.dto';
 import { AssociateSprintDto } from './dto/release-sprint-association.dto';
 import { ReleaseResponseDto, ReadinessScoreDto } from './dto/release-response.dto';
+import {
+  EvaluateTelemetryDto,
+  ReleaseTelemetryResponseDto,
+} from './dto/evaluate-telemetry.dto';
+import {
+  RollbackReleaseDto,
+  RollbackResponseDto,
+} from './dto/rollback-release.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -269,4 +277,79 @@ export class ReleasesController {
     await this.releasesService.verifyReleaseAccess(id, organizationId);
     return this.releasesService.calculateReadiness(id);
   }
+
+  /**
+   * Evaluate canary performance regression telemetry for a release
+   */
+  @Post(':id/telemetry/evaluate')
+  @ApiOperation({ summary: 'Evaluate canary performance regression telemetry for a release' })
+  @ApiParam({ name: 'id', description: 'Release ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Canary telemetry evaluation result',
+    type: ReleaseTelemetryResponseDto,
+  })
+  async evaluateTelemetry(
+    @Param('id') id: string,
+    @Body() dto: EvaluateTelemetryDto,
+    @GetUser('id') userId: string,
+    @GetUser('organizationId') organizationId: string,
+  ): Promise<ReleaseTelemetryResponseDto> {
+    await this.releasesService.verifyReleaseAccess(id, organizationId);
+
+    // Only OWNER and ADMIN can trigger telemetry evaluations
+    await this.organizationsService.verifyUserRole(organizationId, userId, [
+      Role.OWNER,
+      Role.ADMIN,
+    ]);
+
+    return this.releasesService.evaluateCanaryTelemetry(id, organizationId, dto);
+  }
+
+  /**
+   * Get canary performance telemetry history for a release
+   */
+  @Get(':id/telemetry')
+  @ApiOperation({ summary: 'Get canary performance telemetry history for a release' })
+  @ApiParam({ name: 'id', description: 'Release ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Historical telemetry analyses for release',
+    type: [ReleaseTelemetryResponseDto],
+  })
+  async getTelemetryHistory(
+    @Param('id') id: string,
+    @GetUser('organizationId') organizationId: string,
+  ): Promise<ReleaseTelemetryResponseDto[]> {
+    return this.releasesService.getTelemetryHistory(id, organizationId);
+  }
+
+  /**
+   * Dispatch automated rollback and webhook incident response for a release
+   */
+  @Post(':id/rollback')
+  @ApiOperation({ summary: 'Dispatch automated rollback and webhook incident response for a release' })
+  @ApiParam({ name: 'id', description: 'Release ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Rollback dispatched and recorded successfully',
+    type: RollbackResponseDto,
+  })
+  async rollbackRelease(
+    @Param('id') id: string,
+    @Body() dto: RollbackReleaseDto,
+    @GetUser('id') userId: string,
+    @GetUser('organizationId') organizationId: string,
+  ): Promise<RollbackResponseDto> {
+    await this.releasesService.verifyReleaseAccess(id, organizationId);
+
+    // Only OWNER and ADMIN can trigger rollbacks
+    await this.organizationsService.verifyUserRole(organizationId, userId, [
+      Role.OWNER,
+      Role.ADMIN,
+    ]);
+
+    return this.releasesService.rollbackRelease(id, organizationId, userId, dto);
+  }
 }
+

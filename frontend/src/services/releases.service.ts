@@ -69,6 +69,45 @@ export const releasesService = {
     const response = await api.get<ReleaseReadiness>(`/releases/${id}/readiness`);
     return response.data;
   },
+
+  /**
+   * Evaluate canary performance regression telemetry
+   */
+  async evaluateCanaryTelemetry(
+    id: string,
+    data?: import('@/types').EvaluateTelemetryRequest,
+  ): Promise<import('@/types').ReleaseTelemetryAnalysis> {
+    const response = await api.post<import('@/types').ReleaseTelemetryAnalysis>(
+      `/releases/${id}/telemetry/evaluate`,
+      data || {},
+    );
+    return response.data;
+  },
+
+  /**
+   * Get canary performance telemetry history
+   */
+  async getCanaryTelemetry(id: string): Promise<import('@/types').ReleaseTelemetryAnalysis[]> {
+    const response = await api.get<import('@/types').ReleaseTelemetryAnalysis[]>(
+      `/releases/${id}/telemetry`,
+    );
+    return response.data;
+  },
+
+  /**
+   * Dispatch automated rollback and webhook incident response
+   */
+  async rollbackRelease(
+    id: string,
+    data?: import('@/types').RollbackReleaseRequest,
+  ): Promise<import('@/types').RollbackResponse> {
+    const response = await api.post<import('@/types').RollbackResponse>(
+      `/releases/${id}/rollback`,
+      data || {},
+    );
+    return response.data;
+  },
 };
+
 
 export default releasesService;

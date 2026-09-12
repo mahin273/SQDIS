@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { DefectRiskGauge } from './components/DefectRiskGauge';
+import { ArchitectureTreemapCard } from './components/ArchitectureTreemapCard';
 import {
   codeIntelligenceService,
   repositoriesService,
@@ -440,8 +441,15 @@ export const CodeIntelligencePage: React.FC = () => {
           {/* LIVE TAB 1: ARCHITECTURE DEFECT HOTSPOTS */}
           {/* ------------------------------------------------------------- */}
           {activeLiveTab === 'hotspots' && (
-            <Card>
-              <CardHeader className="pb-4">
+            <div className="space-y-6">
+              {/* Interactive Hierarchical Treemap & Hotspot Quadrant Visualizer */}
+              <ArchitectureTreemapCard
+                repositoryId={activeRepoId}
+                repositoryName={activeRepo?.name || activeRepo?.fullName || 'Active Repository'}
+              />
+
+              <Card>
+                <CardHeader className="pb-4">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <CardTitle className="flex items-center gap-2 text-base">
@@ -588,7 +596,9 @@ export const CodeIntelligencePage: React.FC = () => {
                 )}
               </CardContent>
             </Card>
-          )}
+          </div>
+        )}
+
 
           {/* ------------------------------------------------------------- */}
           {/* LIVE TAB 2: COMMIT DEFECT RISK STREAM */}

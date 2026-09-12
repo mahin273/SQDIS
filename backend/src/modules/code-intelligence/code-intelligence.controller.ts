@@ -13,11 +13,16 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator.js';
 import { CodeIntelligenceService } from './code-intelligence.service.js';
+import { CodeRemediationService } from './services/code-remediation.service.js';
 import {
   AstDefectDto,
   CommitRiskDto,
   TestImpactDto,
   CanaryAnalysisDto,
+  RemediationRequestDto,
+  RemediationResponseDto,
+  TreemapQueryDto,
+  RepositoryTreemapResponseDto,
 } from './dto/index.js';
 
 @ApiTags('Code Intelligence')
@@ -25,7 +30,16 @@ import {
 @Controller('code-intelligence')
 @UseGuards(JwtAuthGuard)
 export class CodeIntelligenceController {
-  constructor(private readonly codeIntelligenceService: CodeIntelligenceService) {}
+  constructor(
+    private readonly codeIntelligenceService: CodeIntelligenceService,
+    private readonly codeRemediationService: CodeRemediationService,
+  ) {}
+
+  @Post('remediation/advise')
+  @ApiOperation({ summary: 'Diagnose structural code smells and generate prescriptive refactoring advice' })
+  async generateRemediationAdvice(@Body() dto: RemediationRequestDto): Promise<RemediationResponseDto> {
+    return this.codeRemediationService.generateAdvice(dto);
+  }
 
   @Post('ast-defect')
   @ApiOperation({ summary: 'Predict module defect risk using Tree-sitter AST and NASA MDP model' })
@@ -110,4 +124,18 @@ export class CodeIntelligenceController {
   ) {
     return this.codeIntelligenceService.getPullRequestTestImpact(repositoryId, changedFiles);
   }
+
+  @Get('repositories/:repositoryId/treemap')
+  @ApiOperation({ summary: 'Retrieve hierarchical architectural treemap and churn vs complexity hotspot matrix' })
+  async getRepositoryTreemap(
+    @Param('repositoryId') repositoryId: string,
+    @Query() query: TreemapQueryDto,
+  ): Promise<RepositoryTreemapResponseDto> {
+    return this.codeIntelligenceService.getRepositoryTreemap(
+      repositoryId,
+      query.sizeBy,
+      query.colorBy,
+    );
+  }
 }
+

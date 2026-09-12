@@ -595,11 +595,16 @@ export interface Release {
   shippedAt?: string;
   isActive?: boolean;
   readiness?: ReleaseReadiness;
+  isRolledBack?: boolean;
+  rolledBackAt?: string;
+  rollbackReason?: string;
+  rollbackTriggeredBy?: string;
   createdAt: string;
   updatedAt: string;
   sprints?: Sprint[];
   name?: string;
 }
+
 
 export interface CreateReleaseRequest {
   version: string;
@@ -619,20 +624,161 @@ export interface AssociateSprintRequest {
 }
 
 export interface ReleaseReadiness {
-  releaseId: string;
-  version: string;
+  releaseId?: string;
+  version?: string;
   score: number;
-  status: 'NOT_READY' | 'CONCERNING' | 'READY';
-  breakdown: Array<{
+  bugScore?: number;
+  coverageScore?: number;
+  dqsScore?: number;
+  testPassRate?: number;
+  isAtRisk?: boolean;
+  telemetryScore?: number;
+  telemetryVerdict?: 'HEALTHY' | 'DEGRADED' | 'CRITICAL_REGRESSION';
+  telemetryRecommendation?: 'PROCEED' | 'MONITOR_CLOSELY' | 'TRIGGER_ROLLBACK';
+  hasTelemetry?: boolean;
+  status?: 'NOT_READY' | 'CONCERNING' | 'READY';
+  breakdown?: Array<{
     category: string;
     score: number;
     weight: number;
     status: 'pass' | 'warn' | 'fail';
   }>;
-  risks: Array<{
+  risks?: Array<{
     severity: 'LOW' | 'MEDIUM' | 'HIGH';
     message: string;
   }>;
+}
+
+export interface CanaryMetricSnapshot {
+  p95_latency_ms: number;
+  error_rate_5xx: number;
+  memory_rss_mb: number;
+  cpu_utilization_pct?: number;
+}
+
+export interface CanaryMetricDelta {
+  latency_delta_pct: number;
+  error_rate_delta: number;
+  memory_delta_pct: number;
+}
+
+export interface CanaryViolation {
+  metric: string;
+  severity: 'WARNING' | 'CRITICAL';
+  description: string;
+  observed_value: number;
+  baseline_value: number;
+  threshold: string;
+}
+
+export interface ReleaseTelemetryAnalysis {
+  id: string;
+  releaseId: string;
+  serviceName: string;
+  verdict: 'HEALTHY' | 'DEGRADED' | 'CRITICAL_REGRESSION';
+  recommendation: 'PROCEED' | 'MONITOR_CLOSELY' | 'TRIGGER_ROLLBACK';
+  score: number;
+  baselineMetrics: CanaryMetricSnapshot;
+  canaryMetrics: CanaryMetricSnapshot;
+  deltas: CanaryMetricDelta;
+  violations: CanaryViolation[];
+  createdAt: string;
+}
+
+export interface EvaluateTelemetryRequest {
+  serviceName?: string;
+  baselineDurationMinutes?: number;
+  canaryDurationMinutes?: number;
+}
+
+export interface RollbackReleaseRequest {
+  reason?: string;
+  webhookUrl?: string;
+  targetStableVersion?: string;
+}
+
+export interface RollbackResponse {
+  success: boolean;
+  releaseId: string;
+  version: string;
+  isRolledBack: boolean;
+  rolledBackAt: string;
+  rollbackReason: string;
+  rollbackTriggeredBy?: string;
+  webhookDispatched: boolean;
+  webhookHttpStatus?: number | null;
+  dispatchedPayload?: any;
+}
+
+export interface RemediationRecipe {
+  smellType: string;
+  title: string;
+  severity: 'CRITICAL' | 'WARNING' | 'SUGGESTION';
+  recommendedStrategy: string;
+  estimatedComplexityReductionPct: number;
+  explanation: string;
+  stepByStep: string[];
+  beforeSnippet: string;
+  afterSnippet: string;
+}
+
+export interface RemediationResponse {
+  targetFilePath?: string;
+  totalSmellsFound: number;
+  refactoringPotentialScore: number;
+  recipes: RemediationRecipe[];
+}
+
+export interface RemediationRequest {
+  code: string;
+  language?: string;
+  filePath?: string;
+  cyclomaticComplexity?: number;
+}
+
+export interface TreemapNode {
+  name: string;
+  path: string;
+  type: 'directory' | 'file';
+  loc: number;
+  cyclomaticComplexity: number;
+  cognitiveComplexity: number;
+  defectProbability: number;
+  debtCount: number;
+  churnCount: number;
+  riskLevel: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+  children?: TreemapNode[];
+}
+
+export interface QuadrantFileInfo {
+  filePath: string;
+  loc: number;
+  cyclomaticComplexity: number;
+  churnCount: number;
+  debtCount: number;
+  defectProbability: number;
+  riskLevel: string;
+  quadrant: 'DANGER_ZONE' | 'STABLE_COMPLEX' | 'ACTIVE_SIMPLE' | 'HEALTHY';
+}
+
+export interface RepositoryTreemapResponse {
+  repositoryId: string;
+  totalFiles: number;
+  totalLoc: number;
+  averageComplexity: number;
+  root: TreemapNode;
+  quadrantCounts: {
+    dangerZone: number;
+    stableComplex: number;
+    activeSimple: number;
+    healthy: number;
+  };
+  quadrantFiles: QuadrantFileInfo[];
+}
+
+export interface TreemapQuery {
+  sizeBy?: 'loc' | 'churn';
+  colorBy?: 'complexity' | 'defectRisk' | 'debtCount';
 }
 
 // ============== COMMITS ==============

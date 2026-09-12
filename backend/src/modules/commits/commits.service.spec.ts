@@ -18,6 +18,7 @@ import { OnboardingService } from '../onboarding/onboarding.service';
 import { ScoresService } from '../scores/scores.service';
 import { CommitsService } from './commits.service';
 import { MlClientService } from './services';
+import { CodeIntelligenceService } from '../code-intelligence/code-intelligence.service';
 
 describe('CommitsService', () => {
   let service: CommitsService;
@@ -129,6 +130,10 @@ describe('CommitsService', () => {
         { provide: DebtService, useValue: debtService },
         { provide: OnboardingService, useValue: onboardingService },
         { provide: AlertsService, useValue: alertsService },
+        {
+          provide: CodeIntelligenceService,
+          useValue: { predictCommitDefect: jest.fn().mockResolvedValue(undefined) },
+        },
       ],
     }).compile();
 
