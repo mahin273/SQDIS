@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import { GitPullRequest, Clock, CheckCircle2, AlertCircle, ArrowRight, Search, Activity, User, Github, Zap, Shield } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -51,6 +52,23 @@ export function ReviewsPage() {
     headCommitSha?: string;
   } | null>(null)
   const pageSize = 10
+
+  const queryClient = useQueryClient()
+
+  // Real-time WebSocket listener for live Quality Gate evaluation updates
+  useWebSocket('dashboard-updates', {
+    onMessage: (msg: any) => {
+      if (
+        msg?.type === 'pr_quality_gate_evaluated' ||
+        msg?.event?.evaluationId ||
+        msg?.type === 'PR_EVALUATED'
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['quality-gate'] })
+        queryClient.invalidateQueries({ queryKey: ['quality-gate-history'] })
+        queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all() })
+      }
+    },
+  })
 
   const stateParam = mapToReviewStateFilter(filterState)
 

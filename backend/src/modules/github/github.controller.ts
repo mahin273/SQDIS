@@ -1034,5 +1034,24 @@ export class GitHubController {
     this.validateOrganizationContext(organizationId);
     return this.prQualityGateBotService.upsertPolicy(repositoryId, dto);
   }
+
+  /**
+   * Retrieve historical compliance analytics for a repository
+   */
+  @Get('quality-gate/history/:repositoryId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get historical quality gate compliance analytics for a repository',
+  })
+  async getQualityGateComplianceHistory(
+    @Param('repositoryId') repositoryId: string,
+    @Query('days') days: string | undefined,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    this.validateOrganizationContext(organizationId);
+    const periodDays = days ? parseInt(days, 10) : 30;
+    return this.prQualityGateBotService.getComplianceHistory(repositoryId, isNaN(periodDays) ? 30 : periodDays);
+  }
 }
 

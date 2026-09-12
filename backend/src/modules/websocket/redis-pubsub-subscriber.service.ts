@@ -6,6 +6,7 @@ import {
   ScoreUpdatedEvent,
   AlertNewEvent,
   NotificationNewEvent,
+  QualityGateEvaluatedWsEvent,
 } from './types/websocket.types';
 
 /**
@@ -31,6 +32,11 @@ interface AlertEventPayload {
 interface NotificationEventPayload {
   userId: string;
   event: NotificationNewEvent;
+}
+
+interface QualityGateEventPayload {
+  organizationId: string;
+  event: QualityGateEvaluatedWsEvent;
 }
 
 /**
@@ -77,6 +83,12 @@ export class RedisPubSubSubscriber implements OnModuleInit {
     await this.redisPubSub.subscribe<NotificationEventPayload>(
       PUBSUB_CHANNELS.NOTIFICATION_EVENTS,
       (message) => this.handleNotificationEvent(message),
+    );
+
+    // Subscribe to quality gate events
+    await this.redisPubSub.subscribe<QualityGateEventPayload>(
+      PUBSUB_CHANNELS.QUALITY_GATE_EVENTS,
+      (message) => this.handleQualityGateEvent(message),
     );
 
     this.logger.log('Subscribed to all Redis pub/sub channels');
@@ -148,5 +160,24 @@ export class RedisPubSubSubscriber implements OnModuleInit {
     this.logger.debug(`Received notification event from Redis for user ${userId}`);
 
     this.wsGateway.publishNotificationNew(userId, event);
+  }
+
+  /**
+   * Handle quality gate events from Redis
+   * Only forward if message originated from a different server
+   */
+  private handleQualityGateEvent(message: PubSubMessage<QualityGateEventPayload>): void {
+    // Skip if message originated from this server
+    if (message.serverId === this.redisPubSub.getServerId()) {
+      this.logger.debug('Skipping quality gate event from same server');
+      return;
+    }
+
+    const { organizationId, event } = message.payload;
+    this.logger.debug(
+      `Received quality gate event from Redis for org ${organizationId} PR #${event.prNumber}`,
+    );
+
+    this.wsGateway.publishQualityGateEvaluated(organizationId, event);
   }
 }

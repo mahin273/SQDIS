@@ -3,6 +3,7 @@ import { PrQualityGateBotService } from './pr-quality-gate-bot.service';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GitHubService } from '../github.service';
 import { CodeIntelligenceService } from '../../code-intelligence/code-intelligence.service';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { QualityGateStatus } from '@prisma/client';
 
 describe('PrQualityGateBotService', () => {
@@ -10,6 +11,7 @@ describe('PrQualityGateBotService', () => {
   let mockPrisma: any;
   let mockGitHubService: any;
   let mockCodeIntelligenceService: any;
+  let mockEventEmitter: any;
 
   const sampleRepo = {
     id: 'repo-uuid-1',
@@ -25,6 +27,10 @@ describe('PrQualityGateBotService', () => {
   };
 
   beforeEach(async () => {
+    mockEventEmitter = {
+      emit: jest.fn(),
+    };
+
     mockPrisma = {
       repository: {
         findUnique: jest.fn().mockResolvedValue(sampleRepo),
@@ -36,10 +42,17 @@ describe('PrQualityGateBotService', () => {
       pullRequestQualityGate: {
         create: jest.fn().mockImplementation(({ data }) => Promise.resolve({ id: 'gate-uuid-1', createdAt: new Date(), ...data })),
         findFirst: jest.fn().mockResolvedValue({ id: 'gate-uuid-1', status: QualityGateStatus.PASSED }),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       qualityGatePolicy: {
         findUnique: jest.fn().mockResolvedValue(null),
         upsert: jest.fn().mockImplementation(({ create, update }) => Promise.resolve({ id: 'policy-1', ...create, ...update })),
+      },
+      organizationMember: {
+        findMany: jest.fn().mockResolvedValue([{ userId: 'admin-1' }]),
+      },
+      notification: {
+        create: jest.fn().mockResolvedValue({ id: 'notif-1' }),
       },
     };
 
@@ -77,6 +90,7 @@ describe('PrQualityGateBotService', () => {
         { provide: PrismaService, useValue: mockPrisma },
         { provide: GitHubService, useValue: mockGitHubService },
         { provide: CodeIntelligenceService, useValue: mockCodeIntelligenceService },
+        { provide: EventEmitter2, useValue: mockEventEmitter },
       ],
     }).compile();
 
@@ -395,6 +409,122 @@ describe('PrQualityGateBotService', () => {
       });
 
       expect(result.status).toBe(QualityGateStatus.BLOCKED);
+    });
+  });
+
+  describe('Realtime Events & Compliance Analytics', () => {
+    it('emits pr.quality_gate.evaluated event upon completing evaluation', async () => {
+      await service.evaluateAndReport({
+        repositoryId: 'repo-uuid-1',
+        prNumber: 42,
+        filesOverride: [{ path: 'README.md', content: '# Docs' }],
+      });
+
+      expect(mockEventEmitter.emit).toHaveBeenCalledWith(
+        'pr.quality_gate.evaluated',
+        expect.objectContaining({
+          repositoryId: 'repo-uuid-1',
+          organizationId: 'org-uuid-1',
+          prNumber: 42,
+          status: QualityGateStatus.PASSED,
+        }),
+      );
+    });
+
+    it('creates in-app notifications for team leads when a PR is BLOCKED', async () => {
+      mockCodeIntelligenceService.predictCommitRisk.mockResolvedValueOnce({
+        defect_probability: 0.85,
+        risk_level: 'CRITICAL',
+        is_defect_prone: true,
+        top_risk_drivers: ['Critical defect probability'],
+      });
+
+      await service.evaluateAndReport({
+        repositoryId: 'repo-uuid-1',
+        prNumber: 99,
+        filesOverride: [{ path: 'src/risky.ts', content: 'export const x = 1;' }],
+      });
+
+      expect(mockPrisma.notification.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            userId: 'admin-1',
+            type: 'ALERT',
+            title: 'Quality Gate Blocked: PR #99',
+          }),
+        }),
+      );
+    });
+
+    it('returns default 100% compliance rate when repository has no prior evaluations', async () => {
+      mockPrisma.pullRequestQualityGate.findMany.mockResolvedValueOnce([]);
+
+      const history = await service.getComplianceHistory('repo-uuid-1', 30);
+
+      expect(history.totalEvaluations).toBe(0);
+      expect(history.passedCount).toBe(0);
+      expect(history.complianceRate).toBe(100.0);
+      expect(history.averageDefectProbability).toBe(0);
+      expect(history.evaluations).toEqual([]);
+    });
+
+    it('computes compliance history percentages, defect averages, and peak complexity accurately', async () => {
+      const now = new Date();
+      mockPrisma.pullRequestQualityGate.findMany.mockResolvedValueOnce([
+        {
+          id: 'gate-1',
+          prNumber: 101,
+          headCommitSha: 'sha-1',
+          status: QualityGateStatus.PASSED,
+          defectProbability: 0.12,
+          riskLevel: 'LOW',
+          maxComplexity: 5,
+          createdAt: now,
+        },
+        {
+          id: 'gate-2',
+          prNumber: 102,
+          headCommitSha: 'sha-2',
+          status: QualityGateStatus.PASSED,
+          defectProbability: 0.18,
+          riskLevel: 'LOW',
+          maxComplexity: 8,
+          createdAt: now,
+        },
+        {
+          id: 'gate-3',
+          prNumber: 103,
+          headCommitSha: 'sha-3',
+          status: QualityGateStatus.WARNING,
+          defectProbability: 0.45,
+          riskLevel: 'MODERATE',
+          maxComplexity: 16,
+          createdAt: now,
+        },
+        {
+          id: 'gate-4',
+          prNumber: 104,
+          headCommitSha: 'sha-4',
+          status: QualityGateStatus.BLOCKED,
+          defectProbability: 0.75,
+          riskLevel: 'CRITICAL',
+          maxComplexity: 28,
+          createdAt: now,
+        },
+      ]);
+
+      const history = await service.getComplianceHistory('repo-uuid-1', 30);
+
+      expect(history.totalEvaluations).toBe(4);
+      expect(history.passedCount).toBe(2);
+      expect(history.warningCount).toBe(1);
+      expect(history.blockedCount).toBe(1);
+      // Passed / Total = 2 / 4 = 50.0%
+      expect(history.complianceRate).toBe(50.0);
+      // Average defect = (0.12 + 0.18 + 0.45 + 0.75) / 4 = 1.50 / 4 = 0.38 (38%)
+      expect(history.averageDefectProbability).toBe(0.38);
+      expect(history.peakComplexity).toBe(28);
+      expect(history.evaluations).toHaveLength(4);
     });
   });
 });

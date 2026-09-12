@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, Optional } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Octokit } from '@octokit/rest';
 import { PrismaService } from '../../../prisma/prisma.service';
 import { GitHubService } from '../github.service';
@@ -78,6 +79,7 @@ export class PrQualityGateBotService {
     private readonly prisma: PrismaService,
     private readonly githubService: GitHubService,
     private readonly codeIntelligenceService: CodeIntelligenceService,
+    @Optional() private readonly eventEmitter?: EventEmitter2,
   ) {}
 
   /**
@@ -479,6 +481,61 @@ export class PrQualityGateBotService {
       },
     });
 
+    // 14. Dispatch in-app notifications if BLOCKED
+    if (status === QualityGateStatus.BLOCKED) {
+      try {
+        if (this.prisma.organizationMember?.findMany && this.prisma.notification?.create) {
+          const leads = await this.prisma.organizationMember.findMany({
+            where: {
+              organizationId,
+              role: { in: ['OWNER', 'ADMIN', 'TEAM_LEAD'] },
+            },
+            select: { userId: true },
+            take: 5,
+          });
+
+          for (const lead of leads) {
+            await this.prisma.notification.create({
+              data: {
+                userId: lead.userId,
+                organizationId,
+                type: 'ALERT',
+                title: `Quality Gate Blocked: PR #${options.prNumber}`,
+                message: `PR #${options.prNumber} in ${repository.fullName} was BLOCKED (Defect risk: ${Math.round(defectProbability * 100)}%, Peak Complexity: ${maxComplexity}).`,
+                metadata: {
+                  prNumber: options.prNumber,
+                  repositoryId: repository.id,
+                  status,
+                  headCommitSha,
+                },
+              },
+            });
+          }
+        }
+      } catch (notifErr: any) {
+        this.logger.warn(`Could not dispatch in-app notification for blocked PR: ${notifErr?.message}`);
+      }
+    }
+
+    // 15. Emit event for real-time WebSocket distribution
+    if (this.eventEmitter) {
+      this.eventEmitter.emit('pr.quality_gate.evaluated', {
+        evaluationId: savedRecord.id,
+        pullRequestId: savedRecord.pullRequestId,
+        repositoryId: repository.id,
+        organizationId,
+        prNumber: options.prNumber,
+        status: savedRecord.status,
+        defectProbability: savedRecord.defectProbability,
+        riskLevel: savedRecord.riskLevel,
+        maxComplexity: savedRecord.maxComplexity,
+        headCommitSha: savedRecord.headCommitSha,
+        githubStatusState: savedRecord.githubStatusState,
+        summaryMarkdown: savedRecord.summaryMarkdown,
+        createdAt: savedRecord.createdAt,
+      });
+    }
+
     return {
       id: savedRecord.id,
       pullRequestId: savedRecord.pullRequestId,
@@ -637,6 +694,65 @@ export class PrQualityGateBotService {
     return {
       ...record,
       githubCommentId: record.githubCommentId ? Number(record.githubCommentId) : null,
+    };
+  }
+
+  /**
+   * Retrieve historical Quality Gate compliance analytics for a repository
+   */
+  async getComplianceHistory(repositoryId: string, days: number = 30) {
+    const startDate = new Date(Date.now() - days * 24 * 60 * 60 * 1000);
+    const records = await this.prisma.pullRequestQualityGate.findMany({
+      where: {
+        repositoryId,
+        createdAt: { gte: startDate },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const totalEvaluations = records.length;
+    const passedCount = records.filter((r) => r.status === QualityGateStatus.PASSED).length;
+    const warningCount = records.filter((r) => r.status === QualityGateStatus.WARNING).length;
+    const blockedCount = records.filter((r) => r.status === QualityGateStatus.BLOCKED).length;
+    const complianceRate =
+      totalEvaluations > 0
+        ? Math.round((passedCount / totalEvaluations) * 1000) / 10
+        : 100.0;
+
+    const avgDefect =
+      totalEvaluations > 0
+        ? Math.round(
+            (records.reduce((acc, curr) => acc + curr.defectProbability, 0) /
+              totalEvaluations) *
+              100,
+          ) / 100
+        : 0;
+
+    const peakComplexity = records.reduce(
+      (max, curr) => Math.max(max, curr.maxComplexity),
+      0,
+    );
+
+    return {
+      repositoryId,
+      periodDays: days,
+      totalEvaluations,
+      passedCount,
+      warningCount,
+      blockedCount,
+      complianceRate,
+      averageDefectProbability: avgDefect,
+      peakComplexity,
+      evaluations: records.slice(0, 15).map((r) => ({
+        id: r.id,
+        prNumber: r.prNumber,
+        headCommitSha: r.headCommitSha,
+        status: r.status,
+        defectProbability: r.defectProbability,
+        riskLevel: r.riskLevel,
+        maxComplexity: r.maxComplexity,
+        createdAt: r.createdAt,
+      })),
     };
   }
 

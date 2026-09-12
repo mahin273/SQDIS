@@ -62,6 +62,30 @@ export interface UpdateQualityGatePolicyPayload {
   strictBranchProtection?: boolean;
 }
 
+export interface QualityGateHistoryItem {
+  id: string;
+  prNumber: number;
+  headCommitSha: string;
+  status: QualityGateStatus;
+  defectProbability: number;
+  riskLevel: string;
+  maxComplexity: number;
+  createdAt: string;
+}
+
+export interface QualityGateComplianceHistory {
+  repositoryId: string;
+  periodDays: number;
+  totalEvaluations: number;
+  passedCount: number;
+  warningCount: number;
+  blockedCount: number;
+  complianceRate: number;
+  averageDefectProbability: number;
+  peakComplexity: number;
+  evaluations: QualityGateHistoryItem[];
+}
+
 export const qualityGateService = {
   /**
    * Retrieve the latest Quality Gate evaluation for a given PR.
@@ -104,6 +128,20 @@ export const qualityGateService = {
     const response = await api.put<QualityGatePolicy>(
       `/github/quality-gate/policy/${repositoryId}`,
       payload
+    );
+    return response.data;
+  },
+
+  /**
+   * Retrieve historical compliance analytics for a repository.
+   */
+  async getComplianceHistory(
+    repositoryId: string,
+    days: number = 30
+  ): Promise<QualityGateComplianceHistory> {
+    const response = await api.get<QualityGateComplianceHistory>(
+      `/github/quality-gate/history/${repositoryId}`,
+      { params: { days } }
     );
     return response.data;
   },

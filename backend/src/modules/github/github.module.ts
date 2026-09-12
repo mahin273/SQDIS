@@ -1,6 +1,7 @@
 import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { GitHubController } from './github.controller';
 import { GitHubService } from './github.service';
 import { EncryptionService } from './services/encryption.service';
@@ -43,6 +44,7 @@ import { CodeIntelligenceModule } from '../code-intelligence/code-intelligence.m
   imports: [
     PrismaModule,
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot(),
     PullRequestQueueModule,
     CodeIntelligenceModule,
     forwardRef(() => WebSocketModule),

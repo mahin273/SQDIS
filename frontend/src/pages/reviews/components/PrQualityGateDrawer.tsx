@@ -17,6 +17,7 @@ import {
   FileText,
   Sliders,
   Save,
+  History,
 } from 'lucide-react';
 import {
   Sheet,
@@ -58,7 +59,7 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
 }) => {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'overview' | 'test-impact' | 'bot-report' | 'policy'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'test-impact' | 'bot-report' | 'policy' | 'history'>('overview');
   const [copied, setCopied] = useState(false);
 
   // Policy form state
@@ -89,6 +90,15 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
   } = useQuery({
     queryKey: ['quality-gate-policy', repositoryId],
     queryFn: () => qualityGateService.getPolicy(repositoryId!),
+    enabled: isOpen && !!repositoryId,
+  });
+
+  const {
+    data: complianceHistory,
+    isLoading: isHistoryLoading,
+  } = useQuery({
+    queryKey: ['quality-gate-history', repositoryId],
+    queryFn: () => qualityGateService.getComplianceHistory(repositoryId!, 30),
     enabled: isOpen && !!repositoryId,
   });
 
@@ -321,13 +331,17 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                 onValueChange={(val) => setActiveTab(val as any)}
                 className="w-full"
               >
-                <TabsList className="w-full grid grid-cols-4">
+                <TabsList className="w-full grid grid-cols-5">
                   <TabsTrigger value="overview">Overview</TabsTrigger>
                   <TabsTrigger value="test-impact">Test Impact</TabsTrigger>
                   <TabsTrigger value="bot-report">Bot Report</TabsTrigger>
                   <TabsTrigger value="policy" className="gap-1">
                     <Sliders className="w-3.5 h-3.5" />
                     <span>Policy</span>
+                  </TabsTrigger>
+                  <TabsTrigger value="history" className="gap-1">
+                    <History className="w-3.5 h-3.5" />
+                    <span>Compliance</span>
                   </TabsTrigger>
                 </TabsList>
 
@@ -843,6 +857,130 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                         : 'Save Policy Thresholds'}
                     </Button>
                   </div>
+                </TabsContent>
+
+                {/* TAB 5: COMPLIANCE & HISTORY */}
+                <TabsContent value="history" className="mt-4 space-y-6">
+                  {isHistoryLoading ? (
+                    <div className="py-12 text-center space-y-2">
+                      <RefreshCw className="w-6 h-6 animate-spin text-blue-600 mx-auto" />
+                      <p className="text-xs text-slate-500">Loading compliance history...</p>
+                    </div>
+                  ) : !complianceHistory || complianceHistory.totalEvaluations === 0 ? (
+                    <div className="rounded-xl border border-dashed border-slate-200 dark:border-slate-800 p-8 text-center space-y-2">
+                      <History className="w-8 h-8 text-slate-400 mx-auto" />
+                      <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                        No Compliance History Yet
+                      </h4>
+                      <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                        Historical metrics will populate as pull requests are evaluated by the Quality Gate engine over the next 30 days.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      {/* Metric Summary Cards */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            Compliance Rate
+                          </span>
+                          <div className={`text-2xl font-bold mt-1 ${
+                            complianceHistory.complianceRate >= 80
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : complianceHistory.complianceRate >= 60
+                              ? 'text-amber-500 dark:text-amber-400'
+                              : 'text-rose-600 dark:text-rose-400'
+                          }`}>
+                            {complianceHistory.complianceRate.toFixed(1)}%
+                          </div>
+                          <span className="text-[10px] text-slate-400">30-day window</span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            Evaluations
+                          </span>
+                          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                            {complianceHistory.totalEvaluations}
+                          </div>
+                          <span className="text-[10px] text-slate-400">
+                            {complianceHistory.passedCount} pass / {complianceHistory.blockedCount} blocked
+                          </span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            Avg Defect Risk
+                          </span>
+                          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                            {(complianceHistory.averageDefectProbability * 100).toFixed(1)}%
+                          </div>
+                          <span className="text-[10px] text-slate-400">across changesets</span>
+                        </div>
+
+                        <div className="p-3.5 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 shadow-xs">
+                          <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+                            Peak Complexity
+                          </span>
+                          <div className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
+                            {complianceHistory.peakComplexity}
+                          </div>
+                          <span className="text-[10px] text-slate-400">highest cyclomatic</span>
+                        </div>
+                      </div>
+
+                      {/* Recent Evaluations Chronology */}
+                      <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 overflow-hidden shadow-xs">
+                        <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
+                          <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-blue-600" />
+                            Recent Quality Gate Runs
+                          </h4>
+                          <span className="text-[11px] text-slate-400">
+                            Showing latest {complianceHistory.evaluations.length} runs
+                          </span>
+                        </div>
+
+                        <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                          {complianceHistory.evaluations.map((item) => (
+                            <div
+                              key={item.id}
+                              className="p-3.5 flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800/40 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${
+                                  item.status === 'PASSED'
+                                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800'
+                                    : item.status === 'WARNING'
+                                    ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400 border border-amber-200 dark:border-amber-800'
+                                    : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-400 border border-rose-200 dark:border-rose-800'
+                                }`}>
+                                  {item.status}
+                                </span>
+                                <span className="font-semibold text-slate-900 dark:text-slate-100">
+                                  PR #{item.prNumber}
+                                </span>
+                                <span className="font-mono text-slate-400 text-[11px]">
+                                  {item.headCommitSha.slice(0, 7)}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-4 text-slate-500">
+                                <span>Risk: {(item.defectProbability * 100).toFixed(0)}%</span>
+                                <span>Peak CC: {item.maxComplexity}</span>
+                                <span className="text-[11px] text-slate-400">
+                                  {new Date(item.createdAt).toLocaleDateString(undefined, {
+                                    month: 'short',
+                                    day: 'numeric',
+                                  })}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </TabsContent>
               </Tabs>
             </div>

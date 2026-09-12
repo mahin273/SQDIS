@@ -106,4 +106,38 @@ describe('qualityGateService', () => {
     expect(api.put).toHaveBeenCalledWith('/github/quality-gate/policy/repo-1', payload);
     expect(result).toEqual(mockUpdated);
   });
+
+  it('retrieves compliance analytics history for a repository', async () => {
+    const mockHistory = {
+      repositoryId: 'repo-1',
+      periodDays: 30,
+      totalEvaluations: 10,
+      passedCount: 8,
+      warningCount: 1,
+      blockedCount: 1,
+      complianceRate: 80.0,
+      averageDefectProbability: 0.18,
+      peakComplexity: 16,
+      evaluations: [
+        {
+          id: 'eval-1',
+          prNumber: 42,
+          headCommitSha: 'sha-abc',
+          status: 'PASSED',
+          defectProbability: 0.12,
+          riskLevel: 'LOW',
+          maxComplexity: 8,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+    };
+    vi.mocked(api.get).mockResolvedValueOnce({ data: mockHistory });
+
+    const result = await qualityGateService.getComplianceHistory('repo-1', 30);
+
+    expect(api.get).toHaveBeenCalledWith('/github/quality-gate/history/repo-1', {
+      params: { days: 30 },
+    });
+    expect(result).toEqual(mockHistory);
+  });
 });
