@@ -127,29 +127,120 @@ export class ReviewsService {
       this.prisma.review.count({ where }),
     ]);
 
-    const mappedData = data.map((r) => ({
-      ...r,
-      pullRequestId: r.prNumber,
-      pullRequestTitle: r.prTitle,
-      author: {
-        id: r.reviewer?.id,
-        name: r.reviewer?.name || 'Mahin Khan',
-        email: r.reviewer?.email || 'md.mahin.bd18@gmail.com',
+    // Enrich with linesAdded and linesDeleted from pull_requests and commits
+    const prNumbers = data.map((r) => r.prNumber);
+    const repoIds = Array.from(new Set(data.map((r) => r.repositoryId)));
+
+    const prs = await this.prisma.pullRequest.findMany({
+      where: {
+        repositoryId: { in: repoIds },
+        prNumber: { in: prNumbers },
       },
-      reviewers: r.reviewer
-        ? [
-            {
-              id: r.reviewer.id,
-              name: r.reviewer.name,
-              email: r.reviewer.email,
-              reviewedAt: r.submittedAt?.toISOString(),
-            },
-          ]
-        : [],
-      commentCount: r._count?.comments ?? 0,
-      linesAdded: 0,
-      linesRemoved: 0,
-    }));
+      select: {
+        prNumber: true,
+        repositoryId: true,
+        headCommitSha: true,
+      },
+    });
+
+    const commitShas = prs
+      .map((p) => p.headCommitSha)
+      .filter((sha): sha is string => !!sha);
+
+    const commits = commitShas.length > 0
+      ? await this.prisma.commit.findMany({
+          where: {
+            repositoryId: { in: repoIds },
+            sha: { in: commitShas },
+          },
+          select: {
+            sha: true,
+            repositoryId: true,
+            linesAdded: true,
+            linesDeleted: true,
+          },
+        })
+      : [];
+
+    const commitMap = new Map<string, { linesAdded: number; linesDeleted: number }>();
+    for (const c of commits) {
+      commitMap.set(`${c.repositoryId}:${c.sha}`, {
+        linesAdded: c.linesAdded,
+        linesDeleted: c.linesDeleted,
+      });
+    }
+
+    const prStatsMap = new Map<string, { linesAdded: number; linesDeleted: number }>();
+    for (const p of prs) {
+      if (p.headCommitSha) {
+        const stats = commitMap.get(`${p.repositoryId}:${p.headCommitSha}`);
+        if (stats) {
+          prStatsMap.set(`${p.repositoryId}:${p.prNumber}`, stats);
+        }
+      }
+    }
+
+    // For any PRs not matched by headCommitSha, try finding merge commit
+    const missingPrs = prNumbers.filter((num) => {
+      const r = data.find((d) => d.prNumber === num);
+      return r && !prStatsMap.has(`${r.repositoryId}:${num}`);
+    });
+
+    if (missingPrs.length > 0) {
+      const mergeCommits = await this.prisma.commit.findMany({
+        where: {
+          repositoryId: { in: repoIds },
+          OR: missingPrs.map((num) => ({
+            message: { contains: `#${num}` },
+          })),
+        },
+        select: {
+          repositoryId: true,
+          message: true,
+          linesAdded: true,
+          linesDeleted: true,
+        },
+      });
+
+      for (const mc of mergeCommits) {
+        for (const num of missingPrs) {
+          if (mc.message.includes(`#${num}`)) {
+            prStatsMap.set(`${mc.repositoryId}:${num}`, {
+              linesAdded: mc.linesAdded,
+              linesDeleted: mc.linesDeleted,
+            });
+            break;
+          }
+        }
+      }
+    }
+
+    const mappedData = data.map((r) => {
+      const stats = prStatsMap.get(`${r.repositoryId}:${r.prNumber}`);
+      return {
+        ...r,
+        pullRequestId: r.prNumber,
+        pullRequestTitle: r.prTitle,
+        author: {
+          id: r.reviewer?.id,
+          name: r.reviewer?.name || 'Mahin Khan',
+          email: r.reviewer?.email || 'md.mahin.bd18@gmail.com',
+        },
+        reviewers: r.reviewer
+          ? [
+              {
+                id: r.reviewer.id,
+                name: r.reviewer.name,
+                email: r.reviewer.email,
+                reviewedAt: r.submittedAt?.toISOString(),
+              },
+            ]
+          : [],
+        commentCount: r._count?.comments ?? 0,
+        linesAdded: stats?.linesAdded ?? 0,
+        linesRemoved: stats?.linesDeleted ?? 0,
+      };
+    });
 
     return {
       data: mappedData as any,
