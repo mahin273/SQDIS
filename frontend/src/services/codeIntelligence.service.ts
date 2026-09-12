@@ -60,6 +60,15 @@ export interface TestImpactResponse {
   impact_closures: Record<string, string[]>;
 }
 
+export interface TestImpactResult {
+  impactedTests: string[];
+  totalTests: number;
+  prunedPercentage: number;
+  estimatedTimeSavedSeconds: number;
+  confidenceScore: number;
+  riskCategory: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+}
+
 export interface AuthorOwnership {
   developer_id: string;
   author_name: string;
@@ -96,6 +105,37 @@ export interface TeamBusFactorResponse {
   createdAt?: string;
 }
 
+export interface RepositoryHotspot {
+  id: string;
+  repositoryId: string;
+  filePath: string;
+  cyclomaticComplexity: number;
+  cognitiveComplexity: number;
+  maintainabilityIndex: number;
+  defectProbability: number;
+  riskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  updatedAt: string;
+}
+
+export interface CommitRiskItem {
+  id: string;
+  commitSha: string;
+  defectProbability: number;
+  riskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+  isDefectProne: boolean;
+  topRiskDrivers: string[];
+  metricsAnalyzed: {
+    added_lines: number;
+    deleted_lines: number;
+    modified_files_count: number;
+  };
+  message: string;
+  authorName: string;
+  linesAdded: number;
+  linesDeleted: number;
+  committedAt: string;
+}
+
 export const codeIntelligenceService = {
   async predictAstDefect(payload: AstDefectRequest): Promise<AstDefectResponse> {
     const resp = await api.post<AstDefectResponse>('/code-intelligence/ast-defect', payload);
@@ -120,6 +160,27 @@ export const codeIntelligenceService = {
   async getDefectHistory(limit = 20): Promise<AstDefectResponse[]> {
     const resp = await api.get<AstDefectResponse[]>('/code-intelligence/history', {
       params: { limit },
+    });
+    return resp.data;
+  },
+
+  async getRepositoryHotspots(repositoryId: string, limit = 20): Promise<RepositoryHotspot[]> {
+    const resp = await api.get<RepositoryHotspot[]>(`/code-intelligence/repositories/${repositoryId}/hotspots`, {
+      params: { limit },
+    });
+    return resp.data;
+  },
+
+  async getRepositoryCommitsRisk(repositoryId: string, limit = 20): Promise<CommitRiskItem[]> {
+    const resp = await api.get<CommitRiskItem[]>(`/code-intelligence/repositories/${repositoryId}/commits-risk`, {
+      params: { limit },
+    });
+    return resp.data;
+  },
+
+  async getPullRequestTestImpact(repositoryId: string, changedFiles: string[]): Promise<TestImpactResult> {
+    const resp = await api.post<TestImpactResult>(`/code-intelligence/repositories/${repositoryId}/test-impact`, {
+      changedFiles,
     });
     return resp.data;
   },

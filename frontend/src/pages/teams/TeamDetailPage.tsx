@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, UserPlus, Shield, Trash2, Award, Users, Activity, Settings, GitCommit, Search, Plus } from 'lucide-react'
+import { ArrowLeft, UserPlus, Shield, Trash2, Award, Users, Activity, Settings, GitCommit, Search, Plus, AlertTriangle, Sparkles } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -10,10 +10,11 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { teamsService, membersService, projectsService } from '@/services'
+import { teamsService, membersService, projectsService, codeIntelligenceService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState, formatScore } from '../pageUtils'
 import type { TeamMetrics } from '@/types'
+import type { TeamBusFactorResponse, ModuleBusFactorResult } from '@/services'
 
 export function TeamDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -49,6 +50,24 @@ export function TeamDetailPage() {
     queryKey: queryKeys.members.all(),
     queryFn: () => membersService.getAll(),
   })
+
+  const busFactorQuery = useQuery({
+    queryKey: ['team-bus-factor', id],
+    queryFn: () => codeIntelligenceService.getTeamBusFactor(id!),
+    enabled: !!id,
+  })
+  const busFactorData = busFactorQuery.data as TeamBusFactorResponse | undefined
+  const busFactorRiskTier = (busFactorData?.critical_silos_count ?? 0) > 0
+    ? 'CRITICAL'
+    : (busFactorData?.vulnerable_count ?? 0) > 0
+    ? 'HIGH'
+    : 'LOW'
+  const siloedModules: ModuleBusFactorResult[] = (busFactorData?.module_results ?? []).filter(
+    (m: ModuleBusFactorResult) => m.risk_level === 'CRITICAL_SILO' || m.risk_level === 'VULNERABLE'
+  )
+  const busFactorRecommendations: string[] = (busFactorData?.module_results ?? [])
+    .map((m: ModuleBusFactorResult) => m.cross_training_recommendation)
+    .filter((r): r is string => Boolean(r))
 
   const addMemberMutation = useMutation({
     mutationFn: (userId: string) => teamsService.addMember(id!, { userId }),
@@ -207,73 +226,182 @@ export function TeamDetailPage() {
             </div>
 
             <div className="grid gap-6 md:grid-cols-3">
-              <Card className="md:col-span-2 flex flex-col">
-                <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
-                  <CardTitle>Team Members</CardTitle>
-                  <div className="relative mt-3 sm:mt-0">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
-                    <Input
-                      placeholder="Search members..."
-                      className="pl-9 w-full sm:w-64"
-                      value={memberSearchQuery}
-                      onChange={(e) => setMemberSearchQuery(e.target.value)}
-                    />
-                  </div>
-                </CardHeader>
-                <CardContent className="flex-1 p-0">
-                  {filteredMembers.length === 0 ? (
-                    <EmptyState
-                      title="No members found"
-                      description={memberSearchQuery ? "Try adjusting your search query." : "There are no members in this team yet."}
-                      action={!memberSearchQuery && (
-                        <Button onClick={() => setIsAddMemberOpen(true)} variant="outline">
-                          <Plus className="mr-2 h-4 w-4" /> Add First Member
-                        </Button>
-                      )}
-                    />
-                  ) : (
-                    <div className="divide-y divide-slate-100 dark:divide-slate-800">
-                      {filteredMembers.map((member) => (
-                        <div key={member.id} className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
-                          <div className="flex items-center gap-4">
-                            <Avatar name={member.name || member.email} src={member.avatarUrl} size="md" />
-                            <div>
-                              <p className="font-semibold text-slate-900 dark:text-slate-100">{member.name}</p>
-                              <p className="text-sm text-slate-500 dark:text-slate-400">{member.email}</p>
+              <div className="md:col-span-2 space-y-6">
+                <Card className="flex flex-col">
+                  <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
+                    <CardTitle>Team Members</CardTitle>
+                    <div className="relative mt-3 sm:mt-0">
+                      <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-500" />
+                      <Input
+                        placeholder="Search members..."
+                        className="pl-9 w-full sm:w-64"
+                        value={memberSearchQuery}
+                        onChange={(e) => setMemberSearchQuery(e.target.value)}
+                      />
+                    </div>
+                  </CardHeader>
+                  <CardContent className="flex-1 p-0">
+                    {filteredMembers.length === 0 ? (
+                      <EmptyState
+                        title="No members found"
+                        description={memberSearchQuery ? "Try adjusting your search query." : "There are no members in this team yet."}
+                        action={!memberSearchQuery && (
+                          <Button onClick={() => setIsAddMemberOpen(true)} variant="outline">
+                            <Plus className="mr-2 h-4 w-4" /> Add First Member
+                          </Button>
+                        )}
+                      />
+                    ) : (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {filteredMembers.map((member) => (
+                          <div key={member.id} className="flex items-center justify-between p-4 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                            <div className="flex items-center gap-4">
+                              <Avatar name={member.name || member.email} src={member.avatarUrl} size="md" />
+                              <div>
+                                <p className="font-semibold text-slate-900 dark:text-slate-100">{member.name}</p>
+                                <p className="text-sm text-slate-500 dark:text-slate-400">{member.email}</p>
+                              </div>
+                              {team.lead?.id === member.id && (
+                                <Badge variant="secondary" className="ml-2 gap-1 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800">
+                                  <Shield className="h-3 w-3" /> Team Lead
+                                </Badge>
+                              )}
                             </div>
-                            {team.lead?.id === member.id && (
-                              <Badge variant="secondary" className="ml-2 gap-1 bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300 border-blue-200 dark:border-blue-800">
-                                <Shield className="h-3 w-3" /> Team Lead
-                              </Badge>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            {team.lead?.id !== member.id && (
+                            <div className="flex items-center gap-2">
+                              {team.lead?.id !== member.id && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => assignLeadMutation.mutate(member.id)}
+                                  isLoading={assignLeadMutation.isPending}
+                                >
+                                  Make Lead
+                                </Button>
+                              )}
                               <Button
-                                variant="outline"
+                                variant="ghost"
                                 size="sm"
-                                onClick={() => assignLeadMutation.mutate(member.id)}
-                                isLoading={assignLeadMutation.isPending}
+                                className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50"
+                                onClick={() => removeMemberMutation.mutate(member.id)}
+                                isLoading={removeMemberMutation.isPending}
                               >
-                                Make Lead
+                                <Trash2 className="h-4 w-4" />
                               </Button>
-                            )}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/50"
-                              onClick={() => removeMemberMutation.mutate(member.id)}
-                              isLoading={removeMemberMutation.isPending}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-3">
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-indigo-500" /> Knowledge Silos & Bus Factor Radar
+                    </CardTitle>
+                    {busFactorData && (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold border"
+                        style={{
+                          backgroundColor:
+                            busFactorRiskTier === 'CRITICAL' ? 'rgba(239, 68, 68, 0.1)' :
+                            busFactorRiskTier === 'HIGH' ? 'rgba(249, 115, 22, 0.1)' :
+                            'rgba(16, 185, 129, 0.1)',
+                          color:
+                            busFactorRiskTier === 'CRITICAL' ? '#ef4444' :
+                            busFactorRiskTier === 'HIGH' ? '#f97316' :
+                            '#10b981',
+                          borderColor:
+                            busFactorRiskTier === 'CRITICAL' ? 'rgba(239, 68, 68, 0.25)' :
+                            busFactorRiskTier === 'HIGH' ? 'rgba(249, 115, 22, 0.25)' :
+                            'rgba(16, 185, 129, 0.25)',
+                        }}
+                      >
+                        {busFactorRiskTier === 'CRITICAL' || busFactorRiskTier === 'HIGH' ? (
+                          <AlertTriangle className="h-3 w-3" />
+                        ) : (
+                          <Shield className="h-3 w-3" />
+                        )}
+                        {busFactorRiskTier} RISK
+                      </span>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {busFactorQuery.isLoading ? (
+                      <div className="py-8 text-center text-xs text-slate-500">
+                        Calculating team bus factor and authorship distribution...
+                      </div>
+                    ) : busFactorData ? (
+                      <>
+                        <div className="grid grid-cols-3 gap-3 rounded-lg bg-slate-50 p-3 text-center dark:bg-slate-900/60">
+                          <div>
+                            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Bus Factor</span>
+                            <p className="mt-0.5 text-lg font-bold text-slate-900 dark:text-slate-100">
+                              {(busFactorData.overall_bus_factor ?? 0).toFixed(1)}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Gini Inequality</span>
+                            <p className="mt-0.5 text-lg font-bold text-amber-600 dark:text-amber-500">
+                              {(busFactorData.average_gini ?? 0).toFixed(2)}
+                            </p>
+                          </div>
+                          <div>
+                            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Critical Silos</span>
+                            <p className="mt-0.5 text-lg font-bold text-rose-600 dark:text-rose-500">
+                              {busFactorData.critical_silos_count ?? 0}
+                            </p>
                           </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
+
+                        {siloedModules.length > 0 && (
+                          <div className="space-y-2">
+                            <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                              Single-Maintainer Knowledge Silos
+                            </h4>
+                            <div className="divide-y divide-slate-100 rounded-lg border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+                              {siloedModules.map((module: ModuleBusFactorResult, i: number) => (
+                                <div key={i} className="flex items-center justify-between p-2.5 text-xs">
+                                  <div>
+                                    <span className="font-mono font-medium text-slate-900 dark:text-slate-100">{module.module_name}</span>
+                                    <p className="text-[11px] text-slate-500">Key owners: {module.key_owners?.join(', ') || 'Unassigned'}</p>
+                                  </div>
+                                  <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300">
+                                    Bus Factor {module.bus_factor} · {module.risk_level}
+                                  </Badge>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {busFactorRecommendations.length > 0 && (
+                          <div className="rounded-lg border border-indigo-100 bg-indigo-50/50 p-3 text-xs dark:border-indigo-900/40 dark:bg-indigo-950/20">
+                            <span className="font-semibold text-indigo-900 dark:text-indigo-200 flex items-center gap-1 mb-1">
+                              <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+                              Mitigation Recommendations
+                            </span>
+                            <ul className="space-y-1 text-slate-600 dark:text-slate-300">
+                              {busFactorRecommendations.map((rec: string, i: number) => (
+                                <li key={i} className="flex items-start gap-1.5">
+                                  <span className="text-indigo-500">•</span>
+                                  <span>{rec}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="py-6 text-center text-slate-500 text-xs">
+                        No commit activity mapped to this team's members yet to evaluate knowledge distribution.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
 
               <div className="space-y-6">
                 <Card>

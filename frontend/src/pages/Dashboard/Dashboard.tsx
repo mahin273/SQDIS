@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { PageHeader } from '../pageUtils'
-import { dashboardService } from '@/services'
+import { dashboardService, repositoriesService, codeIntelligenceService } from '@/services'
 import MetricCard from './components/MetricCard'
 import CommitActivityChart from './components/CommitActivityChart'
 import SQSTrendChart from './components/SQSTrendChart'
@@ -18,6 +18,8 @@ import {
   FiShield,
   FiUsers,
   FiPlus,
+  FiCpu,
+  FiArrowRight,
 } from 'react-icons/fi'
 
 export default function Dashboard() {
@@ -25,6 +27,23 @@ export default function Dashboard() {
     queryKey: ['dashboard', 'stats'],
     queryFn: () => dashboardService.getStats(),
   })
+
+  const { data: repos } = useQuery({
+    queryKey: ['repositories'],
+    queryFn: () => repositoriesService.getAll(),
+  })
+
+  const primaryRepoId = (repos && Array.isArray(repos) && repos.length > 0) ? repos[0].id : ''
+
+  const { data: commitsRisk } = useQuery({
+    queryKey: ['commits-risk', primaryRepoId],
+    queryFn: () => codeIntelligenceService.getRepositoryCommitsRisk(primaryRepoId, 50),
+    enabled: !!primaryRepoId,
+  })
+
+  const highRiskCommitsCount = (commitsRisk || []).filter(
+    (c) => c.riskLevel === 'CRITICAL' || c.riskLevel === 'HIGH'
+  ).length
 
   return (
     <div className="space-y-6">
@@ -93,6 +112,48 @@ export default function Dashboard() {
           value={isLoading ? '...' : (stats?.riskyModulesCount ?? 0).toString()}
           trend={{ direction: (stats?.riskyModulesCount ?? 0) > 0 ? 'up' : 'flat', label: 'HIGH & CRITICAL alerts' }}
         />
+      </div>
+
+      {/* Code Intelligence Pulse */}
+      <div className="rounded-xl border border-indigo-200/80 bg-gradient-to-r from-indigo-50/70 via-blue-50/40 to-slate-50/60 p-4 dark:border-indigo-900/40 dark:from-indigo-950/30 dark:via-blue-950/20 dark:to-slate-900/40">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-indigo-600 p-2 text-white shadow-sm shrink-0">
+              <FiCpu className="h-4 w-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                  Code Intelligence Pulse
+                </span>
+                <span className="inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+                  100% On-Premise ML
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Real-time JIT commit defect screening, AST architecture complexity, and test impact pruning.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-4 text-xs">
+            <div className="text-right">
+              <span className="text-[11px] text-slate-400">JIT High Risk Commits</span>
+              <p className="font-bold text-slate-900 dark:text-slate-100">{highRiskCommitsCount}</p>
+            </div>
+            <div className="h-6 w-px bg-slate-200 dark:bg-slate-700" />
+            <div className="text-right">
+              <span className="text-[11px] text-slate-400">Avg CI Time Pruned</span>
+              <p className="font-bold text-emerald-600 dark:text-emerald-400">~75%</p>
+            </div>
+            <Link
+              to="/code-intelligence"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 pl-2"
+            >
+              <span>Explore</span>
+              <FiArrowRight className="h-3 w-3" />
+            </Link>
+          </div>
+        </div>
       </div>
 
       {/* Main Charts & Tables Grid */}

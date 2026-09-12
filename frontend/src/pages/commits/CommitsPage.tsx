@@ -1,12 +1,14 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { GitCommit, GitPullRequest, Search, Plus, GitBranch } from 'lucide-react'
+import { GitCommit, GitPullRequest, Search, Plus, GitBranch, AlertTriangle, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { CommitChart, ChartSuspense } from '@/components/charts'
-import { commitsService } from '@/services'
+import { commitsService, repositoriesService } from '@/services'
+import { codeIntelligenceService } from '@/services/codeIntelligence.service'
+import type { CommitRiskItem } from '@/services/codeIntelligence.service'
 import { queryKeys } from '@/lib/queryClient'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { MetricTile, PageHeader, QueryState } from '../pageUtils'
@@ -15,6 +17,8 @@ import type { Commit } from '@/types'
 
 export function CommitsPage() {
   const [search, setSearch] = useState('')
+  const [expandedSha, setExpandedSha] = useState<string | null>(null)
+
   const commitsQuery = useQuery({
     queryKey: queryKeys.commits.all({ search }),
     queryFn: () => commitsService.getAll({ search: search || undefined, pageSize: 50 }),
@@ -24,12 +28,35 @@ export function CommitsPage() {
     queryFn: () => commitsService.getStats(),
   })
 
+  const reposQuery = useQuery({
+    queryKey: ['repositories'],
+    queryFn: () => repositoriesService.getAll(),
+  })
+
   const rawCommits = commitsQuery.data
   const commits: Commit[] = Array.isArray(rawCommits)
     ? rawCommits
     : (rawCommits && typeof rawCommits === 'object' && Array.isArray((rawCommits as any).data))
     ? (rawCommits as any).data
     : []
+
+  const primaryRepoId = (reposQuery.data && Array.isArray(reposQuery.data) && reposQuery.data.length > 0)
+    ? reposQuery.data[0].id
+    : commits[0]?.repositoryId || ''
+
+  const commitsRiskQuery = useQuery({
+    queryKey: ['commits-risk', primaryRepoId],
+    queryFn: () => codeIntelligenceService.getRepositoryCommitsRisk(primaryRepoId, 50),
+    enabled: !!primaryRepoId,
+  })
+
+  const commitRiskMap = useMemo(() => {
+    const map = new Map<string, CommitRiskItem>()
+    ;(commitsRiskQuery.data || []).forEach((item) => {
+      if (item.commitSha) map.set(item.commitSha, item)
+    })
+    return map
+  }, [commitsRiskQuery.data])
 
   const chartData = useMemo(
     () =>
@@ -126,21 +153,89 @@ export function CommitsPage() {
 
             <Card className="mt-6">
               <CardContent className="divide-y divide-slate-200 p-0 dark:divide-slate-800">
-                {commits.map((commit) => (
-                  <div key={commit.id} className="grid gap-3 p-4 md:grid-cols-[1fr_9rem_8rem_7rem] md:items-center">
-                    <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-950 dark:text-white">{commit.message}</p>
-                      <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                        {commit.authorName} · {commit.sha.slice(0, 7)} · {commit.branch}
-                      </p>
+                {commits.map((commit) => {
+                  const risk = commitRiskMap.get(commit.sha)
+                  const isExpanded = expandedSha === commit.sha
+
+                  return (
+                    <div key={commit.id} className="p-4 transition-colors hover:bg-slate-50/50 dark:hover:bg-slate-850/50">
+                      <div className="grid gap-3 md:grid-cols-[1fr_auto_8rem_7rem] md:items-center">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className="truncate font-medium text-slate-950 dark:text-white">{commit.message}</p>
+                            {risk && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedSha(isExpanded ? null : commit.sha)}
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold border transition-colors cursor-pointer"
+                                style={{
+                                  backgroundColor:
+                                    risk.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.12)' :
+                                    risk.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.12)' :
+                                    risk.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.12)' :
+                                    'rgba(16, 185, 129, 0.12)',
+                                  color:
+                                    risk.riskLevel === 'CRITICAL' ? '#ef4444' :
+                                    risk.riskLevel === 'HIGH' ? '#f97316' :
+                                    risk.riskLevel === 'MODERATE' ? '#d97706' :
+                                    '#10b981',
+                                  borderColor:
+                                    risk.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.25)' :
+                                    risk.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.25)' :
+                                    risk.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.25)' :
+                                    'rgba(16, 185, 129, 0.25)',
+                                }}
+                                title="Click to toggle Kamei JIT defect risk drivers"
+                              >
+                                {risk.riskLevel === 'CRITICAL' || risk.riskLevel === 'HIGH' ? (
+                                  <AlertTriangle className="h-3 w-3" />
+                                ) : (
+                                  <ShieldCheck className="h-3 w-3" />
+                                )}
+                                JIT {(risk.defectProbability * 100).toFixed(0)}% {risk.riskLevel}
+                                {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                              </button>
+                            )}
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            {commit.authorName} · {commit.sha.slice(0, 7)} · {commit.branch}
+                          </p>
+                        </div>
+                        <Badge variant="outline">{commit.classification}</Badge>
+                        <span className="text-sm text-slate-500 dark:text-slate-400">{formatDate(commit.committedAt)}</span>
+                        <span className="text-sm font-medium text-slate-950 dark:text-white">
+                          +{commit.insertions} / -{commit.deletions}
+                        </span>
+                      </div>
+
+                      {isExpanded && risk && (
+                        <div className="mt-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60 p-3.5 text-xs">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                              Kamei JIT Commit Defect Analysis
+                            </span>
+                            <span className="text-slate-400 font-mono text-[10px]">
+                              SHA: {commit.sha}
+                            </span>
+                          </div>
+                          {risk.topRiskDrivers && risk.topRiskDrivers.length > 0 ? (
+                            <ul className="space-y-1.5 text-slate-600 dark:text-slate-300">
+                              {risk.topRiskDrivers.map((driver, i) => (
+                                <li key={i} className="flex items-start gap-1.5">
+                                  <span className="text-amber-500 font-bold">•</span>
+                                  <span>{driver}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p className="text-slate-500">No critical defect risk patterns detected in this changeset.</p>
+                          )}
+                        </div>
+                      )}
                     </div>
-                    <Badge variant="outline">{commit.classification}</Badge>
-                    <span className="text-sm text-slate-500 dark:text-slate-400">{formatDate(commit.committedAt)}</span>
-                    <span className="text-sm font-medium text-slate-950 dark:text-white">
-                      +{commit.insertions} / -{commit.deletions}
-                    </span>
-                  </div>
-                ))}
+                  )
+                })}
               </CardContent>
             </Card>
           </>
