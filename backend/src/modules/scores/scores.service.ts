@@ -688,7 +688,7 @@ export class ScoresService {
       return {
         developerId,
         score: null,
-        message: 'Insufficient data - minimum 5 commits in last 30 days required',
+        message: 'Insufficient data - minimum 5 commits required',
         features,
       };
     }
@@ -1209,8 +1209,8 @@ export class ScoresService {
     const thirtyDaysAgo = new Date(now);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // Get commit statistics for the developer
-    const commits = await this.prisma.commit.findMany({
+    // Get commit statistics for the developer in trailing 30 days
+    let commits = await this.prisma.commit.findMany({
       where: {
         developerId,
         committedAt: { gte: thirtyDaysAgo },
@@ -1225,6 +1225,34 @@ export class ScoresService {
       },
     });
 
+    let reviewSince = thirtyDaysAgo;
+
+    // If developer has fewer than 5 commits in the last 30 days,
+    // check if they have at least 5 lifetime commits in the organization.
+    // This allows active contributors with historical commits to be scored.
+    if (commits.length < 5) {
+      const allTimeCommits = await this.prisma.commit.findMany({
+        where: {
+          developerId,
+          repository: { organizationId },
+        },
+        orderBy: { committedAt: 'desc' },
+        take: 30,
+        select: {
+          classification: true,
+          churnRatio: true,
+          linesAdded: true,
+          linesDeleted: true,
+          repositoryId: true,
+        },
+      });
+
+      if (allTimeCommits.length >= 5) {
+        commits = allTimeCommits;
+        reviewSince = new Date(0);
+      }
+    }
+
     const commitCount = commits.length;
     const bugfixCount = commits.filter((c) => c.classification === 'BUGFIX').length;
     const avgChurn =
@@ -1238,7 +1266,7 @@ export class ScoresService {
     const reviewMetrics = await this.extractReviewMetrics(
       developerId,
       organizationId,
-      thirtyDaysAgo,
+      reviewSince,
     );
 
     // Calculate developer's average coverage in the last 30 days
