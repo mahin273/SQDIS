@@ -38,14 +38,24 @@ export function ReleaseDetailPage() {
   })
 
   const updateStatusMutation = useMutation({
-    mutationFn: (status: ReleaseStatus) => releasesService.update(id!, { status }),
+    mutationFn: (status: ReleaseStatus) =>
+      releasesService.update(id!, {
+        status,
+        shippedAt: status === 'RELEASED' ? new Date().toISOString() : undefined,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.releases.detail(id!) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.releases.all() })
     },
   })
 
   const release = releaseQuery.data
   const readiness = readinessQuery.data
+  const currentStatus: ReleaseStatus = release?.isRolledBack
+    ? 'ROLLED_BACK'
+    : release?.shippedAt
+    ? 'RELEASED'
+    : release?.status || 'PLANNED'
 
   return (
     <div>
@@ -67,16 +77,23 @@ export function ReleaseDetailPage() {
                       <AlertOctagon className="h-3.5 w-3.5" /> ROLLED BACK
                     </Badge>
                   )}
+                  {currentStatus === 'RELEASED' && (
+                    <Badge variant="success" className="gap-1 text-xs py-1 px-2.5 font-bold">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> SHIPPED
+                    </Badge>
+                  )}
                 </div>
               }
               description={`Target deployment date: ${release.targetDate ? new Date(release.targetDate).toLocaleDateString() : 'TBD'}${
                 release.isRolledBack && release.rolledBackAt
                   ? ` • Rolled back on ${new Date(release.rolledBackAt).toLocaleDateString()}`
+                  : release.shippedAt
+                  ? ` • Shipped on ${new Date(release.shippedAt).toLocaleDateString()}`
                   : ''
               }`}
               action={
                 <div className="flex gap-2">
-                  {!release.isRolledBack && release.status !== 'RELEASED' && (
+                  {!release.isRolledBack && currentStatus !== 'RELEASED' && (
                     <Button
                       onClick={() => updateStatusMutation.mutate('RELEASED')}
                       isLoading={updateStatusMutation.isPending}
@@ -95,8 +112,16 @@ export function ReleaseDetailPage() {
             <div className="mb-6 grid gap-4 md:grid-cols-3">
               <MetricTile
                 label="Release Status"
-                value={release.isRolledBack ? 'ROLLED BACK' : release.status}
-                icon={release.isRolledBack ? <AlertOctagon className="h-5 w-5 text-rose-500" /> : <Clock className="h-5 w-5" />}
+                value={currentStatus.replace('_', ' ')}
+                icon={
+                  release.isRolledBack ? (
+                    <AlertOctagon className="h-5 w-5 text-rose-500" />
+                  ) : currentStatus === 'RELEASED' ? (
+                    <CheckCircle2 className="h-5 w-5 text-emerald-500" />
+                  ) : (
+                    <Clock className="h-5 w-5 text-blue-500" />
+                  )
+                }
               />
               <MetricTile
                 label="Readiness Score"

@@ -85,8 +85,8 @@ export class ReleasesService {
   /**
    * Get all releases for an organization
    */
-  async findAll(organizationId: string) {
-    return this.prisma.release.findMany({
+  async findAll(organizationId: string): Promise<ReleaseResponseDto[]> {
+    const releases = await this.prisma.release.findMany({
       where: {
         organizationId,
         isActive: true,
@@ -106,6 +106,8 @@ export class ReleasesService {
       },
       orderBy: { targetDate: 'desc' },
     });
+
+    return releases.map((release) => this.formatReleaseResponse(release));
   }
 
   /**
@@ -180,7 +182,15 @@ export class ReleasesService {
       updateData.shippedAt = new Date(dto.shippedAt);
     }
 
-    return this.prisma.release.update({
+    if (dto.status !== undefined) {
+      if (dto.status === 'RELEASED' && !dto.shippedAt) {
+        updateData.shippedAt = new Date();
+      } else if (dto.status === 'PLANNED' || dto.status === 'DRAFT') {
+        updateData.shippedAt = null;
+      }
+    }
+
+    const updated = await this.prisma.release.update({
       where: { id },
       data: updateData,
       include: {
@@ -197,6 +207,8 @@ export class ReleasesService {
         },
       },
     });
+
+    return this.formatReleaseResponse(updated);
   }
 
   /**
@@ -622,13 +634,22 @@ export class ReleasesService {
    * Format release response with sprint summaries
    */
   private formatReleaseResponse(release: any): ReleaseResponseDto {
-    const sprints: SprintSummaryDto[] = release.sprintAssociations.map((assoc: any) => ({
+    const sprints: SprintSummaryDto[] = (release.sprintAssociations || []).map((assoc: any) => ({
       id: assoc.sprint.id,
       name: assoc.sprint.name,
       startDate: assoc.sprint.startDate,
       endDate: assoc.sprint.endDate,
-      teamName: assoc.sprint.team.name,
+      teamName: assoc.sprint.team?.name || 'General Team',
     }));
+
+    let status = 'PLANNED';
+    if (release.isRolledBack) {
+      status = 'ROLLED_BACK';
+    } else if (release.shippedAt) {
+      status = 'RELEASED';
+    } else if (sprints.length > 0) {
+      status = 'IN_PROGRESS';
+    }
 
     return {
       id: release.id,
@@ -637,6 +658,7 @@ export class ReleasesService {
       description: release.description,
       shippedAt: release.shippedAt,
       isActive: release.isActive,
+      status,
       isRolledBack: release.isRolledBack || false,
       rolledBackAt: release.rolledBackAt || undefined,
       rollbackReason: release.rollbackReason || undefined,

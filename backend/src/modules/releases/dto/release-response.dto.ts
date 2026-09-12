@@ -104,6 +104,9 @@ export class ReleaseResponseDto {
   @ApiPropertyOptional({ description: 'Actual ship date' })
   shippedAt?: Date;
 
+  @ApiProperty({ description: 'Release status', example: 'PLANNED' })
+  status!: string;
+
   @ApiProperty({ description: 'Whether the release is active' })
   isActive!: boolean;
 

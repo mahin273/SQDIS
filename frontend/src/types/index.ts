@@ -617,6 +617,7 @@ export interface UpdateReleaseRequest {
   version?: string;
   description?: string;
   status?: ReleaseStatus;
+  shippedAt?: string;
   targetDate?: string;
 }
 
