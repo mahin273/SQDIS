@@ -131,36 +131,38 @@ export class ReviewsService {
     const prNumbers = data.map((r) => r.prNumber);
     const repoIds = Array.from(new Set(data.map((r) => r.repositoryId)));
 
-    const prs = await this.prisma.pullRequest.findMany({
-      where: {
-        repositoryId: { in: repoIds },
-        prNumber: { in: prNumbers },
-      },
-      select: {
-        prNumber: true,
-        repositoryId: true,
-        headCommitSha: true,
-      },
-    });
+    const prs =
+      (await this.prisma.pullRequest?.findMany?.({
+        where: {
+          repositoryId: { in: repoIds },
+          prNumber: { in: prNumbers },
+        },
+        select: {
+          prNumber: true,
+          repositoryId: true,
+          headCommitSha: true,
+        },
+      })) ?? [];
 
-    const commitShas = prs
+    const commitShas = (prs || [])
       .map((p) => p.headCommitSha)
       .filter((sha): sha is string => !!sha);
 
-    const commits = commitShas.length > 0
-      ? await this.prisma.commit.findMany({
-          where: {
-            repositoryId: { in: repoIds },
-            sha: { in: commitShas },
-          },
-          select: {
-            sha: true,
-            repositoryId: true,
-            linesAdded: true,
-            linesDeleted: true,
-          },
-        })
-      : [];
+    const commits =
+      commitShas.length > 0 && this.prisma.commit?.findMany
+        ? (await this.prisma.commit.findMany({
+            where: {
+              repositoryId: { in: repoIds },
+              sha: { in: commitShas },
+            },
+            select: {
+              sha: true,
+              repositoryId: true,
+              linesAdded: true,
+              linesDeleted: true,
+            },
+          })) ?? []
+        : [];
 
     const commitMap = new Map<string, { linesAdded: number; linesDeleted: number }>();
     for (const c of commits) {
@@ -186,21 +188,22 @@ export class ReviewsService {
       return r && !prStatsMap.has(`${r.repositoryId}:${num}`);
     });
 
-    if (missingPrs.length > 0) {
-      const mergeCommits = await this.prisma.commit.findMany({
-        where: {
-          repositoryId: { in: repoIds },
-          OR: missingPrs.map((num) => ({
-            message: { contains: `#${num}` },
-          })),
-        },
-        select: {
-          repositoryId: true,
-          message: true,
-          linesAdded: true,
-          linesDeleted: true,
-        },
-      });
+    if (missingPrs.length > 0 && this.prisma.commit?.findMany) {
+      const mergeCommits =
+        (await this.prisma.commit.findMany({
+          where: {
+            repositoryId: { in: repoIds },
+            OR: missingPrs.map((num) => ({
+              message: { contains: `#${num}` },
+            })),
+          },
+          select: {
+            repositoryId: true,
+            message: true,
+            linesAdded: true,
+            linesDeleted: true,
+          },
+        })) ?? [];
 
       for (const mc of mergeCommits) {
         for (const num of missingPrs) {

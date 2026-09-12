@@ -24,6 +24,7 @@ describe('ReviewsService', () => {
     review: Record<string, jest.Mock>;
     reviewComment: Record<string, jest.Mock>;
     pullRequest: Record<string, jest.Mock>;
+    commit: Record<string, jest.Mock>;
     user: Record<string, jest.Mock>;
     repository: Record<string, jest.Mock>;
   };
@@ -74,7 +75,12 @@ describe('ReviewsService', () => {
         groupBy: jest.fn(),
       },
       pullRequest: {
-        findMany: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
+        findFirst: jest.fn(),
+        count: jest.fn(),
+      },
+      commit: {
+        findMany: jest.fn().mockResolvedValue([]),
         findFirst: jest.fn(),
         count: jest.fn(),
       },
@@ -128,13 +134,27 @@ describe('ReviewsService', () => {
 
   describe('findAll', () => {
     it('returns paginated reviews for an organization', async () => {
-      prisma.review.findMany.mockResolvedValue([mockReview]);
+      prisma.review.findMany.mockResolvedValue([
+        {
+          ...mockReview,
+          _count: { comments: 2 },
+        },
+      ]);
       prisma.review.count.mockResolvedValue(1);
 
       const result = await service.findAll('org-1', { page: 1, limit: 10, repositoryId: 'repo-1' });
 
       expect(result).toEqual({
-        data: [mockReview],
+        data: [
+          expect.objectContaining({
+            id: 'review-1',
+            prNumber: 42,
+            pullRequestId: 42,
+            state: 'APPROVED',
+            linesAdded: 0,
+            linesRemoved: 0,
+          }),
+        ],
         total: 1,
         page: 1,
         limit: 10,
