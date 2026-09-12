@@ -48,4 +48,48 @@ describe('codeIntelligenceService - Automated Remediation Advice', () => {
     expect(result.recipes[0].recommendedStrategy).toBe('Guard Clause Inversion');
     expect(result.refactoringPotentialScore).toBe(85);
   });
+
+  it('calls GET /code-intelligence/repositories/:id/treemap and returns architecture treemap', async () => {
+    const mockTreemap = {
+      repositoryId: 'repo-123',
+      totalFiles: 24,
+      totalLoc: 8500,
+      averageComplexity: 11.2,
+      root: {
+        name: 'root',
+        path: '',
+        type: 'directory' as const,
+        loc: 8500,
+        cyclomaticComplexity: 11.2,
+        cognitiveComplexity: 14.5,
+        defectProbability: 0.45,
+        debtCount: 3,
+        churnCount: 42,
+        riskLevel: 'HIGH' as const,
+        children: [],
+      },
+      quadrantCounts: {
+        dangerZone: 3,
+        stableComplex: 4,
+        activeSimple: 7,
+        healthy: 10,
+      },
+      quadrantFiles: [],
+    };
+
+    vi.mocked(api.get).mockResolvedValueOnce({ data: mockTreemap });
+
+    const result = await codeIntelligenceService.getRepositoryTreemap('repo-123', {
+      sizeBy: 'loc',
+      colorBy: 'complexity',
+    });
+
+    expect(api.get).toHaveBeenCalledWith('/code-intelligence/repositories/repo-123/treemap', {
+      params: { sizeBy: 'loc', colorBy: 'complexity' },
+    });
+    expect(result.repositoryId).toBe('repo-123');
+    expect(result.totalFiles).toBe(24);
+    expect(result.quadrantCounts.dangerZone).toBe(3);
+  });
 });
+

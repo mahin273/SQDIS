@@ -21,6 +21,8 @@ import {
   CanaryAnalysisDto,
   RemediationRequestDto,
   RemediationResponseDto,
+  TreemapQueryDto,
+  RepositoryTreemapResponseDto,
 } from './dto/index.js';
 
 @ApiTags('Code Intelligence')
@@ -122,4 +124,18 @@ export class CodeIntelligenceController {
   ) {
     return this.codeIntelligenceService.getPullRequestTestImpact(repositoryId, changedFiles);
   }
+
+  @Get('repositories/:repositoryId/treemap')
+  @ApiOperation({ summary: 'Retrieve hierarchical architectural treemap and churn vs complexity hotspot matrix' })
+  async getRepositoryTreemap(
+    @Param('repositoryId') repositoryId: string,
+    @Query() query: TreemapQueryDto,
+  ): Promise<RepositoryTreemapResponseDto> {
+    return this.codeIntelligenceService.getRepositoryTreemap(
+      repositoryId,
+      query.sizeBy,
+      query.colorBy,
+    );
+  }
 }
+

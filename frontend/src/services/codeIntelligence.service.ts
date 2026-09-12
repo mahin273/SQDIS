@@ -194,4 +194,16 @@ export const codeIntelligenceService = {
     );
     return resp.data;
   },
+
+  async getRepositoryTreemap(
+    repositoryId: string,
+    params?: import('@/types').TreemapQuery,
+  ): Promise<import('@/types').RepositoryTreemapResponse> {
+    const resp = await api.get<import('@/types').RepositoryTreemapResponse>(
+      `/code-intelligence/repositories/${repositoryId}/treemap`,
+      { params },
+    );
+    return resp.data;
+  },
 };
+

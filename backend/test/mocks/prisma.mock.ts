@@ -91,4 +91,5 @@ export const createMockPrismaService = () => ({
   auditRetentionPolicy: createMockModel(),
   onboarding: createMockModel(),
   onboardingChecklistItem: createMockModel(),
+  defectPrediction: createMockModel(),
 });

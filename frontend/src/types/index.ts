@@ -712,6 +712,51 @@ export interface RemediationRequest {
   cyclomaticComplexity?: number;
 }
 
+export interface TreemapNode {
+  name: string;
+  path: string;
+  type: 'directory' | 'file';
+  loc: number;
+  cyclomaticComplexity: number;
+  cognitiveComplexity: number;
+  defectProbability: number;
+  debtCount: number;
+  churnCount: number;
+  riskLevel: 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW';
+  children?: TreemapNode[];
+}
+
+export interface QuadrantFileInfo {
+  filePath: string;
+  loc: number;
+  cyclomaticComplexity: number;
+  churnCount: number;
+  debtCount: number;
+  defectProbability: number;
+  riskLevel: string;
+  quadrant: 'DANGER_ZONE' | 'STABLE_COMPLEX' | 'ACTIVE_SIMPLE' | 'HEALTHY';
+}
+
+export interface RepositoryTreemapResponse {
+  repositoryId: string;
+  totalFiles: number;
+  totalLoc: number;
+  averageComplexity: number;
+  root: TreemapNode;
+  quadrantCounts: {
+    dangerZone: number;
+    stableComplex: number;
+    activeSimple: number;
+    healthy: number;
+  };
+  quadrantFiles: QuadrantFileInfo[];
+}
+
+export interface TreemapQuery {
+  sizeBy?: 'loc' | 'churn';
+  colorBy?: 'complexity' | 'defectRisk' | 'debtCount';
+}
+
 // ============== COMMITS ==============
 
 export type CommitClassification =
