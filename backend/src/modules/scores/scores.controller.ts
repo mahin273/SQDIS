@@ -33,17 +33,29 @@ export class ScoresController {
   @ApiResponse({ status: 200, description: 'User DQS score retrieved.' })
   async getMyScore(@GetUser('id') userId: string, @GetOrganization() organizationId: string) {
     const dqsResult = await this.scoresService.getDQS(userId, organizationId);
+
+    // Code Quality: Use automated test coverage if available, otherwise reflect the developer's overall quality score (DQS) or code stability instead of an inaccurate 0%
+    const codeQuality = dqsResult.features?.coverage_avg && dqsResult.features.coverage_avg > 0
+      ? Math.round(dqsResult.features.coverage_avg)
+      : Math.round(dqsResult.score || (1 - (dqsResult.features?.code_churn || 0.15)) * 100);
+
+    // Review Speed: Measures peer review turnaround time.
+    // If peer reviews exist, calculate score out of 100. If no peer reviews have been recorded yet, return null so UI displays 'N/A' rather than an unfair 0% failing grade.
+    const hasReviews = !!(dqsResult.features?.review_count && dqsResult.features.review_count > 0);
+    const reviewSpeed = hasReviews && dqsResult.features?.review_turnaround_avg !== undefined
+      ? Math.max(10, Math.min(100, Math.round(100 - dqsResult.features.review_turnaround_avg * 4)))
+      : null;
+
     return {
       dqs: dqsResult.score || 0,
       score: dqsResult.score || 0,
       trend: 0,
-      codeQuality: dqsResult.features?.coverage_avg || 0,
-      reviewSpeed: dqsResult.features?.review_turnaround_avg
-        ? Math.max(0, 100 - dqsResult.features.review_turnaround_avg * 4)
-        : 0,
+      codeQuality,
+      reviewSpeed,
       bugFixRate: dqsResult.features?.bug_fix_ratio
         ? Math.round(dqsResult.features.bug_fix_ratio * 100)
         : 0,
+      coverage: dqsResult.features?.coverage_avg || 0,
       modelVersion: dqsResult.modelVersion,
       calculatedAt: dqsResult.calculatedAt,
       shapValues: dqsResult.shapValues,

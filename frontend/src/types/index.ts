@@ -1594,8 +1594,9 @@ export interface DqsScore {
   score: number;
   trend: number;
   codeQuality: number;
-  reviewSpeed: number;
+  reviewSpeed: number | null;
   bugFixRate: number;
+  coverage?: number;
   modelVersion?: string;
   calculatedAt?: string;
   shapValues?: Record<string, number>;
