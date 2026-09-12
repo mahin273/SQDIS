@@ -103,4 +103,33 @@ describe('releasesService - Telemetry & Readiness', () => {
     expect(result.hasTelemetry).toBe(true);
     expect(result.telemetryScore).toBe(95);
   });
+
+  it('dispatches automated release rollback and returns response', async () => {
+    const mockRollbackResponse = {
+      success: true,
+      releaseId: 'rel-1',
+      version: 'v2.0.0',
+      isRolledBack: true,
+      rolledBackAt: new Date().toISOString(),
+      rollbackReason: 'Canary telemetry failure: P95 latency spiked +35%',
+      webhookDispatched: true,
+      webhookHttpStatus: 200,
+    };
+
+    vi.mocked(api.post).mockResolvedValueOnce({ data: mockRollbackResponse });
+
+    const result = await releasesService.rollbackRelease('rel-1', {
+      reason: 'Canary telemetry failure: P95 latency spiked +35%',
+      targetStableVersion: 'v1.9.0',
+    });
+
+    expect(api.post).toHaveBeenCalledWith('/releases/rel-1/rollback', {
+      reason: 'Canary telemetry failure: P95 latency spiked +35%',
+      targetStableVersion: 'v1.9.0',
+    });
+    expect(result.success).toBe(true);
+    expect(result.isRolledBack).toBe(true);
+    expect(result.webhookDispatched).toBe(true);
+  });
 });
+

@@ -10,6 +10,7 @@ import {
   Download,
   Calendar,
   Activity,
+  AlertOctagon,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -58,11 +59,24 @@ export function ReleaseDetailPage() {
         {release && (
           <div>
             <PageHeader
-              title={release.version}
-              description={`Target deployment date: ${release.targetDate ? new Date(release.targetDate).toLocaleDateString() : 'TBD'}`}
+              title={
+                <div className="flex items-center gap-3">
+                  <span>{release.version}</span>
+                  {release.isRolledBack && (
+                    <Badge variant="destructive" className="gap-1 text-xs py-1 px-2.5 font-bold">
+                      <AlertOctagon className="h-3.5 w-3.5" /> ROLLED BACK
+                    </Badge>
+                  )}
+                </div>
+              }
+              description={`Target deployment date: ${release.targetDate ? new Date(release.targetDate).toLocaleDateString() : 'TBD'}${
+                release.isRolledBack && release.rolledBackAt
+                  ? ` • Rolled back on ${new Date(release.rolledBackAt).toLocaleDateString()}`
+                  : ''
+              }`}
               action={
                 <div className="flex gap-2">
-                  {release.status !== 'RELEASED' && (
+                  {!release.isRolledBack && release.status !== 'RELEASED' && (
                     <Button
                       onClick={() => updateStatusMutation.mutate('RELEASED')}
                       isLoading={updateStatusMutation.isPending}
@@ -79,7 +93,11 @@ export function ReleaseDetailPage() {
             />
 
             <div className="mb-6 grid gap-4 md:grid-cols-3">
-              <MetricTile label="Release Status" value={release.status} icon={<Clock className="h-5 w-5" />} />
+              <MetricTile
+                label="Release Status"
+                value={release.isRolledBack ? 'ROLLED BACK' : release.status}
+                icon={release.isRolledBack ? <AlertOctagon className="h-5 w-5 text-rose-500" /> : <Clock className="h-5 w-5" />}
+              />
               <MetricTile
                 label="Readiness Score"
                 value={`${Math.round(readiness?.score ?? release.readiness?.score ?? 0)}%`}
@@ -90,7 +108,18 @@ export function ReleaseDetailPage() {
 
             {/* Operational Telemetry & Canary Radar */}
             <div className="mb-6">
-              <CanaryTelemetryRadarCard releaseId={release.id} releaseVersion={release.version} />
+              <CanaryTelemetryRadarCard
+                releaseId={release.id}
+                releaseVersion={release.version}
+                isRolledBack={release.isRolledBack}
+                rolledBackAt={release.rolledBackAt}
+                rollbackReason={release.rollbackReason}
+                rollbackTriggeredBy={release.rollbackTriggeredBy}
+                onRollbackSuccess={() => {
+                  queryClient.invalidateQueries({ queryKey: queryKeys.releases.detail(id!) });
+                  queryClient.invalidateQueries({ queryKey: queryKeys.releases.readiness(id!) });
+                }}
+              />
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">

@@ -19,6 +19,10 @@ import {
   EvaluateTelemetryDto,
   ReleaseTelemetryResponseDto,
 } from './dto/evaluate-telemetry.dto';
+import {
+  RollbackReleaseDto,
+  RollbackResponseDto,
+} from './dto/rollback-release.dto';
 
 /**
  * Service for release management
@@ -633,9 +637,160 @@ export class ReleasesService {
       description: release.description,
       shippedAt: release.shippedAt,
       isActive: release.isActive,
+      isRolledBack: release.isRolledBack || false,
+      rolledBackAt: release.rolledBackAt || undefined,
+      rollbackReason: release.rollbackReason || undefined,
+      rollbackTriggeredBy: release.rollbackTriggeredBy || undefined,
       createdAt: release.createdAt,
       updatedAt: release.updatedAt,
       sprints,
     };
   }
+
+  /**
+   * Dispatch automated rollback and webhook incident response for a release
+   */
+  async rollbackRelease(
+    releaseId: string,
+    organizationId: string,
+    userId?: string,
+    dto?: RollbackReleaseDto,
+  ): Promise<RollbackResponseDto> {
+    const release = await this.prisma.release.findFirst({
+      where: {
+        id: releaseId,
+        organizationId,
+        isActive: true,
+      },
+      include: {
+        telemetryAnalyses: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
+      },
+    });
+
+    if (!release) {
+      throw new NotFoundException('Release not found');
+    }
+
+    if (release.isRolledBack) {
+      throw new ConflictException(
+        `Release "${release.version}" has already been rolled back on ${release.rolledBackAt?.toISOString() || 'prior date'}`,
+      );
+    }
+
+    const latestTelemetry = release.telemetryAnalyses?.[0];
+    const rollbackReason =
+      dto?.reason ||
+      (latestTelemetry?.verdict === 'FAIL' || latestTelemetry?.verdict === 'DEGRADED'
+        ? `Canary telemetry ${latestTelemetry.verdict}: ${latestTelemetry.recommendation}`
+        : 'Emergency manual rollback triggered due to production instability');
+
+    // Find previous stable release if available
+    const previousRelease = await this.prisma.release.findFirst({
+      where: {
+        organizationId,
+        isActive: true,
+        isRolledBack: false,
+        id: { not: releaseId },
+        shippedAt: { not: null },
+      },
+      orderBy: { shippedAt: 'desc' },
+    });
+
+    const targetVersion = dto?.targetStableVersion || previousRelease?.version || 'v1.0.0-previous';
+
+    // Construct dispatch payload
+    const dispatchPayload = {
+      event: 'RELEASE_ROLLBACK_DISPATCHED',
+      organizationId,
+      releaseId: release.id,
+      rolledBackVersion: release.version,
+      targetStableVersion: targetVersion,
+      reason: rollbackReason,
+      triggeredByUserId: userId || 'system-automated-watchdog',
+      timestamp: new Date().toISOString(),
+      telemetrySnapshot: latestTelemetry
+        ? {
+            p95BaselineMs: latestTelemetry.p95BaselineMs,
+            p95CanaryMs: latestTelemetry.p95CanaryMs,
+            p95DeltaPct: latestTelemetry.p95DeltaPct,
+            errorDelta: latestTelemetry.errorDelta,
+            memoryDeltaPct: latestTelemetry.memoryDeltaPct,
+            score: latestTelemetry.score,
+          }
+        : null,
+    };
+
+    // Outbound HTTP Webhook Dispatch
+    let webhookDispatched = false;
+    let webhookHttpStatus: number | null = null;
+    const webhookTarget = dto?.webhookUrl || release.rollbackWebhookUrl;
+
+    if (webhookTarget) {
+      try {
+        const resp = await fetch(webhookTarget, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-SQDIS-Event': 'release.rollback',
+            'X-SQDIS-Delivery': `rb-${Date.now()}`,
+          },
+          body: JSON.stringify(dispatchPayload),
+        });
+        webhookDispatched = true;
+        webhookHttpStatus = resp.status;
+        this.logger.log(`Rollback webhook dispatched to ${webhookTarget} with HTTP ${resp.status}`);
+      } catch (err: any) {
+        this.logger.warn(`Failed to dispatch rollback webhook to ${webhookTarget}: ${err.message}`);
+        webhookDispatched = false;
+      }
+    }
+
+    // Update release entity with immutable rollback state
+    const rolledBackAt = new Date();
+    const updated = await this.prisma.release.update({
+      where: { id: release.id },
+      data: {
+        isRolledBack: true,
+        rolledBackAt,
+        rollbackReason,
+        rollbackTriggeredBy: userId || 'system',
+        rollbackWebhookUrl: webhookTarget || null,
+      },
+    });
+
+    // Create in-app incident notification
+    try {
+      if (userId) {
+        await this.prisma.notification.create({
+          data: {
+            organizationId,
+            userId,
+            title: `Emergency Rollback: Release ${release.version}`,
+            message: `Rollback executed: ${rollbackReason}. Reverted to target version ${targetVersion}.`,
+            type: 'ALERT',
+            isRead: false,
+          },
+        });
+      }
+    } catch (err: any) {
+      this.logger.warn(`Failed to insert incident notification: ${err.message}`);
+    }
+
+    return {
+      success: true,
+      releaseId: updated.id,
+      version: updated.version,
+      isRolledBack: updated.isRolledBack,
+      rolledBackAt: updated.rolledBackAt!.toISOString(),
+      rollbackReason: updated.rollbackReason!,
+      rollbackTriggeredBy: updated.rollbackTriggeredBy || undefined,
+      webhookDispatched,
+      webhookHttpStatus,
+      dispatchedPayload: dispatchPayload,
+    };
+  }
 }
+

@@ -124,4 +124,27 @@ export class ReleaseResponseDto {
     type: ReadinessScoreDto,
   })
   readiness?: ReadinessScoreDto;
+
+  @ApiPropertyOptional({
+    description: 'Whether the release has been rolled back due to failure/incident',
+    example: false,
+  })
+  isRolledBack?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Timestamp when rollback was executed',
+  })
+  rolledBackAt?: Date;
+
+  @ApiPropertyOptional({
+    description: 'Reason for rollback',
+    example: 'P95 latency spike detected in canary telemetry',
+  })
+  rollbackReason?: string;
+
+  @ApiPropertyOptional({
+    description: 'User ID who triggered the rollback',
+  })
+  rollbackTriggeredBy?: string;
 }
+

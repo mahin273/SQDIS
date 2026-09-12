@@ -9,6 +9,7 @@ import {
   RefreshCw,
   Clock,
   ShieldCheck,
+  ShieldAlert,
   Server,
   Zap,
 } from 'lucide-react';
@@ -17,18 +18,30 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { releasesService } from '@/services';
 import type { ReleaseTelemetryAnalysis } from '@/types';
+import { RollbackConfirmationModal } from './RollbackConfirmationModal';
 
 interface CanaryTelemetryRadarCardProps {
   releaseId: string;
   releaseVersion: string;
+  isRolledBack?: boolean;
+  rolledBackAt?: string;
+  rollbackReason?: string;
+  rollbackTriggeredBy?: string;
+  onRollbackSuccess?: () => void;
 }
 
 export const CanaryTelemetryRadarCard: React.FC<CanaryTelemetryRadarCardProps> = ({
   releaseId,
   releaseVersion,
+  isRolledBack,
+  rolledBackAt,
+  rollbackReason,
+  rollbackTriggeredBy,
+  onRollbackSuccess,
 }) => {
   const queryClient = useQueryClient();
   const [showHistory, setShowHistory] = useState(false);
+  const [isRollbackModalOpen, setIsRollbackModalOpen] = useState(false);
 
   const historyQuery = useQuery({
     queryKey: ['releases', releaseId, 'telemetry'],
@@ -81,14 +94,27 @@ export const CanaryTelemetryRadarCard: React.FC<CanaryTelemetryRadarCardProps> =
     if (!rec) return null;
     if (rec === 'TRIGGER_ROLLBACK') {
       return (
-        <div className="flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50/80 p-3.5 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
-          <AlertOctagon className="h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
-          <div>
-            <p className="font-semibold">Rollback Recommended</p>
-            <p className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
-              Canary telemetry observed significant performance regression or memory growth exceeding safe limits.
-            </p>
+        <div className="flex items-start justify-between gap-3 rounded-lg border border-rose-200 bg-rose-50/80 p-3.5 text-sm text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/40 dark:text-rose-200">
+          <div className="flex items-start gap-3">
+            <AlertOctagon className="h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+            <div>
+              <p className="font-semibold">Rollback Recommended</p>
+              <p className="text-xs text-rose-700 dark:text-rose-300 mt-0.5">
+                Canary telemetry observed significant performance regression or memory growth exceeding safe limits.
+              </p>
+            </div>
           </div>
+          {!isRolledBack && (
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setIsRollbackModalOpen(true)}
+              className="shrink-0 text-xs h-8 bg-rose-600 hover:bg-rose-700 text-white gap-1.5 font-medium shadow-xs"
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              Trigger Rollback
+            </Button>
+          )}
         </div>
       );
     }
@@ -136,6 +162,11 @@ export const CanaryTelemetryRadarCard: React.FC<CanaryTelemetryRadarCardProps> =
         </div>
 
         <div className="flex items-center gap-2">
+          {isRolledBack && (
+            <Badge variant="destructive" className="gap-1 text-xs py-1 px-2.5 font-semibold">
+              <AlertOctagon className="h-3.5 w-3.5" /> Rolled Back
+            </Badge>
+          )}
           {history.length > 1 && (
             <Button
               variant="outline"
@@ -144,6 +175,17 @@ export const CanaryTelemetryRadarCard: React.FC<CanaryTelemetryRadarCardProps> =
               className="text-xs h-8"
             >
               {showHistory ? 'Hide History' : `History (${history.length})`}
+            </Button>
+          )}
+          {!isRolledBack && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setIsRollbackModalOpen(true)}
+              className="text-xs h-8 text-rose-600 border-rose-200 hover:bg-rose-50 dark:border-rose-900 dark:hover:bg-rose-950/50 gap-1.5"
+            >
+              <ShieldAlert className="h-3.5 w-3.5" />
+              Rollback
             </Button>
           )}
           <Button
@@ -192,7 +234,33 @@ export const CanaryTelemetryRadarCard: React.FC<CanaryTelemetryRadarCardProps> =
               </div>
             </div>
 
-            {getRecommendationBanner(latest.recommendation)}
+            {isRolledBack ? (
+              <div className="flex items-start gap-3 rounded-lg border border-rose-300 bg-rose-50/90 dark:border-rose-900/60 dark:bg-rose-950/50 p-3.5 text-sm">
+                <AlertOctagon className="h-5 w-5 shrink-0 text-rose-600 dark:text-rose-400 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <p className="font-bold text-rose-900 dark:text-rose-100">Release Deployment Rolled Back</p>
+                    <Badge variant="destructive" className="text-[10px] px-1.5 py-0.5 font-bold">
+                      ROLLED BACK
+                    </Badge>
+                  </div>
+                  <p className="text-xs text-rose-700 dark:text-rose-300">
+                    {rollbackReason || 'Production release was reverted to safe baseline due to telemetry breaches.'}
+                  </p>
+                  <div className="flex items-center gap-2 text-[11px] text-rose-600/80 dark:text-rose-400/80">
+                    <span>Triggered by: <strong>{rollbackTriggeredBy || 'Release Operator'}</strong></span>
+                    {rolledBackAt && (
+                      <>
+                        <span>•</span>
+                        <span>{new Date(rolledBackAt).toLocaleString()}</span>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              getRecommendationBanner(latest.recommendation)
+            )}
 
             {/* Core Telemetry Metrics Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -360,6 +428,21 @@ export const CanaryTelemetryRadarCard: React.FC<CanaryTelemetryRadarCardProps> =
           </>
         )}
       </CardContent>
+
+      <RollbackConfirmationModal
+        isOpen={isRollbackModalOpen}
+        onClose={() => setIsRollbackModalOpen(false)}
+        releaseId={releaseId}
+        releaseVersion={releaseVersion}
+        defaultReason={
+          latest?.violations && latest.violations.length > 0
+            ? `Canary telemetry violations: ${latest.violations.map((v) => v.description).join('; ')}`
+            : undefined
+        }
+        onSuccess={() => {
+          onRollbackSuccess?.();
+        }}
+      />
     </Card>
   );
 };

@@ -595,11 +595,16 @@ export interface Release {
   shippedAt?: string;
   isActive?: boolean;
   readiness?: ReleaseReadiness;
+  isRolledBack?: boolean;
+  rolledBackAt?: string;
+  rollbackReason?: string;
+  rollbackTriggeredBy?: string;
   createdAt: string;
   updatedAt: string;
   sprints?: Sprint[];
   name?: string;
 }
+
 
 export interface CreateReleaseRequest {
   version: string;
@@ -684,6 +689,25 @@ export interface EvaluateTelemetryRequest {
   serviceName?: string;
   baselineDurationMinutes?: number;
   canaryDurationMinutes?: number;
+}
+
+export interface RollbackReleaseRequest {
+  reason?: string;
+  webhookUrl?: string;
+  targetStableVersion?: string;
+}
+
+export interface RollbackResponse {
+  success: boolean;
+  releaseId: string;
+  version: string;
+  isRolledBack: boolean;
+  rolledBackAt: string;
+  rollbackReason: string;
+  rollbackTriggeredBy?: string;
+  webhookDispatched: boolean;
+  webhookHttpStatus?: number | null;
+  dispatchedPayload?: any;
 }
 
 export interface RemediationRecipe {

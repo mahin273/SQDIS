@@ -177,4 +177,65 @@ describe('ReleasesService', () => {
       expect(readiness.telemetryRecommendation).toBe('TRIGGER_ROLLBACK');
     });
   });
+
+  describe('rollbackRelease', () => {
+    it('should successfully execute rollback, update release, and create notification', async () => {
+      prisma.release.findFirst.mockResolvedValue({
+        ...mockRelease,
+        isRolledBack: false,
+        telemetryAnalyses: [
+          {
+            verdict: 'FAIL',
+            recommendation: 'TRIGGER_ROLLBACK',
+            p95DeltaPct: 35.2,
+            errorDelta: 0.8,
+            memoryDeltaPct: 15.0,
+            score: 25,
+          },
+        ],
+      } as any);
+
+      prisma.release.update.mockResolvedValue({
+        ...mockRelease,
+        isRolledBack: true,
+        rolledBackAt: new Date(),
+        rollbackReason: 'Canary telemetry FAIL: TRIGGER_ROLLBACK',
+        rollbackTriggeredBy: 'user-123',
+      } as any);
+
+      prisma.notification.create.mockResolvedValue({} as any);
+
+      const result = await service.rollbackRelease('rel-123', 'org-123', 'user-123', {
+        reason: 'Canary telemetry FAIL: TRIGGER_ROLLBACK',
+      });
+
+      expect(result.success).toBe(true);
+      expect(result.isRolledBack).toBe(true);
+      expect(result.releaseId).toBe('rel-123');
+      expect(result.rollbackReason).toBe('Canary telemetry FAIL: TRIGGER_ROLLBACK');
+      expect(prisma.release.update).toHaveBeenCalled();
+      expect(prisma.notification.create).toHaveBeenCalled();
+    });
+
+    it('should throw ConflictException if release is already rolled back', async () => {
+      prisma.release.findFirst.mockResolvedValue({
+        ...mockRelease,
+        isRolledBack: true,
+        rolledBackAt: new Date(),
+      } as any);
+
+      await expect(
+        service.rollbackRelease('rel-123', 'org-123', 'user-123'),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it('should throw NotFoundException if release does not exist', async () => {
+      prisma.release.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.rollbackRelease('non-existent', 'org-123', 'user-123'),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
 });
+

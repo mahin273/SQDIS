@@ -742,6 +742,11 @@ model Release {
   description    String?
   shippedAt      DateTime?
   isActive       Boolean   @default(true)
+  isRolledBack   Boolean   @default(false)
+  rolledBackAt   DateTime?
+  rollbackReason String?
+  rollbackTriggeredBy String?
+  rollbackWebhookUrl String?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
@@ -775,6 +780,7 @@ model ReleaseTelemetryAnalysis {
   serviceName      String   @default("sqdis-backend")
   verdict          String
   recommendation   String
+  shouldRollback   Boolean  @default(false)
   p95BaselineMs    Float
   p95CanaryMs      Float
   p95DeltaPct      Float

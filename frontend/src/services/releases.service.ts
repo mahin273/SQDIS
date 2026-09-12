@@ -93,6 +93,21 @@ export const releasesService = {
     );
     return response.data;
   },
+
+  /**
+   * Dispatch automated rollback and webhook incident response
+   */
+  async rollbackRelease(
+    id: string,
+    data?: import('@/types').RollbackReleaseRequest,
+  ): Promise<import('@/types').RollbackResponse> {
+    const response = await api.post<import('@/types').RollbackResponse>(
+      `/releases/${id}/rollback`,
+      data || {},
+    );
+    return response.data;
+  },
 };
+
 
 export default releasesService;
