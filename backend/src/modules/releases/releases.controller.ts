@@ -24,6 +24,10 @@ import {
   RollbackReleaseDto,
   RollbackResponseDto,
 } from './dto/rollback-release.dto';
+import {
+  ShipReleaseDto,
+  ShipReleaseResponseDto,
+} from './dto/ship-release.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -146,6 +150,34 @@ export class ReleasesController {
     ]);
 
     return this.releasesService.update(id, dto);
+  }
+
+  /**
+   * Ship a release with optional automated GitHub Release & Git Tag creation (Option A)
+   * and optional GitHub Actions workflow dispatch (Option B).
+   */
+  @Post(':id/ship')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Ship a release and execute optional GitHub Release & CI/CD workflow triggers' })
+  @ApiParam({ name: 'id', description: 'Release ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Release shipped successfully with integration results',
+    type: ShipReleaseResponseDto,
+  })
+  async ship(
+    @Param('id') id: string,
+    @Body() dto: ShipReleaseDto,
+    @GetUser('id') userId: string,
+    @GetUser('organizationId') organizationId: string,
+  ): Promise<ShipReleaseResponseDto> {
+    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.organizationsService.verifyUserRole(organizationId, userId, [
+      Role.OWNER,
+      Role.ADMIN,
+    ]);
+
+    return this.releasesService.shipRelease(id, organizationId, dto, userId);
   }
 
   /**

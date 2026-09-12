@@ -5,9 +5,12 @@ import {
   ForbiddenException,
   Logger,
   Optional,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma';
+import { GitHubService } from '../github/github.service';
 import { CreateReleaseDto } from './dto/create-release.dto';
 import { UpdateReleaseDto } from './dto/update-release.dto';
 import {
@@ -23,6 +26,12 @@ import {
   RollbackReleaseDto,
   RollbackResponseDto,
 } from './dto/rollback-release.dto';
+import {
+  ShipReleaseDto,
+  ShipReleaseResponseDto,
+  GitHubReleaseDetails,
+  WorkflowDispatchDetails,
+} from './dto/ship-release.dto';
 
 /**
  * Service for release management
@@ -35,6 +44,7 @@ export class ReleasesService {
   constructor(
     private readonly prisma: PrismaService,
     @Optional() private readonly configService?: ConfigService,
+    @Optional() @Inject(forwardRef(() => GitHubService)) private readonly githubService?: GitHubService,
   ) {
     this.mlServiceUrl =
       this.configService?.get<string>('ML_SERVICE_URL', 'http://ml-service:8000') ||
@@ -209,6 +219,223 @@ export class ReleasesService {
     });
 
     return this.formatReleaseResponse(updated);
+  }
+
+  /**
+   * Ship a release with optional automated GitHub Release & Git Tag creation (Option A)
+   * and optional GitHub Actions workflow dispatch (Option B).
+   */
+  async shipRelease(
+    id: string,
+    organizationId: string,
+    dto?: ShipReleaseDto,
+    userId?: string,
+  ): Promise<ShipReleaseResponseDto> {
+    const release = await this.prisma.release.findFirst({
+      where: { id, organizationId, isActive: true },
+      include: {
+        sprintAssociations: {
+          include: {
+            sprint: {
+              include: { team: { select: { name: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    if (!release) {
+      throw new NotFoundException('Release not found');
+    }
+
+    if (release.isRolledBack) {
+      throw new ConflictException(`Cannot ship release "${release.version}" because it has been rolled back.`);
+    }
+
+    // 1. Update release in PostgreSQL with shippedAt timestamp
+    const shippedAt = new Date();
+    const updated = await this.prisma.release.update({
+      where: { id },
+      data: { shippedAt },
+      include: {
+        sprintAssociations: {
+          include: {
+            sprint: {
+              include: { team: { select: { name: true } } },
+            },
+          },
+        },
+      },
+    });
+
+    const releaseResponse = this.formatReleaseResponse(updated);
+    let githubReleaseResult: GitHubReleaseDetails | undefined = undefined;
+    let workflowDispatchResult: WorkflowDispatchDetails | undefined = undefined;
+
+    // Resolve target repository if Option A or Option B is enabled
+    if (dto?.createGitHubRelease || dto?.triggerWorkflow) {
+      let repository = dto?.repositoryId
+        ? await this.prisma.repository.findFirst({
+            where: { id: dto.repositoryId, organizationId },
+          })
+        : await this.prisma.repository.findFirst({
+            where: { organizationId, isEnabled: true },
+            orderBy: { createdAt: 'asc' },
+          });
+
+      if (!repository) {
+        repository = await this.prisma.repository.findFirst({
+          where: { organizationId },
+        });
+      }
+
+      if (!repository) {
+        const noRepoMsg = 'No connected GitHub repository found for this organization.';
+        if (dto?.createGitHubRelease) {
+          githubReleaseResult = { success: false, error: noRepoMsg };
+        }
+        if (dto?.triggerWorkflow) {
+          workflowDispatchResult = { success: false, error: noRepoMsg };
+        }
+      } else {
+        const [owner, repo] = repository.fullName.split('/');
+
+        // Initialize authenticated Octokit client
+        let octokit: any = null;
+        if (this.githubService) {
+          try {
+            octokit = await this.githubService.getOctokitForOrganization(organizationId);
+          } catch (err: any) {
+            this.logger.warn(`Failed to initialize GitHub client: ${err.message}`);
+          }
+        }
+
+        if (!octokit) {
+          const errMsg = 'GitHub integration is not connected or token has expired. Please verify GitHub settings.';
+          if (dto?.createGitHubRelease) {
+            githubReleaseResult = { success: false, error: errMsg };
+          }
+          if (dto?.triggerWorkflow) {
+            workflowDispatchResult = { success: false, error: errMsg };
+          }
+        } else {
+          const tagName =
+            dto.tagName?.trim() ||
+            (release.version.startsWith('v') ? release.version : `v${release.version}`);
+          const releaseTitle = dto.releaseName?.trim() || `Release ${tagName}`;
+          const releaseBody =
+            dto.releaseNotes?.trim() ||
+            release.description ||
+            `Automated release ${tagName} published via SQDIS Quality Governance.`;
+
+          // ==================== OPTION A: Create GitHub Release & Git Tag ====================
+          if (dto?.createGitHubRelease) {
+            try {
+              this.logger.log(`Publishing GitHub Release ${tagName} for repository ${repository.fullName}...`);
+              const ghRes = await octokit.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tagName,
+                name: releaseTitle,
+                body: releaseBody,
+                draft: false,
+                prerelease: tagName.includes('rc') || tagName.includes('beta') || tagName.includes('alpha'),
+                generate_release_notes: true,
+              });
+
+              githubReleaseResult = {
+                success: true,
+                id: ghRes.data.id,
+                tagName: ghRes.data.tag_name,
+                name: ghRes.data.name || tagName,
+                htmlUrl: ghRes.data.html_url,
+              };
+
+              // Record in github_releases table in PostgreSQL
+              try {
+                await this.prisma.gitHubRelease.upsert({
+                  where: {
+                    repositoryId_githubReleaseId: {
+                      repositoryId: repository.id,
+                      githubReleaseId: ghRes.data.id,
+                    },
+                  },
+                  update: {
+                    tagName: ghRes.data.tag_name,
+                    releaseName: ghRes.data.name || tagName,
+                    body: ghRes.data.body || '',
+                    publishedAt: new Date(ghRes.data.published_at || Date.now()),
+                  },
+                  create: {
+                    repositoryId: repository.id,
+                    githubReleaseId: ghRes.data.id,
+                    tagName: ghRes.data.tag_name,
+                    releaseName: ghRes.data.name || tagName,
+                    body: ghRes.data.body || '',
+                    isDraft: false,
+                    isPrerelease: ghRes.data.prerelease || false,
+                    authorLogin: ghRes.data.author?.login || 'sqdis-bot',
+                    authorId: ghRes.data.author?.id || 0,
+                    createdAt: new Date(ghRes.data.created_at || Date.now()),
+                    publishedAt: new Date(ghRes.data.published_at || Date.now()),
+                  },
+                });
+              } catch (dbErr: any) {
+                this.logger.warn(`Failed to store github_releases record: ${dbErr.message}`);
+              }
+            } catch (err: any) {
+              this.logger.error(`Failed to create GitHub release on ${repository.fullName}: ${err.message}`);
+              githubReleaseResult = {
+                success: false,
+                error: err.message || 'Failed to create GitHub Release',
+              };
+            }
+          }
+
+          // ==================== OPTION B: Trigger GitHub Actions CI/CD Workflow ====================
+          if (dto?.triggerWorkflow) {
+            const workflowFileName = dto.workflowFileName?.trim() || 'ci.yml';
+            const gitRef = dto.gitRef?.trim() || 'main';
+
+            try {
+              this.logger.log(`Dispatching GitHub Actions workflow "${workflowFileName}" on ${repository.fullName} (ref: ${gitRef})...`);
+              await octokit.actions.createWorkflowDispatch({
+                owner,
+                repo,
+                workflow_id: workflowFileName,
+                ref: gitRef,
+                inputs: {
+                  release_version: release.version,
+                },
+              });
+
+              workflowDispatchResult = {
+                success: true,
+                workflow: workflowFileName,
+                ref: gitRef,
+                actionsUrl: `https://github.com/${owner}/${repo}/actions`,
+                message: `Successfully dispatched workflow "${workflowFileName}" on ref "${gitRef}".`,
+              };
+            } catch (err: any) {
+              this.logger.error(`Failed to dispatch GitHub Actions workflow "${workflowFileName}": ${err.message}`);
+              workflowDispatchResult = {
+                success: false,
+                workflow: workflowFileName,
+                ref: gitRef,
+                actionsUrl: `https://github.com/${owner}/${repo}/actions`,
+                error: err.message || `Failed to dispatch workflow "${workflowFileName}". Ensure workflow_dispatch is enabled on ${gitRef}.`,
+              };
+            }
+          }
+        }
+      }
+    }
+
+    return {
+      release: releaseResponse,
+      githubRelease: githubReleaseResult,
+      workflowDispatch: workflowDispatchResult,
+    };
   }
 
   /**

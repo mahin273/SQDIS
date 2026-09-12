@@ -237,5 +237,44 @@ describe('ReleasesService', () => {
       ).rejects.toThrow(NotFoundException);
     });
   });
+
+  describe('shipRelease', () => {
+    it('should throw NotFoundException if release does not exist', async () => {
+      prisma.release.findFirst.mockResolvedValue(null);
+
+      await expect(service.shipRelease('non-existent', 'org-123')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('should throw ConflictException if release is already rolled back', async () => {
+      prisma.release.findFirst.mockResolvedValue({
+        ...mockRelease,
+        isRolledBack: true,
+      } as any);
+
+      await expect(service.shipRelease('rel-123', 'org-123')).rejects.toThrow(ConflictException);
+    });
+
+    it('should ship release and update shippedAt timestamp', async () => {
+      prisma.release.findFirst.mockResolvedValue(mockRelease as any);
+      const shippedDate = new Date();
+      prisma.release.update.mockResolvedValue({
+        ...mockRelease,
+        shippedAt: shippedDate,
+      } as any);
+
+      const result = await service.shipRelease('rel-123', 'org-123');
+
+      expect(result.release.status).toBe('RELEASED');
+      expect(result.release.shippedAt).toBeDefined();
+      expect(prisma.release.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'rel-123' },
+          data: expect.objectContaining({ shippedAt: expect.any(Date) }),
+        }),
+      );
+    });
+  });
 });
 

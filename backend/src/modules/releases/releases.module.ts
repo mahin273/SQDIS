@@ -5,6 +5,7 @@ import { PrismaModule } from '../../prisma';
 import { AuthModule } from '../auth/auth.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
 import { SprintsModule } from '../sprints/sprints.module';
+import { GitHubModule } from '../github/github.module';
 
 @Module({
   imports: [
@@ -12,6 +13,7 @@ import { SprintsModule } from '../sprints/sprints.module';
     forwardRef(() => AuthModule),
     forwardRef(() => OrganizationsModule),
     forwardRef(() => SprintsModule),
+    forwardRef(() => GitHubModule),
   ],
   controllers: [ReleasesController],
   providers: [ReleasesService],
