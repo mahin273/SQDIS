@@ -207,7 +207,7 @@ export function ReviewsPage() {
                     </Badge>
                   </div>
                   <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-                    DAG dependency graph detected {tia.impactedTests?.length ?? 1} affected test suites out of {tia.totalTests ?? 4} total suites. 
+                    Dependency analysis detected {tia.impactedTests?.length ?? 1} affected test suites out of {tia.totalTests ?? 4} total suites. 
                     Safe to prune {tia.prunedPercentage ?? 75}% of regression tests, saving ~{tia.estimatedTimeSavedSeconds ?? 180}s of pipeline execution time.
                   </p>
                 </div>

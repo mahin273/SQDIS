@@ -14,7 +14,7 @@ export const DefectRiskGauge: React.FC<DefectRiskGaugeProps> = ({
   probability,
   riskLevel,
   isDefectProne,
-  benchmark = 'NASA MDP / Kamei Empirical',
+  benchmark = 'Defect Prediction Model',
   className,
 }) => {
   const percentage = Math.round(probability * 100);
@@ -103,7 +103,7 @@ export const DefectRiskGauge: React.FC<DefectRiskGaugeProps> = ({
       </div>
 
       <p className="mt-2 text-xs text-center text-slate-500 dark:text-slate-400">
-        Benchmark: <span className="font-medium text-slate-700 dark:text-slate-300">{benchmark}</span>
+        Model: <span className="font-medium text-slate-700 dark:text-slate-300">{benchmark}</span>
       </p>
     </div>
   );

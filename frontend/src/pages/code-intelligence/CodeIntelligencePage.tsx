@@ -284,7 +284,7 @@ export const CodeIntelligencePage: React.FC = () => {
               </Badge>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Empirical NASA MDP defect classification, Kamei JIT commit screening, DAG test impact pruning, and Bus Factor analytics.
+              Automated code defect detection, commit risk screening, smart test selection, and bus factor analytics.
             </p>
           </div>
         </div>
@@ -385,7 +385,7 @@ export const CodeIntelligencePage: React.FC = () => {
               }`}
             >
               <Flame className="h-4 w-4" />
-              <span>Architecture & NASA Hotspots</span>
+              <span>Architecture Hotspots</span>
               <Badge variant="secondary" className="text-[10px] ml-1">
                 {hotspots.length}
               </Badge>
@@ -400,7 +400,7 @@ export const CodeIntelligencePage: React.FC = () => {
               }`}
             >
               <GitCommit className="h-4 w-4" />
-              <span>JIT Commit Defect Stream</span>
+              <span>Commit Defect Stream</span>
               <Badge variant="secondary" className="text-[10px] ml-1">
                 {commitsRisk.length}
               </Badge>
@@ -437,7 +437,7 @@ export const CodeIntelligencePage: React.FC = () => {
           </div>
 
           {/* ------------------------------------------------------------- */}
-          {/* LIVE TAB 1: ARCHITECTURE & NASA DEFECT HOTSPOTS */}
+          {/* LIVE TAB 1: ARCHITECTURE DEFECT HOTSPOTS */}
           {/* ------------------------------------------------------------- */}
           {activeLiveTab === 'hotspots' && (
             <Card>
@@ -445,10 +445,10 @@ export const CodeIntelligencePage: React.FC = () => {
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div>
                     <CardTitle className="flex items-center gap-2 text-base">
-                      <Flame className="h-5 w-5 text-rose-500" /> Repository Defect Hotspots (NASA MDP & Tree-sitter AST)
+                      <Flame className="h-5 w-5 text-rose-500" /> Repository Defect Hotspots
                     </CardTitle>
                     <CardDescription>
-                      Files ranked by McCabe Cyclomatic Complexity ($v(G)$), Cognitive Complexity, and empirical NASA defect probability.
+                      Files ranked by Cyclomatic Complexity, Cognitive Complexity, and Defect Probability.
                     </CardDescription>
                   </div>
 
@@ -501,7 +501,7 @@ export const CodeIntelligencePage: React.FC = () => {
                 {hotspotsQuery.isLoading ? (
                   <div className="py-12 text-center text-xs text-slate-500">
                     <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" />
-                    Analyzing repository source tree AST & NASA defect classifiers...
+                    Analyzing repository files for complexity and defect risk...
                   </div>
                 ) : filteredHotspots.length > 0 ? (
                   <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
@@ -582,7 +582,7 @@ export const CodeIntelligencePage: React.FC = () => {
                     <Flame className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-2" />
                     <p className="text-sm font-medium">No architecture defect hotspots found.</p>
                     <p className="text-xs text-slate-400 mt-1">
-                      {hotspotSearch ? 'Try clearing your search query.' : 'Tree-sitter AST analysis is generated as commits are ingested.'}
+                      {hotspotSearch ? 'Try clearing your search query.' : 'Complexity analysis is generated as commits are ingested.'}
                     </p>
                   </div>
                 )}
@@ -591,7 +591,7 @@ export const CodeIntelligencePage: React.FC = () => {
           )}
 
           {/* ------------------------------------------------------------- */}
-          {/* LIVE TAB 2: KAMEI JIT COMMIT DEFECT STREAM */}
+          {/* LIVE TAB 2: COMMIT DEFECT RISK STREAM */}
           {/* ------------------------------------------------------------- */}
           {activeLiveTab === 'commits' && (
             <Card>
@@ -599,10 +599,10 @@ export const CodeIntelligencePage: React.FC = () => {
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
                     <CardTitle className="flex items-center gap-2 text-base">
-                      <GitCommit className="h-5 w-5 text-blue-600" /> Kamei Just-In-Time (JIT) Defect Stream
+                      <GitCommit className="h-5 w-5 text-blue-600" /> Commit Defect Risk Stream
                     </CardTitle>
                     <CardDescription>
-                      Empirical commit-level defect classification based on code churn, diffusion entropy, and author history.
+                      Commit-level defect prediction based on code churn, file diffusion, and author history.
                     </CardDescription>
                   </div>
 
@@ -623,7 +623,7 @@ export const CodeIntelligencePage: React.FC = () => {
                 {commitsRiskQuery.isLoading ? (
                   <div className="py-12 text-center text-xs text-slate-500">
                     <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" />
-                    Screening commit changeset telemetry with Kamei defect models...
+                    Screening commit changes for defect risk...
                   </div>
                 ) : filteredCommits.length > 0 ? (
                   <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
@@ -696,12 +696,12 @@ export const CodeIntelligencePage: React.FC = () => {
                             </Button>
                           </div>
 
-                          {/* Collapsible Kamei Risk Driver Details */}
+                          {/* Collapsible Commit Risk Driver Details */}
                           {isExpanded && (
                             <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs dark:border-slate-800 dark:bg-slate-950/60">
                               <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5 mb-2">
                                 <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                                Kamei Empirical Risk Analysis & SHAP Explanations
+                                Commit Defect Risk Breakdown & Key Drivers
                               </span>
                               {c.topRiskDrivers && c.topRiskDrivers.length > 0 ? (
                                 <ul className="space-y-1 text-slate-600 dark:text-slate-300">
@@ -770,7 +770,7 @@ export const CodeIntelligencePage: React.FC = () => {
                       <p className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mt-1">
                         {liveTia.riskCategory || 'LOW'}
                       </p>
-                      <span className="text-[10px] text-slate-400">DAG traversal confidence</span>
+                      <span className="text-[10px] text-slate-400">Dependency confidence</span>
                     </Card>
                   </div>
 
@@ -781,7 +781,7 @@ export const CodeIntelligencePage: React.FC = () => {
                         <CardTitle className="text-sm flex items-center gap-2 text-rose-600 dark:text-rose-400">
                           <AlertTriangle className="h-4 w-4" /> Impacted Suites (Must Execute)
                         </CardTitle>
-                        <CardDescription>Direct and transitive downstream dependents in DAG</CardDescription>
+                        <CardDescription>Downstream test suites affected by changed code</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
@@ -800,7 +800,7 @@ export const CodeIntelligencePage: React.FC = () => {
                         <CardTitle className="text-sm flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                           <CheckCircle2 className="h-4 w-4" /> Pruned Test Suites (Safe to Skip)
                         </CardTitle>
-                        <CardDescription>Independent subgraphs guaranteed untouched by changes</CardDescription>
+                        <CardDescription>Independent test suites untouched by changes</CardDescription>
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
@@ -820,7 +820,7 @@ export const CodeIntelligencePage: React.FC = () => {
                   <Zap className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-2" />
                   <p className="text-sm font-medium">Test Impact Analysis Idle</p>
                   <p className="text-xs text-slate-400 mt-1">
-                    TIA analyzes pull request diffs against the repository dependency DAG in real time.
+                    TIA analyzes pull request diffs against code dependencies in real time.
                   </p>
                 </Card>
               )}
@@ -837,7 +837,7 @@ export const CodeIntelligencePage: React.FC = () => {
                   <Users className="h-5 w-5 text-purple-600" /> Repository Knowledge Distribution & Bus Factor
                 </CardTitle>
                 <CardDescription>
-                  Measures authorship inequality across subsystems using the Gini coefficient and Avelino 80% frontier.
+                  Measures code ownership concentration and identifies single points of failure across your team.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
@@ -968,15 +968,15 @@ export const CodeIntelligencePage: React.FC = () => {
             <TabsList className="bg-slate-100 dark:bg-slate-800/80 p-1 rounded-xl">
               <TabsTrigger value="ast" className="gap-2">
                 <Code2 className="w-4 h-4" />
-                <span>AST & NASA Defect Inspector</span>
+                <span>Code Complexity & Defect Inspector</span>
               </TabsTrigger>
               <TabsTrigger value="commit" className="gap-2">
                 <GitCommit className="w-4 h-4" />
-                <span>JIT Commit Risk Simulator</span>
+                <span>Commit Risk Simulator</span>
               </TabsTrigger>
               <TabsTrigger value="tia" className="gap-2">
                 <Layers className="w-4 h-4" />
-                <span>Test Impact (DAG TIA)</span>
+                <span>Test Impact Analysis</span>
               </TabsTrigger>
               <TabsTrigger value="bus-factor" className="gap-2">
                 <Users className="w-4 h-4" />
@@ -984,7 +984,7 @@ export const CodeIntelligencePage: React.FC = () => {
               </TabsTrigger>
             </TabsList>
 
-            {/* TAB 1: AST & NASA DEFECT INSPECTOR */}
+            {/* TAB 1: CODE COMPLEXITY & DEFECT INSPECTOR */}
             <TabsContent value="ast" className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-7 space-y-4">
@@ -993,7 +993,7 @@ export const CodeIntelligencePage: React.FC = () => {
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div>
                           <CardTitle className="text-base">Pre-Commit Code Inspector</CardTitle>
-                          <CardDescription>Paste draft code to analyze AST complexity and NASA defect probability</CardDescription>
+                          <CardDescription>Paste draft code to analyze complexity and defect probability</CardDescription>
                         </div>
                         <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800 self-start sm:self-auto">
                           {(['typescript', 'javascript', 'python'] as const).map((lang) => (
@@ -1049,12 +1049,12 @@ export const CodeIntelligencePage: React.FC = () => {
                         {astLoading ? (
                           <>
                             <RefreshCw className="w-4 h-4 animate-spin" />
-                            Analyzing AST with Tree-sitter & NASA Model...
+                            Analyzing code complexity and defect risk...
                           </>
                         ) : (
                           <>
                             <Play className="w-4 h-4 fill-current" />
-                            Analyze Defect Risk & AST Complexity
+                            Analyze Defect Risk & Code Complexity
                           </>
                         )}
                       </Button>
@@ -1069,12 +1069,12 @@ export const CodeIntelligencePage: React.FC = () => {
                         probability={astResult.defect_probability}
                         riskLevel={astResult.risk_level}
                         isDefectProne={astResult.is_defect_prone}
-                        benchmark="NASA MDP (14.6k modules)"
+                        benchmark="Code Defect Model"
                       />
 
                       <div className="grid grid-cols-2 gap-3">
                         <Card className="p-4 bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
-                          <p className="text-xs font-medium text-slate-500">McCabe Cyclomatic</p>
+                          <p className="text-xs font-medium text-slate-500">Cyclomatic Complexity</p>
                           <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
                             {astResult.metrics_analyzed?.v_g ?? 1}
                           </p>
@@ -1128,7 +1128,7 @@ export const CodeIntelligencePage: React.FC = () => {
                       </div>
                       <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Awaiting Source Code</h3>
                       <p className="text-xs text-slate-500 mt-1">
-                        Click "Analyze Defect Risk" to execute real-time Tree-sitter AST and NASA classification.
+                        Click "Analyze Defect Risk" to evaluate code complexity and defect probability.
                       </p>
                     </Card>
                   )}
@@ -1136,13 +1136,13 @@ export const CodeIntelligencePage: React.FC = () => {
               </div>
             </TabsContent>
 
-            {/* TAB 2: JIT COMMIT RISK SIMULATOR */}
+            {/* TAB 2: COMMIT RISK SIMULATOR */}
             <TabsContent value="commit" className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
                 <div className="lg:col-span-7 space-y-4">
                   <Card>
                     <CardHeader>
-                      <CardTitle className="text-base">Kamei JIT Diff Simulator</CardTitle>
+                      <CardTitle className="text-base">Commit Risk Simulator</CardTitle>
                       <CardDescription>Simulate commit metrics to predict bug insertion risk before pushing</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -1193,7 +1193,7 @@ export const CodeIntelligencePage: React.FC = () => {
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Directory Diffusion Entropy (H)</label>
+                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">File Spread / Diffusion (H)</label>
                           <input
                             type="number"
                             step="0.1"
@@ -1210,7 +1210,7 @@ export const CodeIntelligencePage: React.FC = () => {
                         className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                       >
                         {commitLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
-                        Simulate JIT Commit Defect Risk
+                        Simulate Commit Defect Risk
                       </Button>
                     </CardContent>
                   </Card>
@@ -1223,7 +1223,7 @@ export const CodeIntelligencePage: React.FC = () => {
                         probability={commitResult.defect_probability}
                         riskLevel={commitResult.risk_level}
                         isDefectProne={commitResult.is_defect_prone}
-                        benchmark="Kamei JIT (XGBoost 0.88 AUC)"
+                        benchmark="Commit Risk Model"
                       />
 
                       <Card>
@@ -1259,9 +1259,9 @@ export const CodeIntelligencePage: React.FC = () => {
             <TabsContent value="tia" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Test Impact Analysis (TIA via Dependency DAG)</CardTitle>
+                  <CardTitle className="text-base">Test Impact Analysis (TIA)</CardTitle>
                   <CardDescription>
-                    Constructs an in-memory dependency graph, computes transposed graph G^T, and uses BFS to execute ONLY tests impacted by changes.
+                    Analyzes file dependencies to select and execute ONLY the test suites impacted by your changes.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
@@ -1305,7 +1305,7 @@ export const CodeIntelligencePage: React.FC = () => {
                     className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {tiaLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
-                    Execute Test Impact Graph Analysis
+                    Execute Test Impact Analysis
                   </Button>
 
                   {tiaResult && (
@@ -1335,7 +1335,7 @@ export const CodeIntelligencePage: React.FC = () => {
                       </div>
 
                       <div>
-                        <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Impacted Test Suites (Downstream Closures)</h4>
+                        <h4 className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">Impacted Test Suites (Must Run)</h4>
                         <div className="space-y-1.5">
                           {tiaResult.impacted_tests.map((test, idx) => (
                             <div key={idx} className="flex items-center gap-2 p-2 rounded bg-blue-50/50 dark:bg-blue-950/20 text-xs font-mono text-blue-800 dark:text-blue-300 border border-blue-100 dark:border-blue-900/40">
@@ -1357,7 +1357,7 @@ export const CodeIntelligencePage: React.FC = () => {
                 <CardHeader>
                   <CardTitle className="text-base">Team Knowledge Silo & Bus Factor Radar</CardTitle>
                   <CardDescription>
-                    Measures code authorship inequality using the Gini coefficient and the Avelino/Valente 80% contribution frontier.
+                    Measures code ownership distribution and key developer dependencies across modules.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-6">
