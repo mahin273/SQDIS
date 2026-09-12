@@ -185,14 +185,14 @@ export function CommitsPage() {
                                     risk.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.25)' :
                                     'rgba(16, 185, 129, 0.25)',
                                 }}
-                                title="Click to toggle Kamei JIT defect risk drivers"
+                                title="Click to toggle defect risk breakdown"
                               >
                                 {risk.riskLevel === 'CRITICAL' || risk.riskLevel === 'HIGH' ? (
                                   <AlertTriangle className="h-3 w-3" />
                                 ) : (
                                   <ShieldCheck className="h-3 w-3" />
                                 )}
-                                JIT {(risk.defectProbability * 100).toFixed(0)}% {risk.riskLevel}
+                                Risk: {(risk.defectProbability * 100).toFixed(0)}% {risk.riskLevel}
                                 {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                               </button>
                             )}
@@ -213,7 +213,7 @@ export function CommitsPage() {
                           <div className="flex items-center justify-between mb-2">
                             <span className="font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
                               <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
-                              Kamei JIT Commit Defect Analysis
+                              Commit Defect Risk Analysis
                             </span>
                             <span className="text-slate-400 font-mono text-[10px]">
                               SHA: {commit.sha}

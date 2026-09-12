@@ -17,6 +17,8 @@ export const PUBSUB_CHANNELS = {
   NOTIFICATION_EVENTS: 'sqdis:events:notification',
   /** Channel for team events */
   TEAM_EVENTS: 'sqdis:events:team',
+  /** Channel for quality gate evaluation events */
+  QUALITY_GATE_EVENTS: 'sqdis:events:pr_quality_gate',
 };
 
 /**

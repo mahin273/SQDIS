@@ -46,6 +46,9 @@ import { UpdateWebhookSecretDto } from './dto/update-webhook-secret.dto';
 import { UpdateWebhookEnabledDto } from './dto/update-webhook-enabled.dto';
 import { TestWebhookDto } from './dto/test-webhook.dto';
 import { UpdateRateLimitDto } from './dto/update-rate-limit.dto';
+import { EvaluatePrQualityGateDto } from './dto/evaluate-pr-quality-gate.dto';
+import { UpdateQualityGatePolicyDto } from './dto/update-quality-gate-policy.dto';
+import { PrQualityGateBotService } from './services/pr-quality-gate-bot.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -73,6 +76,7 @@ export class GitHubController {
     private readonly webhookLogService: WebhookLogService,
     private readonly webhookMonitoringService: WebhookMonitoringService,
     private readonly rateLimitService: RateLimitService,
+    private readonly prQualityGateBotService: PrQualityGateBotService,
   ) {}
 
   /**
@@ -950,4 +954,104 @@ export class GitHubController {
     // Return the updated configuration
     return this.rateLimitService.getRateLimitConfig(orgId);
   }
+
+  /**
+   * Evaluate PR Quality Gate on demand
+   */
+  @Post('quality-gate/evaluate-pr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD, Role.DEVELOPER)
+  @ApiOperation({
+    summary: 'Evaluate code quality gate for a pull request',
+    description: 'Triggers on-demand quality gate assessment for a pull request changeset',
+  })
+  async evaluatePrQualityGate(
+    @Body() dto: EvaluatePrQualityGateDto,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    const orgId = this.validateOrganizationContext(organizationId);
+    return this.prQualityGateBotService.evaluateAndReport({
+      repositoryId: dto.repositoryId,
+      prNumber: dto.prNumber,
+      headCommitSha: dto.headCommitSha,
+      organizationId: orgId,
+      filesOverride: dto.files,
+    });
+  }
+
+  /**
+   * Retrieve latest Quality Gate evaluation for a pull request
+   */
+  @Get('quality-gate/:repositoryId/pr/:prNumber')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get latest quality gate evaluation for a pull request',
+  })
+  async getLatestPrQualityGate(
+    @Param('repositoryId') repositoryId: string,
+    @Param('prNumber') prNumber: string,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    this.validateOrganizationContext(organizationId);
+    const parsedPr = parseInt(prNumber, 10);
+    return this.prQualityGateBotService.getLatestEvaluation(repositoryId, parsedPr);
+  }
+
+  /**
+   * Retrieve effective Quality Gate policy for a repository
+   */
+  @Get('quality-gate/policy/:repositoryId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get effective quality gate policy for a repository',
+  })
+  async getQualityGatePolicy(
+    @Param('repositoryId') repositoryId: string,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    this.validateOrganizationContext(organizationId);
+    return this.prQualityGateBotService.getPolicy(repositoryId);
+  }
+
+  /**
+   * Upsert Quality Gate policy thresholds for a repository
+   */
+  @Put('quality-gate/policy/:repositoryId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
+  @ApiOperation({
+    summary: 'Configure quality gate policy thresholds for a repository',
+  })
+  async updateQualityGatePolicy(
+    @Param('repositoryId') repositoryId: string,
+    @Body() dto: UpdateQualityGatePolicyDto,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    this.validateOrganizationContext(organizationId);
+    return this.prQualityGateBotService.upsertPolicy(repositoryId, dto);
+  }
+
+  /**
+   * Retrieve historical compliance analytics for a repository
+   */
+  @Get('quality-gate/history/:repositoryId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get historical quality gate compliance analytics for a repository',
+  })
+  async getQualityGateComplianceHistory(
+    @Param('repositoryId') repositoryId: string,
+    @Query('days') days: string | undefined,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    this.validateOrganizationContext(organizationId);
+    const periodDays = days ? parseInt(days, 10) : 30;
+    return this.prQualityGateBotService.getComplianceHistory(repositoryId, isNaN(periodDays) ? 30 : periodDays);
+  }
 }
+

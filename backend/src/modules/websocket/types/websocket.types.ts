@@ -33,6 +33,7 @@ export interface ServerToClientEvents {
   'score:updated': (data: ScoreUpdatedEvent) => void;
   'alert:new': (data: AlertNewEvent) => void;
   'notification:new': (data: NotificationNewEvent) => void;
+  'pr_quality_gate_evaluated': (data: QualityGateEvaluatedWsEvent) => void;
   error: (data: { message: string; code?: string }) => void;
   subscribed: (data: { channel: string }) => void;
   unsubscribed: (data: { channel: string }) => void;
@@ -70,6 +71,25 @@ export interface AlertNewEvent {
   message: string;
   type?: string;
   commitId?: string;
+}
+
+/**
+ * Event payload for pull request quality gate evaluations
+ */
+export interface QualityGateEvaluatedWsEvent {
+  evaluationId: string;
+  pullRequestId: string;
+  repositoryId: string;
+  organizationId: string;
+  prNumber: number;
+  status: string;
+  defectProbability: number;
+  riskLevel: string;
+  maxComplexity: number;
+  headCommitSha: string;
+  githubStatusState: string;
+  summaryMarkdown: string;
+  createdAt: string;
 }
 
 /**

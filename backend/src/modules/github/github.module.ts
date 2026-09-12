@@ -1,6 +1,7 @@
 import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { ModuleRef } from '@nestjs/core';
 import { ScheduleModule } from '@nestjs/schedule';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { GitHubController } from './github.controller';
 import { GitHubService } from './github.service';
 import { EncryptionService } from './services/encryption.service';
@@ -33,6 +34,8 @@ import { WebSocketModule } from '../websocket/websocket.module';
 import { PullRequestQueueModule } from '../../config';
 import { AlertsModule } from '../alerts/alerts.module';
 import { AuthModule } from '../auth/auth.module';
+import { PrQualityGateBotService } from './services/pr-quality-gate-bot.service';
+import { CodeIntelligenceModule } from '../code-intelligence/code-intelligence.module';
 
 /**
  * GitHub integration module
@@ -41,7 +44,9 @@ import { AuthModule } from '../auth/auth.module';
   imports: [
     PrismaModule,
     ScheduleModule.forRoot(),
+    EventEmitterModule.forRoot(),
     PullRequestQueueModule,
+    CodeIntelligenceModule,
     forwardRef(() => WebSocketModule),
     forwardRef(() => AlertsModule),
     forwardRef(() => AuthModule),
@@ -74,6 +79,7 @@ import { AuthModule } from '../auth/auth.module';
     BackfillService,
     PollingService,
     CommitProcessorQueue,
+    PrQualityGateBotService,
   ],
   exports: [
     GitHubService,
@@ -98,6 +104,7 @@ import { AuthModule } from '../auth/auth.module';
     BackfillService,
     PollingService,
     CommitProcessorQueue,
+    PrQualityGateBotService,
   ],
 })
 export class GitHubModule implements OnModuleInit {

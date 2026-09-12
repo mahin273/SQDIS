@@ -6,6 +6,7 @@ import { PULL_REQUEST_QUEUE_NAME, PullRequestJobData } from '../queues/commit-pr
 import { ParsedPullRequestData } from '../dto/webhook-payload.dto';
 import { PullRequestState } from '@prisma/client';
 import { DatabaseErrorHandler } from '../utils/database-error-handler';
+import { PrQualityGateBotService } from '../services/pr-quality-gate-bot.service';
 
 /**
  * Result of processing a pull request
@@ -25,13 +26,17 @@ export interface ProcessedPullRequestResult {
  * - PR updates for 'closed', 'reopened', 'synchronize' actions
  * - Review requests for 'review_requested' action
  * - Mapping GitHub users to internal users via githubId
+ * - Triggering automated Quality Gate bot evaluations
  *
  */
 @Processor(PULL_REQUEST_QUEUE_NAME)
 export class PullRequestWorker extends WorkerHost {
   private readonly logger = new Logger(PullRequestWorker.name);
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly prQualityGateBotService: PrQualityGateBotService,
+  ) {
     super();
   }
 
@@ -83,6 +88,24 @@ export class PullRequestWorker extends WorkerHost {
             action,
             authorId: author?.id || null,
           };
+      }
+
+      // Trigger automated Quality Gate evaluation for opened, synchronize, or reopened PRs
+      if (['opened', 'synchronize', 'reopened'].includes(action)) {
+        try {
+          await this.prQualityGateBotService.evaluateAndReport({
+            repositoryId,
+            prNumber: pullRequest.prNumber,
+            headCommitSha: pullRequest.headCommitSha,
+            pullRequestId: result.pullRequestId || undefined,
+            organizationId,
+          });
+          this.logger.log(`Completed Quality Gate evaluation for PR #${pullRequest.prNumber}`);
+        } catch (gateErr) {
+          this.logger.error(
+            `Quality Gate evaluation failed for PR #${pullRequest.prNumber}: ${gateErr.message}`,
+          );
+        }
       }
 
       this.logger.log(`Successfully processed PR #${pullRequest.prNumber} (action: ${action})`);

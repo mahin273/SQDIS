@@ -1,7 +1,8 @@
 import { useState, useMemo } from 'react'
 import { Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
-import { GitPullRequest, Clock, CheckCircle2, AlertCircle, ArrowRight, Search, Activity, User, Github, Zap } from 'lucide-react'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useWebSocket } from '@/hooks/useWebSocket'
+import { GitPullRequest, Clock, CheckCircle2, AlertCircle, ArrowRight, Search, Activity, User, Github, Zap, Shield } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -12,6 +13,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { reviewsService, repositoriesService, codeIntelligenceService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
+import { PrQualityGateBadge, PrQualityGateDrawer } from './components'
 import type { Review, ReviewState, ReviewStateFilter, ReviewActivityTrendPoint, ReviewLeaderboardEntry } from '@/types'
 import type { TestImpactResult } from '@/services'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
@@ -42,7 +44,31 @@ export function ReviewsPage() {
   const [filterState, setFilterState] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
+  const [selectedPrGate, setSelectedPrGate] = useState<{
+    repositoryId: string;
+    prNumber: number;
+    prTitle?: string;
+    authorName?: string;
+    headCommitSha?: string;
+  } | null>(null)
   const pageSize = 10
+
+  const queryClient = useQueryClient()
+
+  // Real-time WebSocket listener for live Quality Gate evaluation updates
+  useWebSocket('dashboard-updates', {
+    onMessage: (msg: any) => {
+      if (
+        msg?.type === 'pr_quality_gate_evaluated' ||
+        msg?.event?.evaluationId ||
+        msg?.type === 'PR_EVALUATED'
+      ) {
+        queryClient.invalidateQueries({ queryKey: ['quality-gate'] })
+        queryClient.invalidateQueries({ queryKey: ['quality-gate-history'] })
+        queryClient.invalidateQueries({ queryKey: queryKeys.reviews.all() })
+      }
+    },
+  })
 
   const stateParam = mapToReviewStateFilter(filterState)
 
@@ -207,7 +233,7 @@ export function ReviewsPage() {
                     </Badge>
                   </div>
                   <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-                    DAG dependency graph detected {tia.impactedTests?.length ?? 1} affected test suites out of {tia.totalTests ?? 4} total suites. 
+                    Dependency analysis detected {tia.impactedTests?.length ?? 1} affected test suites out of {tia.totalTests ?? 4} total suites. 
                     Safe to prune {tia.prunedPercentage ?? 75}% of regression tests, saving ~{tia.estimatedTimeSavedSeconds ?? 180}s of pipeline execution time.
                   </p>
                 </div>
@@ -334,11 +360,23 @@ export function ReviewsPage() {
                         <GitPullRequest className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                       </div>
                       <div className="min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate text-base">
                             {review.pullRequestTitle || `Update in ${review.repository?.name || 'repository'}`}
                           </h3>
                           {getStatusBadge(review.state)}
+                          <PrQualityGateBadge
+                            repositoryId={review.repositoryId || review.repository?.id}
+                            prNumber={review.pullRequestId}
+                            onClick={() =>
+                              setSelectedPrGate({
+                                repositoryId: review.repositoryId || review.repository?.id || '',
+                                prNumber: review.pullRequestId,
+                                prTitle: review.pullRequestTitle,
+                                authorName: review.author?.name,
+                              })
+                            }
+                          />
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
@@ -362,7 +400,7 @@ export function ReviewsPage() {
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-4 text-sm text-slate-500 shrink-0 sm:flex-col sm:items-end sm:gap-1">
+                    <div className="flex items-center gap-4 text-sm text-slate-500 shrink-0 sm:flex-col sm:items-end sm:gap-1.5">
                       <div className="flex items-center gap-3">
                         {review.reviewers && review.reviewers.length > 0 && (
                           <div className="flex -space-x-2 mr-2">
@@ -380,7 +418,28 @@ export function ReviewsPage() {
                           {review.commentCount ?? 0} comments
                         </span>
                       </div>
-                      <span className="text-xs">{review.createdAt ? new Date(review.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}</span>
+                      
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            setSelectedPrGate({
+                              repositoryId: review.repositoryId || review.repository?.id || '',
+                              prNumber: review.pullRequestId,
+                              prTitle: review.pullRequestTitle,
+                              authorName: review.author?.name,
+                            })
+                          }
+                          className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                        >
+                          <Shield className="w-3 h-3" />
+                          Inspect Gate
+                        </Button>
+                        <span className="text-xs">
+                          {review.createdAt ? new Date(review.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 ))
@@ -406,6 +465,16 @@ export function ReviewsPage() {
           </QueryState>
         </CardContent>
       </Card>
+
+      <PrQualityGateDrawer
+        isOpen={!!selectedPrGate}
+        onClose={() => setSelectedPrGate(null)}
+        repositoryId={selectedPrGate?.repositoryId}
+        prNumber={selectedPrGate?.prNumber}
+        prTitle={selectedPrGate?.prTitle}
+        authorName={selectedPrGate?.authorName}
+        headCommitSha={selectedPrGate?.headCommitSha}
+      />
     </div>
   )
 }

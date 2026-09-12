@@ -20,6 +20,7 @@ import {
   ScoreUpdatedEvent,
   AlertNewEvent,
   NotificationNewEvent,
+  QualityGateEvaluatedWsEvent,
 } from './types/websocket.types';
 import { JwtPayload } from '../auth/types/jwt-payload.types';
 
@@ -326,6 +327,15 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
     const channelName = this.channelManager.getChannelName('dashboard', orgId);
     this.server.to(channelName).emit('alert:new', event);
     this.logger.debug(`Published alert:new to ${channelName}`);
+  }
+
+  /**
+   * Publish pr_quality_gate_evaluated event to dashboard subscribers
+   */
+  publishQualityGateEvaluated(orgId: string, event: QualityGateEvaluatedWsEvent): void {
+    const channelName = this.channelManager.getChannelName('dashboard', orgId);
+    this.server.to(channelName).emit('pr_quality_gate_evaluated', event);
+    this.logger.debug(`Published pr_quality_gate_evaluated to ${channelName}`);
   }
 
   /**

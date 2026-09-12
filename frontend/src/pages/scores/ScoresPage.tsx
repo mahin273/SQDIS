@@ -47,7 +47,7 @@ export function ScoresPage() {
     <div className="space-y-6">
       <PageHeader
         title="Quality Scores & DQS"
-        description="Monitor your Developer Quality Score, SHAP factor breakdown, and risky module indicators"
+        description="Monitor your Developer Quality Score, key score factors, and code risk indicators"
       />
 
       <QueryState isLoading={isScoreLoading} error={scoreError} onRetry={() => refetchScore()}>

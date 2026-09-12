@@ -125,13 +125,13 @@ export function AuthLayout() {
               <div className="space-y-2 pt-1">
                 <div className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold flex items-center justify-between">
                   <span>Recent Inspected Commits</span>
-                  <span className="text-[10px] text-slate-400 font-normal">SHAP Explained</span>
+                  <span className="text-[10px] text-slate-400 font-normal">Scored by Quality Engine</span>
                 </div>
                 <div className="space-y-1.5 text-xs">
                   <div className="flex items-center justify-between px-2.5 py-1.5 rounded-lg bg-slate-950/40 border border-white/[0.04]">
                     <div className="flex items-center gap-2 truncate">
                       <GitCommit className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
-                      <span className="text-slate-200 truncate font-mono text-[11px]">feat(ml): tree-sitter AST engine verified</span>
+                      <span className="text-slate-200 truncate font-mono text-[11px]">feat(quality): code analysis engine verified</span>
                     </div>
                     <span className="text-[10px] font-semibold text-emerald-400 shrink-0 ml-2">Score: 98</span>
                   </div>
@@ -150,7 +150,7 @@ export function AuthLayout() {
             <div className="pt-2 flex items-center gap-6 text-xs text-slate-400 border-t border-slate-800/60">
               <div>
                 <span className="font-bold text-white text-sm">250,000+</span>
-                <span className="block text-[11px] text-slate-400">Empirical defect rows</span>
+                <span className="block text-[11px] text-slate-400">Inspected changesets</span>
               </div>
               <div className="h-6 w-px bg-slate-800" />
               <div>
@@ -159,8 +159,8 @@ export function AuthLayout() {
               </div>
               <div className="h-6 w-px bg-slate-800" />
               <div>
-                <span className="font-bold text-white text-sm">AST + XGBoost</span>
-                <span className="block text-[11px] text-slate-400">Explainable AI (SHAP)</span>
+                <span className="font-bold text-white text-sm">Deep Analysis</span>
+                <span className="block text-[11px] text-slate-400">Transparent Risk Drivers</span>
               </div>
             </div>
           </div>

@@ -207,6 +207,7 @@ model Repository {
   githubReleases      GitHubRelease[]
   commitComments      CommitComment[]
   fileASTMetrics      FileASTMetric[]
+  qualityGatePolicy   QualityGatePolicy?
 
   @@unique([organizationId, githubId])
   @@map("repositories")
@@ -289,7 +290,8 @@ model PullRequest {
   updatedAt     DateTime
   closedAt      DateTime?
 
-  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  repository   Repository               @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+  qualityGates PullRequestQualityGate[]
 
   @@unique([repositoryId, githubPrId])
   @@index([repositoryId, state])
@@ -300,6 +302,56 @@ enum PullRequestState {
   OPEN
   CLOSED
   MERGED
+}
+
+enum QualityGateStatus {
+  PASSED
+  WARNING
+  BLOCKED
+}
+
+model PullRequestQualityGate {
+  id                 String            @id @default(uuid())
+  pullRequestId      String
+  repositoryId       String
+  prNumber           Int
+  headCommitSha      String
+  status             QualityGateStatus
+  defectProbability  Float
+  riskLevel          String
+  maxComplexity      Int
+  impactedTestsCount Int
+  prunedPercentage   Float
+  estimatedTimeSaved Float
+  summaryMarkdown    String            @db.Text
+  githubCommentId    BigInt?
+  githubStatusState  String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+
+  pullRequest PullRequest @relation(fields: [pullRequestId], references: [id], onDelete: Cascade)
+
+  @@index([repositoryId, prNumber])
+  @@map("pull_request_quality_gates")
+}
+
+model QualityGatePolicy {
+  id                       String     @id @default(uuid())
+  repositoryId             String     @unique
+  warningDefectProbability Float      @default(0.40)
+  blockedDefectProbability Float      @default(0.65)
+  warningComplexity        Int        @default(15)
+  blockedComplexity        Int        @default(25)
+  blockOnSecurity          Boolean    @default(true)
+  enableBotComment         Boolean    @default(true)
+  enableCommitStatus       Boolean    @default(true)
+  strictBranchProtection   Boolean    @default(false)
+  createdAt                DateTime   @default(now())
+  updatedAt                DateTime   @updatedAt
+
+  repository Repository @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
+
+  @@map("quality_gate_policies")
 }
 
 // Issues

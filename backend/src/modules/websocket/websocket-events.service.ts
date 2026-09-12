@@ -6,6 +6,7 @@ import {
   ScoreUpdatedEvent,
   AlertNewEvent,
   NotificationNewEvent,
+  QualityGateEvaluatedWsEvent,
 } from './types/websocket.types';
 import { RedisPubSubService, PUBSUB_CHANNELS } from '../cache/redis-pubsub.service';
 
@@ -179,5 +180,42 @@ export class WebSocketEventsService {
       userId: event.userId,
       event: wsEvent,
     });
+  }
+
+  /**
+   * Handle pr.quality_gate.evaluated event
+   */
+  @OnEvent('pr.quality_gate.evaluated')
+  async handleQualityGateEvaluated(event: any): Promise<void> {
+    this.logger.debug(
+      `Received pr.quality_gate.evaluated event for repo ${event.repositoryId} PR #${event.prNumber}`,
+    );
+
+    const wsEvent: QualityGateEvaluatedWsEvent = {
+      evaluationId: event.evaluationId,
+      pullRequestId: event.pullRequestId,
+      repositoryId: event.repositoryId,
+      organizationId: event.organizationId,
+      prNumber: event.prNumber,
+      status: event.status,
+      defectProbability: event.defectProbability,
+      riskLevel: event.riskLevel,
+      maxComplexity: event.maxComplexity,
+      headCommitSha: event.headCommitSha,
+      githubStatusState: event.githubStatusState,
+      summaryMarkdown: event.summaryMarkdown,
+      createdAt: (event.createdAt instanceof Date ? event.createdAt : new Date(event.createdAt)).toISOString(),
+    };
+
+    if (event.organizationId) {
+      // Publish to local WebSocket clients in organization room
+      this.wsGateway.publishQualityGateEvaluated(event.organizationId, wsEvent);
+
+      // Publish to Redis for cluster-wide distribution
+      await this.redisPubSub.publish(PUBSUB_CHANNELS.QUALITY_GATE_EVENTS, 'pr:evaluated', {
+        organizationId: event.organizationId,
+        event: wsEvent,
+      });
+    }
   }
 }
