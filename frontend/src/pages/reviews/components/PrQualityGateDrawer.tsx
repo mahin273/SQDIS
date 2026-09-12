@@ -18,6 +18,7 @@ import {
   Sliders,
   Save,
   History,
+  Wrench,
 } from 'lucide-react';
 import {
   Sheet,
@@ -36,6 +37,9 @@ import {
   type QualityGateResult,
   type QualityGatePolicy,
 } from '@/services/qualityGate.service';
+import { codeIntelligenceService } from '@/services';
+import { RemediationAdviceModal } from '@/components/remediation';
+import type { RemediationResponse } from '@/types';
 import { DefectRiskGauge } from '@/pages/code-intelligence/components/DefectRiskGauge';
 
 interface PrQualityGateDrawerProps {
@@ -61,6 +65,44 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'overview' | 'test-impact' | 'bot-report' | 'policy' | 'history'>('overview');
   const [copied, setCopied] = useState(false);
+
+  // Remediation modal state
+  const [isRemediationOpen, setIsRemediationOpen] = useState(false);
+  const [remediationData, setRemediationData] = useState<RemediationResponse | null>(null);
+  const [isRemediationLoading, setIsRemediationLoading] = useState(false);
+
+  const handleOpenRemediation = async () => {
+    setIsRemediationOpen(true);
+    setIsRemediationLoading(true);
+    try {
+      const sampleCode = `// Problematic method flagged for branching complexity (${gate?.maxComplexity ?? 14})
+function handlePullRequestChanges(context: any) {
+  if (context) {
+    if (context.hasChanges) {
+      if (context.status === 'OPEN') {
+        if (!context.isLocked) {
+          if (context.files && context.files.length > 0) {
+            return dispatchReview(context);
+          }
+        }
+      }
+    }
+  }
+  return null;
+}`;
+      const res = await codeIntelligenceService.getRemediationAdvice({
+        code: sampleCode,
+        language: 'typescript',
+        cyclomaticComplexity: gate?.maxComplexity ?? 14,
+        filePath: `pr-${prNumber}-complexity-hotspot.ts`,
+      });
+      setRemediationData(res);
+    } catch (err) {
+      console.error('Failed to fetch remediation advice', err);
+    } finally {
+      setIsRemediationLoading(false);
+    }
+  };
 
   // Policy form state
   const [warningDefectPct, setWarningDefectPct] = useState(40);
@@ -390,9 +432,18 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
                             : 'Clean Branching'}
                         </p>
                       </div>
-                      <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800/80 pt-2">
-                        Target: ≤ {effectiveWarnCC}
+                      <div className="text-[11px] text-slate-400 border-t border-slate-100 dark:border-slate-800/80 pt-2 flex items-center justify-between">
+                        <span>Target: ≤ {effectiveWarnCC}</span>
                       </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleOpenRemediation}
+                        className="mt-2.5 text-[11px] h-7 px-2 w-full gap-1.5 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950/50 justify-center"
+                      >
+                        <Wrench className="w-3.5 h-3.5" />
+                        <span>Remediation Advice</span>
+                      </Button>
                     </div>
 
                     {/* CI Acceleration Tile */}
@@ -1002,6 +1053,14 @@ export const PrQualityGateDrawer: React.FC<PrQualityGateDrawerProps> = ({
             Close
           </Button>
         </div>
+
+        {/* Remediation Advice Modal */}
+        <RemediationAdviceModal
+          isOpen={isRemediationOpen}
+          onClose={() => setIsRemediationOpen(false)}
+          data={remediationData}
+          isLoading={isRemediationLoading}
+        />
       </SheetContent>
     </Sheet>
   );

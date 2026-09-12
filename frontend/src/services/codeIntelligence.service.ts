@@ -184,4 +184,14 @@ export const codeIntelligenceService = {
     });
     return resp.data;
   },
+
+  async getRemediationAdvice(
+    payload: import('@/types').RemediationRequest,
+  ): Promise<import('@/types').RemediationResponse> {
+    const resp = await api.post<import('@/types').RemediationResponse>(
+      '/code-intelligence/remediation/advise',
+      payload,
+    );
+    return resp.data;
+  },
 };

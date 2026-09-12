@@ -686,6 +686,32 @@ export interface EvaluateTelemetryRequest {
   canaryDurationMinutes?: number;
 }
 
+export interface RemediationRecipe {
+  smellType: string;
+  title: string;
+  severity: 'CRITICAL' | 'WARNING' | 'SUGGESTION';
+  recommendedStrategy: string;
+  estimatedComplexityReductionPct: number;
+  explanation: string;
+  stepByStep: string[];
+  beforeSnippet: string;
+  afterSnippet: string;
+}
+
+export interface RemediationResponse {
+  targetFilePath?: string;
+  totalSmellsFound: number;
+  refactoringPotentialScore: number;
+  recipes: RemediationRecipe[];
+}
+
+export interface RemediationRequest {
+  code: string;
+  language?: string;
+  filePath?: string;
+  cyclomaticComplexity?: number;
+}
+
 // ============== COMMITS ==============
 
 export type CommitClassification =
