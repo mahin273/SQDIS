@@ -59,6 +59,30 @@ export class ReadinessScoreDto {
     example: false,
   })
   isAtRisk!: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Operational telemetry stability score component (20% weight if available)',
+    example: 95,
+  })
+  telemetryScore?: number;
+
+  @ApiPropertyOptional({
+    description: 'Latest canary telemetry verdict',
+    example: 'HEALTHY',
+  })
+  telemetryVerdict?: 'HEALTHY' | 'DEGRADED' | 'CRITICAL_REGRESSION';
+
+  @ApiPropertyOptional({
+    description: 'Operational recommendation',
+    example: 'PROCEED',
+  })
+  telemetryRecommendation?: 'PROCEED' | 'MONITOR_CLOSELY' | 'TRIGGER_ROLLBACK';
+
+  @ApiPropertyOptional({
+    description: 'Whether live telemetry analysis has been executed',
+    example: true,
+  })
+  hasTelemetry?: boolean;
 }
 
 /**

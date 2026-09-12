@@ -1,12 +1,23 @@
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Rocket, CheckCircle2, AlertTriangle, ShieldCheck, Clock, Download, Calendar } from 'lucide-react'
+import {
+  ArrowLeft,
+  Rocket,
+  CheckCircle2,
+  AlertTriangle,
+  ShieldCheck,
+  Clock,
+  Download,
+  Calendar,
+  Activity,
+} from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { releasesService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
+import { CanaryTelemetryRadarCard } from './components'
 import type { ReleaseStatus } from '@/types'
 
 export function ReleaseDetailPage() {
@@ -77,6 +88,11 @@ export function ReleaseDetailPage() {
               <MetricTile label="Associated Sprints" value={release.sprints?.length ?? 0} icon={<CheckCircle2 className="h-5 w-5" />} />
             </div>
 
+            {/* Operational Telemetry & Canary Radar */}
+            <div className="mb-6">
+              <CanaryTelemetryRadarCard releaseId={release.id} releaseVersion={release.version} />
+            </div>
+
             <div className="grid gap-6 md:grid-cols-2">
               <Card>
                 <CardHeader>
@@ -113,13 +129,52 @@ export function ReleaseDetailPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3 text-sm">
-                  {readiness?.breakdown?.length ? (
-                    readiness.breakdown.map((item) => (
-                      <div key={item.category} className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
-                        <span className="text-slate-600 dark:text-slate-400">{item.category}</span>
-                        <span className="font-semibold text-slate-900 dark:text-slate-100">{Math.round(item.score)}%</span>
+                  {readiness ? (
+                    <>
+                      {readiness.isAtRisk && (
+                        <div className="flex items-center gap-2 p-2.5 rounded-lg border border-rose-200 bg-rose-50 text-xs text-rose-800 dark:border-rose-900/50 dark:bg-rose-950/30 dark:text-rose-300 mb-2">
+                          <AlertTriangle className="h-4 w-4 shrink-0 text-rose-600" />
+                          <span>Release is flagged At-Risk: Readiness score or telemetry regression is below tolerance.</span>
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <span className="text-slate-600 dark:text-slate-400">Bug Resolution Score</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {readiness.bugScore !== undefined ? `${Math.round(readiness.bugScore)}%` : '—'}
+                        </span>
                       </div>
-                    ))
+
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <span className="text-slate-600 dark:text-slate-400">Test Coverage Score</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {readiness.coverageScore !== undefined ? `${Math.round(readiness.coverageScore)}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <span className="text-slate-600 dark:text-slate-400">Code Quality (DQS)</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {readiness.dqsScore !== undefined ? `${Math.round(readiness.dqsScore)}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <span className="text-slate-600 dark:text-slate-400">Test Suite Pass Rate</span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {readiness.testPassRate !== undefined ? `${Math.round(readiness.testPassRate)}%` : '—'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2">
+                        <span className="text-slate-600 dark:text-slate-400 flex items-center gap-1.5">
+                          <Activity className="h-3.5 w-3.5 text-indigo-500" /> Operational Telemetry Stability
+                        </span>
+                        <span className="font-semibold text-slate-900 dark:text-slate-100">
+                          {readiness.telemetryScore !== undefined ? `${Math.round(readiness.telemetryScore)}%` : 'Not run'}
+                        </span>
+                      </div>
+                    </>
                   ) : (
                     <div className="flex items-center gap-2 text-slate-500">
                       <AlertTriangle className="h-4 w-4 text-amber-500" />

@@ -747,6 +747,7 @@ model Release {
 
   organization       Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sprintAssociations ReleaseSprintAssociation[]
+  telemetryAnalyses  ReleaseTelemetryAnalysis[]
 
   @@unique([organizationId, version])
   @@index([organizationId])
@@ -766,6 +767,32 @@ model ReleaseSprintAssociation {
   @@index([releaseId])
   @@index([sprintId])
   @@map("release_sprint_associations")
+}
+
+model ReleaseTelemetryAnalysis {
+  id               String   @id @default(uuid())
+  releaseId        String
+  serviceName      String   @default("sqdis-backend")
+  verdict          String
+  recommendation   String
+  p95BaselineMs    Float
+  p95CanaryMs      Float
+  p95DeltaPct      Float
+  errorBaseline    Float
+  errorCanary      Float
+  errorDelta       Float
+  memoryBaselineMb Float
+  memoryCanaryMb   Float
+  memoryDeltaPct   Float
+  score            Float
+  violations       Json?
+  createdAt        DateTime @default(now())
+
+  release Release @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+
+  @@index([releaseId])
+  @@index([createdAt])
+  @@map("release_telemetry_analyses")
 }
 
 // ==================== SPRINT GOALS & RETROSPECTIVES ====================
