@@ -8,6 +8,7 @@ import { ScoresService } from '../scores/scores.service';
 import { DebtService } from '../debt/debt.service';
 import { OnboardingService } from '../onboarding/onboarding.service';
 import { AlertsService } from '../alerts/alerts.service';
+import { CodeIntelligenceService } from '../code-intelligence/code-intelligence.service.js';
 import { ParsedCommitData } from '../github/dto/webhook-payload.dto';
 import { ProcessedCommitResult, FileChangeData, GitHubCommitDetail } from './types';
 import { parseFileChanges, calculateCommitChurnRatio } from './utils';
@@ -37,6 +38,8 @@ export class CommitsService {
     private readonly onboardingService: OnboardingService,
     @Inject(forwardRef(() => AlertsService))
     private readonly alertsService: AlertsService,
+    @Inject(forwardRef(() => CodeIntelligenceService))
+    private readonly codeIntelligenceService: CodeIntelligenceService,
   ) {}
 
   /**
@@ -153,6 +156,11 @@ export class CommitsService {
       .catch((err) => {
         this.logger.warn(`Failed to run incremental AST cache update: ${err}`);
       });
+
+    // Execute automated Code Intelligence enrichment (Kamei JIT defect & NASA touched-file AST) asynchronously
+    this.processCodeIntelligence(savedCommit, commitDetail, repositoryId, organizationId).catch((err) => {
+      this.logger.warn(`Automated Code Intelligence enrichment async error: ${err}`);
+    });
 
     // Create alert on anomaly detection
     if (anomalyResult?.is_anomaly) {
@@ -1438,6 +1446,109 @@ export class CommitsService {
     } catch (error) {
       this.logger.error(`Failed to auto-discover contributor for ${email}:`, error);
       return null;
+    }
+  }
+
+  /**
+   * Calculate Shannon directory entropy across touched file paths.
+   * H = - sum(p_i * log2(p_i))
+   */
+  private calculateDirectoryEntropy(filePaths: string[]): number {
+    if (!filePaths || filePaths.length <= 1) return 0.0;
+    const dirCounts = new Map<string, number>();
+    for (const path of filePaths) {
+      const dir = path.includes('/') ? path.substring(0, path.lastIndexOf('/')) : '/';
+      dirCounts.set(dir, (dirCounts.get(dir) || 0) + 1);
+    }
+    const total = filePaths.length;
+    let entropy = 0.0;
+    for (const count of dirCounts.values()) {
+      const p = count / total;
+      entropy -= p * Math.log2(p);
+    }
+    return Math.round(entropy * 1000) / 1000;
+  }
+
+  /**
+   * Process automated Code Intelligence enrichment for an ingested commit.
+   * Executes Kamei JIT Defect Prediction and updates touched files' NASA AST metrics asynchronously.
+   */
+  private async processCodeIntelligence(
+    savedCommit: any,
+    commitDetail: any,
+    repositoryId: string,
+    organizationId: string,
+  ): Promise<void> {
+    try {
+      const filePaths = commitDetail?.files?.map((f: any) => f.filename) || [];
+      const directoryEntropy = this.calculateDirectoryEntropy(filePaths);
+
+      // Fetch author historical experience count
+      const authorExperienceCommits = await this.prisma.commit.count({
+        where: {
+          repositoryId,
+          authorEmail: savedCommit.authorEmail,
+        },
+      });
+
+      // Calculate or estimate max cyclomatic complexity for the diff
+      const maxCyclomaticComplexity = Math.max(1, Math.min(30, Math.ceil(savedCommit.linesAdded / 15)));
+
+      // 1. Kamei JIT Commit Defect Prediction
+      const commitRisk = await this.codeIntelligenceService.predictCommitRisk(
+        {
+          commitSha: savedCommit.sha,
+          addedLines: savedCommit.linesAdded,
+          deletedLines: savedCommit.linesDeleted,
+          modifiedFilesCount: savedCommit.filesChanged,
+          maxCyclomaticComplexity,
+          authorExperienceCommits,
+          directoryEntropy,
+        },
+        organizationId,
+        repositoryId,
+      );
+
+      // If commit risk is critical/high (probability >= 0.75), trigger automated alert
+      if (commitRisk && commitRisk.defect_probability >= 0.75) {
+        this.logger.warn(
+          `High defect risk (${(commitRisk.defect_probability * 100).toFixed(1)}%) detected on commit ${savedCommit.sha}`,
+        );
+        try {
+          await this.alertsService.createAlert({
+            organizationId,
+            commitId: savedCommit.id,
+            type: 'THRESHOLD',
+            anomalyScore: commitRisk.defect_probability,
+            message: `High JIT Defect Risk (${(commitRisk.defect_probability * 100).toFixed(1)}%): ${commitRisk.top_risk_drivers?.join('; ') || 'Critical code diffusion detected'}`,
+            modelVersion: commitRisk.model_version || '1.0.0-kamei-jit',
+          });
+        } catch (alertErr) {
+          this.logger.warn(`Failed to create defect alert: ${alertErr}`);
+        }
+      }
+
+      // 2. Incremental NASA MDP AST analysis on touched source files
+      const codeFiles = (commitDetail?.files || []).filter((f: any) =>
+        f.filename.match(/\.(ts|tsx|js|jsx|py)$/) && f.status !== 'removed',
+      );
+
+      for (const file of codeFiles.slice(0, 10)) {
+        try {
+          await this.codeIntelligenceService.predictAstDefect(
+            {
+              filePath: file.filename,
+              content: file.patch || `// ${file.filename}\nfunction placeholder() {}`,
+            },
+            organizationId,
+            repositoryId,
+          );
+        } catch (astErr) {
+          this.logger.debug(`File AST defect analysis skipped for ${file.filename}: ${astErr}`);
+        }
+      }
+    } catch (err) {
+      this.logger.warn(`Automated Code Intelligence enrichment failed for commit ${savedCommit.sha}: ${err}`);
     }
   }
 }

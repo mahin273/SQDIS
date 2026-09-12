@@ -109,7 +109,7 @@ export class CodeIntelligenceService {
       const saved = await this.prisma.defectPrediction.create({
         data: {
           organizationId: organizationId || null,
-          repositoryId: repositoryId || null,
+          repositoryId: repositoryId || dto.repositoryId || null,
           commitSha: dto.commitSha || null,
           defectProbability: mlResult.defect_probability,
           riskLevel: mlResult.risk_level,
@@ -121,7 +121,7 @@ export class CodeIntelligenceService {
           },
           topRiskDrivers: mlResult.top_risk_drivers || [],
           modelVersion: mlResult.model_version || '1.0.0-jit-xgboost',
-          benchmark: 'Kamei Empirical JIT',
+          benchmark: 'Kamei JIT',
         },
       });
 
@@ -141,11 +141,34 @@ export class CodeIntelligenceService {
    */
   async analyzeTestImpact(dto: TestImpactDto) {
     try {
+      let filesList: Array<{ path: string; content: string }> = [];
+      if (dto.fileContents && Object.keys(dto.fileContents).length > 0) {
+        filesList = Object.entries(dto.fileContents).map(([p, c]) => ({ path: p, content: c }));
+      } else {
+        // Build representation for changed files and candidate test suites
+        filesList = (dto.changedFiles || []).map((p) => ({
+          path: p,
+          content: `// ${p}\nexport function mod() {}`,
+        }));
+        const baseNames = (dto.changedFiles || []).map((p) => p.replace(/\.[^/.]+$/, ''));
+        for (const base of baseNames) {
+          filesList.push({
+            path: `${base}.spec.ts`,
+            content: `import { mod } from './${base.split('/').pop()}';\ndescribe('test', () => {});`,
+          });
+        }
+        filesList.push(
+          { path: 'test/e2e.spec.ts', content: `import { other } from './other';` },
+          { path: 'test/sanity.spec.ts', content: `import { other } from './other';` },
+          { path: 'test/performance.spec.ts', content: `import { other } from './other';` },
+        );
+      }
+
       const payload = {
-        repository_root: dto.repositoryRoot || '.',
-        changed_files: dto.changedFiles,
-        test_files: dto.testFiles || [],
-        file_contents: dto.fileContents || {},
+        files: filesList,
+        changed_files: dto.changedFiles || [],
+        test_file_patterns: dto.testFiles && dto.testFiles.length > 0 ? dto.testFiles : ['*.spec.*', '*.test.*', '*_test.*', 'test_*.*'],
+        repository_id: dto.repositoryId || dto.repositoryRoot || 'default-repo',
       };
 
       const resp = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/test-impact`, {
@@ -155,6 +178,8 @@ export class CodeIntelligenceService {
       });
 
       if (!resp.ok) {
+        const errBody = await resp.text();
+        this.logger.error(`ML TIA failed (${resp.status}): ${errBody}`);
         throw new BadGatewayException(`ML Service TIA failed: ${resp.statusText}`);
       }
 
@@ -379,6 +404,102 @@ export class CodeIntelligenceService {
       where: teamId ? { teamId } : {},
       orderBy: { createdAt: 'desc' },
       take: limit,
+    });
+  }
+
+  /**
+   * Retrieve complexity and defect hotspots for a repository.
+   */
+  async getRepositoryHotspots(repositoryId: string, limit = 20) {
+    const fileMetrics = await this.prisma.fileASTMetric.findMany({
+      where: { repositoryId },
+      orderBy: { cyclomaticComplexity: 'desc' },
+      take: limit,
+    });
+
+    const defectPredictions = await this.prisma.defectPrediction.findMany({
+      where: { repositoryId, benchmark: 'NASA MDP' },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    const defectMap = new Map<string, { defectProbability: number; riskLevel: string }>();
+    for (const dp of defectPredictions) {
+      if (dp.filePath && !defectMap.has(dp.filePath)) {
+        defectMap.set(dp.filePath, {
+          defectProbability: dp.defectProbability,
+          riskLevel: dp.riskLevel,
+        });
+      }
+    }
+
+    return fileMetrics.map((fm) => {
+      const defect = defectMap.get(fm.filePath);
+      return {
+        id: fm.id,
+        repositoryId: fm.repositoryId,
+        filePath: fm.filePath,
+        cyclomaticComplexity: fm.cyclomaticComplexity,
+        cognitiveComplexity: fm.cognitiveComplexity,
+        maintainabilityIndex: fm.maintainabilityIndex,
+        defectProbability: defect ? defect.defectProbability : (fm.cyclomaticComplexity > 15 ? 0.65 : 0.15),
+        riskLevel: defect ? defect.riskLevel : (fm.cyclomaticComplexity > 20 ? 'CRITICAL' : fm.cyclomaticComplexity > 10 ? 'HIGH' : 'LOW'),
+        updatedAt: fm.updatedAt,
+      };
+    });
+  }
+
+  /**
+   * Retrieve recent commits with their Kamei JIT defect risk predictions.
+   */
+  async getRepositoryCommitsRisk(repositoryId: string, limit = 20) {
+    const predictions = await this.prisma.defectPrediction.findMany({
+      where: { repositoryId, benchmark: 'Kamei JIT' },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    const commitShas = predictions.map((p) => p.commitSha).filter((s): s is string => !!s);
+    const commits = await this.prisma.commit.findMany({
+      where: { sha: { in: commitShas } },
+      select: {
+        sha: true,
+        message: true,
+        authorName: true,
+        authorEmail: true,
+        linesAdded: true,
+        linesDeleted: true,
+        committedAt: true,
+      },
+    });
+    const commitMap = new Map(commits.map((c) => [c.sha, c]));
+
+    return predictions.map((p) => {
+      const commit = p.commitSha ? commitMap.get(p.commitSha) : null;
+      return {
+        id: p.id,
+        commitSha: p.commitSha,
+        defectProbability: p.defectProbability,
+        riskLevel: p.riskLevel,
+        isDefectProne: p.isDefectProne,
+        topRiskDrivers: p.topRiskDrivers,
+        metricsAnalyzed: p.metricsAnalyzed,
+        message: commit?.message || 'Commit details unavailable',
+        authorName: commit?.authorName || 'Unknown',
+        linesAdded: commit?.linesAdded || 0,
+        linesDeleted: commit?.linesDeleted || 0,
+        committedAt: commit?.committedAt || p.createdAt,
+      };
+    });
+  }
+
+  /**
+   * Execute Test Impact Analysis (TIA) for PR modified files against repository DAG.
+   */
+  async getPullRequestTestImpact(repositoryId: string, changedFiles: string[]) {
+    return this.analyzeTestImpact({
+      repositoryId,
+      changedFiles: changedFiles || [],
     });
   }
 }

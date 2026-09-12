@@ -3,6 +3,10 @@ import { IsArray, IsOptional, IsString, IsObject } from 'class-validator';
 export class TestImpactDto {
   @IsOptional()
   @IsString()
+  repositoryId?: string;
+
+  @IsOptional()
+  @IsString()
   repositoryRoot?: string;
 
   @IsArray()
