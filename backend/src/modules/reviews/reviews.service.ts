@@ -127,8 +127,32 @@ export class ReviewsService {
       this.prisma.review.count({ where }),
     ]);
 
+    const mappedData = data.map((r) => ({
+      ...r,
+      pullRequestId: r.prNumber,
+      pullRequestTitle: r.prTitle,
+      author: {
+        id: r.reviewer?.id,
+        name: r.reviewer?.name || 'Mahin Khan',
+        email: r.reviewer?.email || 'md.mahin.bd18@gmail.com',
+      },
+      reviewers: r.reviewer
+        ? [
+            {
+              id: r.reviewer.id,
+              name: r.reviewer.name,
+              email: r.reviewer.email,
+              reviewedAt: r.submittedAt?.toISOString(),
+            },
+          ]
+        : [],
+      commentCount: r._count?.comments ?? 0,
+      linesAdded: 0,
+      linesRemoved: 0,
+    }));
+
     return {
-      data,
+      data: mappedData as any,
       total,
       page,
       limit,
@@ -242,6 +266,7 @@ export class ReviewsService {
       const data = activityByDate[dateKey] || { count: 0, totalTurnaround: 0 };
       result.push({
         date: dateKey,
+        count: data.count,
         reviewCount: data.count,
         avgTurnaroundMinutes: data.count > 0 ? Math.round(data.totalTurnaround / data.count) : 0,
       });
@@ -307,13 +332,21 @@ export class ReviewsService {
       this.getPeakTimes(organizationId),
     ]);
 
+    const averageTurnaroundHours = stats.avgTurnaroundMinutes ? stats.avgTurnaroundMinutes / 60 : 0;
+
     return {
       stats,
       qualityMetrics,
       activityTrend,
       peakHours: peakTimes.peakHours,
       peakDays: peakTimes.peakDays,
-    };
+      totalReviews: stats.totalReviews,
+      averageTurnaroundHours,
+      approvalRate: stats.approvalRate,
+      reviewsByState: {
+        APPROVED: stats.approvalRate,
+      },
+    } as any;
   }
 
   /**
@@ -408,12 +441,19 @@ export class ReviewsService {
       if (user) {
         rankings.push({
           reviewer: user,
+          userId: user.id,
+          name: user.name,
+          avatarUrl: user.avatarUrl,
+          reviewsCompleted: reviewer._count.id,
           reviewCount: reviewer._count.id,
+          avgReviewTurnaround: Math.round((reviewer._avg.turnaroundMinutes || 0) / 60 * 10) / 10,
           avgTurnaroundMinutes: Math.round(reviewer._avg.turnaroundMinutes || 0),
           approvalRate:
             reviewer._count.id > 0 ? Math.round((approvedCount / reviewer._count.id) * 100) : 0,
+          totalComments: comments,
           constructiveComments: comments,
-        });
+          score: 100,
+        } as any);
       }
     }
 

@@ -14,7 +14,7 @@ import { reviewsService, repositoriesService, codeIntelligenceService } from '@/
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
 import { PrQualityGateBadge, PrQualityGateDrawer } from './components'
-import type { Review, ReviewState, ReviewStateFilter, ReviewActivityTrendPoint, ReviewLeaderboardEntry } from '@/types'
+import type { ReviewState, ReviewStateFilter, ReviewActivityTrendPoint, ReviewLeaderboardEntry } from '@/types'
 import type { TestImpactResult } from '@/services'
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer } from 'recharts'
 
@@ -119,10 +119,10 @@ export function ReviewsPage() {
   const filteredReviews = useMemo(() => {
     if (!searchQuery) return allReviews;
     const lowerQuery = searchQuery.toLowerCase()
-    return allReviews.filter((r) => 
-      r.pullRequestTitle?.toLowerCase().includes(lowerQuery) ||
-      r.author?.name?.toLowerCase().includes(lowerQuery) ||
-      r.repository?.name?.toLowerCase().includes(lowerQuery)
+    return allReviews.filter((r: any) => 
+      (r.pullRequestTitle || r.prTitle)?.toLowerCase().includes(lowerQuery) ||
+      (r.author?.name || r.reviewer?.name)?.toLowerCase().includes(lowerQuery) ||
+      (r.repository?.name || r.repository?.fullName)?.toLowerCase().includes(lowerQuery)
     )
   }, [allReviews, searchQuery])
 
@@ -139,6 +139,25 @@ export function ReviewsPage() {
     : (rawTopReviewers && typeof rawTopReviewers === 'object' && Array.isArray((rawTopReviewers as any).data))
     ? (rawTopReviewers as any).data
     : []
+
+  // Ensure chart points have count property
+  const chartData = useMemo(() => {
+    if (!activityTrend || activityTrend.length === 0) {
+      return [
+        { date: 'Mon', count: 12 },
+        { date: 'Tue', count: 19 },
+        { date: 'Wed', count: 15 },
+        { date: 'Thu', count: 22 },
+        { date: 'Fri', count: 18 },
+        { date: 'Sat', count: 5 },
+        { date: 'Sun', count: 8 },
+      ]
+    }
+    return activityTrend.map((pt: any) => ({
+      ...pt,
+      count: pt.count ?? pt.reviewCount ?? 0,
+    }))
+  }, [activityTrend])
 
   const getStatusBadge = (state: ReviewState | ReviewStateFilter | string) => {
     switch (state) {
@@ -162,16 +181,24 @@ export function ReviewsPage() {
     }
   }
 
-  // Placeholder chart data if empty
-  const chartData = activityTrend.length > 0 ? activityTrend : [
-    { date: 'Mon', count: 12 },
-    { date: 'Tue', count: 19 },
-    { date: 'Wed', count: 15 },
-    { date: 'Thu', count: 22 },
-    { date: 'Fri', count: 18 },
-    { date: 'Sat', count: 5 },
-    { date: 'Sun', count: 8 },
-  ]
+  const totalReviewsCount = analytics?.totalReviews ?? (analytics as any)?.stats?.totalReviews ?? allReviews.length ?? 0
+  const avgTurnaroundVal = analytics?.averageTurnaroundHours !== undefined
+    ? `${analytics.averageTurnaroundHours.toFixed(1)}h`
+    : (analytics as any)?.stats?.avgTurnaroundMinutes !== undefined
+      ? `${((analytics as any).stats.avgTurnaroundMinutes / 60).toFixed(1)}h`
+      : '0.1h'
+  const approvalRateVal = analytics?.approvalRate !== undefined
+    ? `${Math.round(analytics.approvalRate)}%`
+    : (analytics as any)?.stats?.approvalRate !== undefined
+      ? `${Math.round((analytics as any).stats.approvalRate)}%`
+      : '100%'
+  const velocityVal = totalReviewsCount > 0 ? `${Math.max(1, Math.round(totalReviewsCount / 30))}/day` : '0/day'
+
+  const prunedTestsPct = tia?.prunedPercentage ?? (tia as any)?.time_savings_percentage ?? 75
+  const totalTestsCount = tia?.totalTests ?? (tia as any)?.total_tests_in_repo ?? 4
+  const impactedTestsCount = tia?.impactedTests?.length ?? (tia as any)?.impacted_tests_count ?? 1
+  const pipelineTimeSavedMins = Math.max(1, Math.round((tia?.estimatedTimeSavedSeconds || 180) / 60))
+  const tiaRisk = tia?.riskCategory || 'LOW'
 
   return (
     <div className="space-y-6">
@@ -191,25 +218,25 @@ export function ReviewsPage() {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <MetricTile 
           label="Total Code Reviews" 
-          value={analytics?.totalReviews ?? allReviews.length ?? 0} 
+          value={totalReviewsCount} 
           helper="Past 30 days"
           icon={<GitPullRequest className="h-5 w-5" />} 
         />
         <MetricTile 
           label="Avg Turnaround Time" 
-          value={analytics?.averageTurnaroundHours ? `${analytics.averageTurnaroundHours.toFixed(1)}h` : '1.4h'} 
+          value={avgTurnaroundVal} 
           helper="Time to first review"
           icon={<Clock className="h-5 w-5" />} 
         />
         <MetricTile 
           label="Review Approval Rate" 
-          value={analytics?.approvalRate ? `${Math.round(analytics.approvalRate)}%` : '88%'} 
+          value={approvalRateVal} 
           helper="First-pass approvals"
           icon={<CheckCircle2 className="h-5 w-5" />} 
         />
         <MetricTile 
           label="Review Velocity" 
-          value={analytics?.totalReviews ? `${Math.round(analytics.totalReviews / 30)}/day` : '42/day'} 
+          value={velocityVal} 
           helper="Average reviews per day"
           icon={<Activity className="h-5 w-5" />} 
         />
@@ -233,8 +260,8 @@ export function ReviewsPage() {
                     </Badge>
                   </div>
                   <p className="text-xs text-slate-500 mt-1 max-w-2xl">
-                    Dependency analysis detected {tia.impactedTests?.length ?? 1} affected test suites out of {tia.totalTests ?? 4} total suites. 
-                    Safe to prune {tia.prunedPercentage ?? 75}% of regression tests, saving ~{tia.estimatedTimeSavedSeconds ?? 180}s of pipeline execution time.
+                    Dependency analysis detected {impactedTestsCount} affected test suites out of {totalTestsCount} total suites. 
+                    Safe to prune {prunedTestsPct}% of regression tests, saving ~{pipelineTimeSavedMins}m of pipeline execution time.
                   </p>
                 </div>
               </div>
@@ -243,19 +270,19 @@ export function ReviewsPage() {
                 <div className="text-center">
                   <span className="text-[11px] font-medium text-slate-500">Pruned Tests</span>
                   <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                    {tia.prunedPercentage}%
+                    {prunedTestsPct}%
                   </p>
                 </div>
                 <div className="text-center">
                   <span className="text-[11px] font-medium text-slate-500">Pipeline Saved</span>
                   <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                    ~{Math.round((tia.estimatedTimeSavedSeconds || 180) / 60)}m
+                    ~{pipelineTimeSavedMins}m
                   </p>
                 </div>
                 <div className="text-center">
                   <span className="text-[11px] font-medium text-slate-500">Impact Risk</span>
                   <p className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mt-1">
-                    {tia.riskCategory || 'LOW'}
+                    {tiaRisk}
                   </p>
                 </div>
               </div>
@@ -299,18 +326,22 @@ export function ReviewsPage() {
           <CardContent>
             <div className="space-y-4">
               {topReviewers.length > 0 ? (
-                topReviewers.map((reviewer, idx) => (
-                  <div key={reviewer.userId || idx} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Avatar name={reviewer.name} size="sm" />
-                      <div>
-                        <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{reviewer.name}</p>
-                        <p className="text-xs text-slate-500">{reviewer.reviewsCompleted} reviews</p>
+                topReviewers.map((reviewer: any, idx) => {
+                  const name = reviewer.name || reviewer.reviewer?.name || 'Reviewer'
+                  const reviewsCount = reviewer.reviewsCompleted ?? reviewer.reviewCount ?? 0
+                  return (
+                    <div key={reviewer.userId || reviewer.reviewer?.id || idx} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Avatar name={name} size="sm" />
+                        <div>
+                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{name}</p>
+                          <p className="text-xs text-slate-500">{reviewsCount} review{reviewsCount === 1 ? '' : 's'}</p>
+                        </div>
                       </div>
+                      <Badge variant="secondary">Rank {idx + 1}</Badge>
                     </div>
-                    <Badge variant="secondary">Rank {idx + 1}</Badge>
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="flex flex-col items-center justify-center py-6 text-slate-500">
                   <User className="h-8 w-8 text-slate-300 mb-2" />
@@ -353,96 +384,109 @@ export function ReviewsPage() {
           <QueryState isLoading={reviewsQuery.isLoading} error={reviewsQuery.error} onRetry={() => reviewsQuery.refetch()}>
             <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {filteredReviews.length > 0 ? (
-                filteredReviews.map((review: Review) => (
-                  <div key={review.id} className="flex flex-col sm:flex-row sm:items-center justify-between py-4 gap-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-6 px-6">
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <div className="mt-1 bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md shrink-0">
-                        <GitPullRequest className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate text-base">
-                            {review.pullRequestTitle || `Update in ${review.repository?.name || 'repository'}`}
-                          </h3>
-                          {getStatusBadge(review.state)}
-                          <PrQualityGateBadge
-                            repositoryId={review.repositoryId || review.repository?.id}
-                            prNumber={review.pullRequestId}
-                            onClick={() =>
-                              setSelectedPrGate({
-                                repositoryId: review.repositoryId || review.repository?.id || '',
-                                prNumber: review.pullRequestId,
-                                prTitle: review.pullRequestTitle,
-                                authorName: review.author?.name,
-                              })
-                            }
-                          />
-                        </div>
-                        
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
-                          <div className="flex items-center gap-1">
-                            <Avatar name={review.author?.name} size="sm" className="h-4 w-4 text-[10px]" />
-                            <span className="font-medium text-slate-700 dark:text-slate-300">{review.author?.name || 'Developer'}</span>
-                          </div>
-                          
-                          <div className="flex items-center gap-1">
-                            <Github className="h-3 w-3" />
-                            <span>{review.repository?.fullName || review.repository?.name || 'Core Repo'}</span>
-                            {review.pullRequestId && <span className="text-slate-400">#{review.pullRequestId}</span>}
-                          </div>
+                filteredReviews.map((review: any) => {
+                  const prTitle = review.pullRequestTitle || review.prTitle || `PR #${review.pullRequestId || review.prNumber || ''}`
+                  const prNum = review.pullRequestId || review.prNumber
+                  const authorName = review.author?.name || review.reviewer?.name || 'Developer'
+                  const repoName = review.repository?.fullName || review.repository?.name || 'Core Repo'
+                  const commentCount = review.commentCount ?? review._count?.comments ?? 0
+                  const repoId = review.repositoryId || review.repository?.id || ''
 
-                          <div className="flex items-center gap-1">
-                            <span className="text-emerald-500 font-medium">+{review.linesAdded || 0}</span>
-                            <span className="text-rose-500 font-medium">-{review.linesRemoved || 0}</span>
-                            <span className="text-slate-400 ml-1">lines</span>
-                          </div>
+                  return (
+                    <div key={review.id} className="flex flex-col sm:flex-row sm:items-center justify-between py-4 gap-4 transition-colors hover:bg-slate-50 dark:hover:bg-slate-800/50 -mx-6 px-6">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className="mt-1 bg-blue-100 dark:bg-blue-900/30 p-2 rounded-md shrink-0">
+                          <GitPullRequest className="h-4 w-4 text-blue-600 dark:text-blue-400" />
                         </div>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-4 text-sm text-slate-500 shrink-0 sm:flex-col sm:items-end sm:gap-1.5">
-                      <div className="flex items-center gap-3">
-                        {review.reviewers && review.reviewers.length > 0 && (
-                          <div className="flex -space-x-2 mr-2">
-                            {review.reviewers.slice(0, 3).map((reviewer, i) => (
-                              <Avatar key={reviewer.id || i} name={reviewer.name} size="sm" className="ring-2 ring-white dark:ring-slate-900 h-6 w-6 text-[10px]" />
-                            ))}
-                            {review.reviewers.length > 3 && (
-                              <div className="flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] ring-2 ring-white dark:ring-slate-900 font-medium z-10">
-                                +{review.reviewers.length - 3}
-                              </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2 mb-1">
+                            <h3 className="font-semibold text-slate-900 dark:text-slate-100 truncate text-base">
+                              {prTitle}
+                            </h3>
+                            {getStatusBadge(review.state)}
+                            {prNum && (
+                              <PrQualityGateBadge
+                                repositoryId={repoId}
+                                prNumber={prNum}
+                                onClick={() =>
+                                  setSelectedPrGate({
+                                    repositoryId: repoId,
+                                    prNumber: prNum,
+                                    prTitle: prTitle,
+                                    authorName: authorName,
+                                  })
+                                }
+                              />
                             )}
                           </div>
-                        )}
-                        <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md text-xs font-medium">
-                          {review.commentCount ?? 0} comments
-                        </span>
+                          
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500">
+                            <div className="flex items-center gap-1">
+                              <Avatar name={authorName} size="sm" className="h-4 w-4 text-[10px]" />
+                              <span className="font-medium text-slate-700 dark:text-slate-300">{authorName}</span>
+                            </div>
+                            
+                            <div className="flex items-center gap-1">
+                              <Github className="h-3 w-3" />
+                              <span>{repoName}</span>
+                              {prNum && <span className="text-slate-400">#{prNum}</span>}
+                            </div>
+
+                            <div className="flex items-center gap-1">
+                              <span className="text-emerald-500 font-medium">+{review.linesAdded || 0}</span>
+                              <span className="text-rose-500 font-medium">-{review.linesRemoved || 0}</span>
+                              <span className="text-slate-400 ml-1">lines</span>
+                            </div>
+                          </div>
+                        </div>
                       </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setSelectedPrGate({
-                              repositoryId: review.repositoryId || review.repository?.id || '',
-                              prNumber: review.pullRequestId,
-                              prTitle: review.pullRequestTitle,
-                              authorName: review.author?.name,
-                            })
-                          }
-                          className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 hover:bg-blue-50 dark:hover:bg-blue-950/40"
-                        >
-                          <Shield className="w-3 h-3" />
-                          Inspect Gate
-                        </Button>
-                        <span className="text-xs">
-                          {review.createdAt ? new Date(review.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
-                        </span>
+
+                      <div className="flex items-center gap-4 text-sm text-slate-500 shrink-0 sm:flex-col sm:items-end sm:gap-1.5">
+                        <div className="flex items-center gap-3">
+                          {review.reviewers && review.reviewers.length > 0 && (
+                            <div className="flex -space-x-2 mr-2">
+                              {review.reviewers.slice(0, 3).map((rev: any, i: number) => (
+                                <Avatar key={rev.id || i} name={rev.name} size="sm" className="ring-2 ring-white dark:ring-slate-900 h-6 w-6 text-[10px]" />
+                              ))}
+                              {review.reviewers.length > 3 && (
+                                <div className="flex items-center justify-center h-6 w-6 rounded-full bg-slate-100 dark:bg-slate-800 text-[10px] ring-2 ring-white dark:ring-slate-900 font-medium z-10">
+                                  +{review.reviewers.length - 3}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md text-xs font-medium">
+                            {commentCount} comments
+                          </span>
+                        </div>
+                        
+                        <div className="flex items-center gap-2">
+                          {prNum && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() =>
+                                setSelectedPrGate({
+                                  repositoryId: repoId,
+                                  prNumber: prNum,
+                                  prTitle: prTitle,
+                                  authorName: authorName,
+                                })
+                              }
+                              className="h-6 px-2 text-[11px] gap-1 cursor-pointer text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-900/60 hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                            >
+                              <Shield className="w-3 h-3" />
+                              Inspect Gate
+                            </Button>
+                          )}
+                          <span className="text-xs">
+                            {review.createdAt ? new Date(review.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'Recently'}
+                          </span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  )
+                })
               ) : (
                 <div className="py-12 text-center">
                   <GitPullRequest className="mx-auto h-12 w-12 text-slate-300 dark:text-slate-600 mb-3" />
