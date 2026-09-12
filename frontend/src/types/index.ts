@@ -211,6 +211,7 @@ export interface TopRepository {
   sqs: number;
   coverage?: number;
   commitCount: number;
+  commits?: number;
   lastActivity?: string;
 }
 

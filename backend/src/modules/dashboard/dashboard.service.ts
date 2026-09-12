@@ -226,6 +226,7 @@ export class DashboardService {
           sqs: Number(sqs.toFixed(1)),
           coverage: Number((latestCoverage?.coveragePercentage || 0).toFixed(1)),
           commits: repo._count.commits,
+          commitCount: repo._count.commits,
         };
       }),
     );

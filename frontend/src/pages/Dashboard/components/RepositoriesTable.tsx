@@ -80,7 +80,7 @@ export default function RepositoriesTable() {
                       {cov > 0 ? `${cov.toFixed(1)}%` : 'N/A'}
                     </td>
                     <td className="py-3 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {formatNumber(r.commitCount || 0)}
+                      {formatNumber(r.commitCount ?? r.commits ?? 0)}
                     </td>
                   </tr>
                 )
