@@ -1319,7 +1319,7 @@ export class ScoresService {
     organizationId: string,
     since: Date,
   ): Promise<{ reviewCount: number; avgTurnaroundHours: number }> {
-    // Get reviews given by the developer in the time period
+    // 1. Get peer reviews given by the developer in the time period
     const reviews = await this.prisma.review.findMany({
       where: {
         reviewerId: developerId,
@@ -1331,19 +1331,69 @@ export class ScoresService {
       },
     });
 
-    const reviewCount = reviews.length;
-
-    // Calculate average turnaround time in hours
-    // Lower turnaround is better for DQS
-    let avgTurnaroundHours = 0;
-    if (reviewCount > 0) {
+    if (reviews.length > 0) {
       const totalMinutes = reviews.reduce((sum, r) => sum + (r.turnaroundMinutes || 0), 0);
-      avgTurnaroundHours = totalMinutes / reviewCount / 60; // Convert minutes to hours
+      const avgTurnaroundHours = totalMinutes / reviews.length / 60;
+      return {
+        reviewCount: reviews.length,
+        avgTurnaroundHours,
+      };
+    }
+
+    // 2. If no peer reviews are recorded, evaluate PR merge turnaround for the developer
+    const user = await this.prisma.user.findUnique({
+      where: { id: developerId },
+      include: { emailAliases: true },
+    });
+
+    if (user) {
+      const logins = new Set<string>();
+      if (user.email) {
+        logins.add(user.email.split('@')[0].toLowerCase());
+      }
+      for (const alias of user.emailAliases) {
+        const match = alias.email.match(/\+([^@]+)@users\.noreply\.github\.com/);
+        if (match) {
+          logins.add(match[1].toLowerCase());
+        }
+      }
+      const githubIdNum = user.githubId ? parseInt(user.githubId, 10) : 0;
+
+      const mergedPrs = await this.prisma.pullRequest.findMany({
+        where: {
+          repository: { organizationId },
+          merged: true,
+          mergedAt: { gte: since },
+          OR: [
+            ...(githubIdNum > 0 ? [{ authorId: githubIdNum }] : []),
+            ...Array.from(logins).map((login) => ({
+              authorLogin: { equals: login, mode: 'insensitive' as const },
+            })),
+          ],
+        },
+        select: {
+          createdAt: true,
+          mergedAt: true,
+        },
+      });
+
+      if (mergedPrs.length > 0) {
+        const totalPrMinutes = mergedPrs.reduce((sum, pr) => {
+          if (!pr.mergedAt) return sum;
+          const diffMs = pr.mergedAt.getTime() - pr.createdAt.getTime();
+          return sum + Math.max(1, Math.round(diffMs / (1000 * 60)));
+        }, 0);
+        const avgTurnaroundHours = totalPrMinutes / mergedPrs.length / 60;
+        return {
+          reviewCount: mergedPrs.length,
+          avgTurnaroundHours,
+        };
+      }
     }
 
     return {
-      reviewCount,
-      avgTurnaroundHours,
+      reviewCount: 0,
+      avgTurnaroundHours: 0,
     };
   }
 

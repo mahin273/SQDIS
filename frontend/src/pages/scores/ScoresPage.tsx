@@ -89,18 +89,23 @@ export function ScoresPage() {
             <CardContent className="pt-6 space-y-5">
               <div>
                 <div className="flex justify-between text-sm font-medium mb-1">
-                  <span className="text-slate-600 dark:text-slate-400">Code Quality</span>
+                  <span className="text-slate-600 dark:text-slate-400">Test Coverage</span>
                   <span className="font-bold text-slate-900 dark:text-slate-100">
-                    {myScore?.codeQuality !== undefined && myScore?.codeQuality !== null
-                      ? `${myScore.codeQuality}%`
-                      : 'N/A'}
+                    {myScore?.coverage !== undefined && myScore?.coverage !== null
+                      ? `${Math.round(myScore.coverage)}%`
+                      : '0%'}
                   </span>
                 </div>
-                <Progress value={myScore?.codeQuality ?? 0} className="h-2" />
+                <Progress value={myScore?.coverage ?? 0} className="h-2" />
+                {(!myScore?.coverage || myScore.coverage === 0) && (
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                    No automated test reports uploaded yet
+                  </p>
+                )}
               </div>
               <div>
                 <div className="flex justify-between text-sm font-medium mb-1">
-                  <span className="text-slate-600 dark:text-slate-400">Review Speed</span>
+                  <span className="text-slate-600 dark:text-slate-400">Review & PR Speed</span>
                   <span className="font-bold text-slate-900 dark:text-slate-100">
                     {myScore?.reviewSpeed !== null && myScore?.reviewSpeed !== undefined && myScore.reviewSpeed > 0
                       ? `${myScore.reviewSpeed}%`
@@ -112,7 +117,7 @@ export function ScoresPage() {
                 ) : (
                   <div
                     className="h-2 w-full rounded-full bg-slate-100 dark:bg-slate-800"
-                    title="No peer review data recorded yet"
+                    title="No peer review or PR turnaround data recorded yet"
                   />
                 )}
               </div>
