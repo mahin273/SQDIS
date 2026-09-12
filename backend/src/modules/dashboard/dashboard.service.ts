@@ -1,9 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
+import { ScoresService } from '../scores/scores.service';
 
 @Injectable()
 export class DashboardService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(DashboardService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly scoresService: ScoresService,
+  ) {}
 
   /**
    * Get organization-wide dashboard statistics
@@ -255,11 +261,26 @@ export class DashboardService {
 
     const devScores = await Promise.all(
       members.map(async (member) => {
-        const latestScore = await this.prisma.dQSScore.findFirst({
+        let latestScore = await this.prisma.dQSScore.findFirst({
           where: { developerId: member.userId },
           orderBy: { calculatedAt: 'desc' },
           select: { score: true },
         });
+
+        // Auto-evaluate developer DQS if not yet persisted
+        if (!latestScore) {
+          try {
+            const calculated = await this.scoresService.calculateDQS(
+              member.userId,
+              organizationId,
+            );
+            if (calculated && calculated.score !== null) {
+              latestScore = { score: calculated.score };
+            }
+          } catch (error) {
+            this.logger.warn(`Failed to auto-evaluate DQS for developer ${member.userId}: ${error}`);
+          }
+        }
 
         const commitCount = await this.prisma.commit.count({
           where: { developerId: member.userId },
