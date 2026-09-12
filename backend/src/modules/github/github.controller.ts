@@ -46,6 +46,8 @@ import { UpdateWebhookSecretDto } from './dto/update-webhook-secret.dto';
 import { UpdateWebhookEnabledDto } from './dto/update-webhook-enabled.dto';
 import { TestWebhookDto } from './dto/test-webhook.dto';
 import { UpdateRateLimitDto } from './dto/update-rate-limit.dto';
+import { EvaluatePrQualityGateDto } from './dto/evaluate-pr-quality-gate.dto';
+import { PrQualityGateBotService } from './services/pr-quality-gate-bot.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -73,6 +75,7 @@ export class GitHubController {
     private readonly webhookLogService: WebhookLogService,
     private readonly webhookMonitoringService: WebhookMonitoringService,
     private readonly rateLimitService: RateLimitService,
+    private readonly prQualityGateBotService: PrQualityGateBotService,
   ) {}
 
   /**
@@ -950,4 +953,49 @@ export class GitHubController {
     // Return the updated configuration
     return this.rateLimitService.getRateLimitConfig(orgId);
   }
+
+  /**
+   * Evaluate PR Quality Gate on demand
+   */
+  @Post('quality-gate/evaluate-pr')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @ApiBearerAuth()
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD, Role.DEVELOPER)
+  @ApiOperation({
+    summary: 'Evaluate code quality gate for a pull request',
+    description: 'Triggers on-demand quality gate assessment for a pull request changeset',
+  })
+  async evaluatePrQualityGate(
+    @Body() dto: EvaluatePrQualityGateDto,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    const orgId = this.validateOrganizationContext(organizationId);
+    return this.prQualityGateBotService.evaluateAndReport({
+      repositoryId: dto.repositoryId,
+      prNumber: dto.prNumber,
+      headCommitSha: dto.headCommitSha,
+      organizationId: orgId,
+      filesOverride: dto.files,
+    });
+  }
+
+  /**
+   * Retrieve latest Quality Gate evaluation for a pull request
+   */
+  @Get('quality-gate/:repositoryId/pr/:prNumber')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Get latest quality gate evaluation for a pull request',
+  })
+  async getLatestPrQualityGate(
+    @Param('repositoryId') repositoryId: string,
+    @Param('prNumber') prNumber: string,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    this.validateOrganizationContext(organizationId);
+    const parsedPr = parseInt(prNumber, 10);
+    return this.prQualityGateBotService.getLatestEvaluation(repositoryId, parsedPr);
+  }
 }
+

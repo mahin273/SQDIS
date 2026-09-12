@@ -219,6 +219,33 @@ export class CodeIntelligenceService {
   }
 
   /**
+   * Run structural code quality analysis (complexity, security, smells) via ML service.
+   */
+  async analyzeCodeQuality(files: Array<{ path: string; content: string }>, repositoryId?: string) {
+    try {
+      const resp = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/analyze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files,
+          repository_id: repositoryId,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errorText = await resp.text();
+        this.logger.error(`ML code quality analysis failed (${resp.status}): ${errorText}`);
+        throw new BadGatewayException(`ML Service code quality analysis failed: ${resp.statusText}`);
+      }
+
+      return await resp.json();
+    } catch (err) {
+      this.logger.error(`Failed in analyzeCodeQuality: ${err.message}`);
+      throw err;
+    }
+  }
+
+  /**
    * Aggregate team commit and churn history from PostgreSQL, calculate Bus Factor via ML service,
    * and persist the audit snapshot.
    */

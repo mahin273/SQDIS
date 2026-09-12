@@ -33,6 +33,8 @@ import { WebSocketModule } from '../websocket/websocket.module';
 import { PullRequestQueueModule } from '../../config';
 import { AlertsModule } from '../alerts/alerts.module';
 import { AuthModule } from '../auth/auth.module';
+import { PrQualityGateBotService } from './services/pr-quality-gate-bot.service';
+import { CodeIntelligenceModule } from '../code-intelligence/code-intelligence.module';
 
 /**
  * GitHub integration module
@@ -42,6 +44,7 @@ import { AuthModule } from '../auth/auth.module';
     PrismaModule,
     ScheduleModule.forRoot(),
     PullRequestQueueModule,
+    CodeIntelligenceModule,
     forwardRef(() => WebSocketModule),
     forwardRef(() => AlertsModule),
     forwardRef(() => AuthModule),
@@ -74,6 +77,7 @@ import { AuthModule } from '../auth/auth.module';
     BackfillService,
     PollingService,
     CommitProcessorQueue,
+    PrQualityGateBotService,
   ],
   exports: [
     GitHubService,
@@ -98,6 +102,7 @@ import { AuthModule } from '../auth/auth.module';
     BackfillService,
     PollingService,
     CommitProcessorQueue,
+    PrQualityGateBotService,
   ],
 })
 export class GitHubModule implements OnModuleInit {
