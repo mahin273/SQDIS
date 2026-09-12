@@ -38,6 +38,8 @@ export { repositoriesService } from './repositories.service';
 export { membersService } from './members.service';
 export { githubService } from './github.service';
 export { scoresService } from './scores.service';
+export { codeIntelligenceService } from './codeIntelligence.service';
+export type { RepositoryHotspot, CommitRiskItem, TeamBusFactorResponse, ModuleBusFactorResult, TestImpactResponse, TestImpactResult } from './codeIntelligence.service';
 
 // Backward-compatible exports for existing code using old naming
 export { authService as authApi } from './auth.service';

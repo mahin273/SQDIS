@@ -1,17 +1,18 @@
 import { useState } from 'react'
 import { useParams, Link, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, ShieldCheck, GitBranch, Layers, Settings, Users, Activity, CalendarDays, BarChart2, Trash2, Plus } from 'lucide-react'
+import { ArrowLeft, ShieldCheck, GitBranch, Layers, Settings, Users, Activity, CalendarDays, BarChart2, Trash2, Plus, Flame, FileCode, AlertTriangle } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { projectsService, repositoriesService, teamsService } from '@/services'
+import { projectsService, repositoriesService, teamsService, codeIntelligenceService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, MetricTile, QueryState, formatScore } from '../pageUtils'
 import type { ProjectMetrics } from '@/types'
+import type { RepositoryHotspot } from '@/services'
 import { useProjectRealtime } from '@/hooks/useProjectRealtime'
 
 export function ProjectDetailPage() {
@@ -210,6 +211,17 @@ export function ProjectDetailPage() {
     ? debtRaw
     : ((debtRaw as any)?.items ?? [])
 
+  const linkedRepos = project?.repositories ?? []
+  const [selectedRepoId, setSelectedRepoId] = useState<string>('')
+  const activeRepoId = selectedRepoId || linkedRepos[0]?.id || linkedRepos[0]?.repositoryId || linkedRepos[0]?.repository?.id || ''
+
+  const hotspotsQuery = useQuery({
+    queryKey: ['repository-hotspots', activeRepoId],
+    queryFn: () => codeIntelligenceService.getRepositoryHotspots(activeRepoId, 10),
+    enabled: !!activeRepoId,
+  })
+  const hotspots: RepositoryHotspot[] = hotspotsQuery.data || []
+
   const handleEdit = (e: React.FormEvent) => {
     e.preventDefault()
     if (!name.trim()) return
@@ -335,6 +347,97 @@ export function ProjectDetailPage() {
                         </div>
                       )}
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between pb-3">
+                    <CardTitle className="flex items-center gap-2">
+                      <Flame className="h-5 w-5 text-rose-500" /> Code Architecture & Defect Hotspots
+                    </CardTitle>
+                    {linkedRepos.length > 1 && (
+                      <select
+                        value={activeRepoId}
+                        onChange={(e) => setSelectedRepoId(e.target.value)}
+                        aria-label="Select repository for hotspots analysis"
+                        className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      >
+                        {linkedRepos.map((r: any) => {
+                          const rId = r.id || r.repositoryId || r.repository?.id
+                          const rName = r.name || r.repository?.name || 'Repo'
+                          return (
+                            <option key={rId} value={rId}>
+                              {rName}
+                            </option>
+                          )
+                        })}
+                      </select>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {hotspotsQuery.isLoading ? (
+                      <div className="py-8 text-center text-xs text-slate-500">
+                        Analyzing AST complexity & defect hotspots...
+                      </div>
+                    ) : hotspots.length > 0 ? (
+                      <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                        {hotspots.map((file) => (
+                          <div
+                            key={file.id || file.filePath}
+                            className="flex flex-col sm:flex-row sm:items-center justify-between py-3 gap-2 hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-colors"
+                          >
+                            <div className="min-w-0 flex-1 pr-3">
+                              <div className="flex items-center gap-2">
+                                <FileCode className="h-4 w-4 text-slate-400 shrink-0" />
+                                <span className="font-mono text-xs font-medium text-slate-900 dark:text-slate-100 truncate" title={file.filePath}>
+                                  {file.filePath}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
+                                <span>Cyclomatic CC: <strong className="text-slate-700 dark:text-slate-300">{file.cyclomaticComplexity}</strong></span>
+                                <span>Cognitive: <strong className="text-slate-700 dark:text-slate-300">{file.cognitiveComplexity}</strong></span>
+                                <span>MI: <strong className={file.maintainabilityIndex < 65 ? "text-rose-500" : "text-emerald-500"}>{file.maintainabilityIndex?.toFixed(0) ?? 'N/A'}/100</strong></span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span
+                                className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold border"
+                                style={{
+                                  backgroundColor:
+                                    file.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.1)' :
+                                    file.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.1)' :
+                                    file.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.1)' :
+                                    'rgba(16, 185, 129, 0.1)',
+                                  color:
+                                    file.riskLevel === 'CRITICAL' ? '#ef4444' :
+                                    file.riskLevel === 'HIGH' ? '#f97316' :
+                                    file.riskLevel === 'MODERATE' ? '#d97706' :
+                                    '#10b981',
+                                  borderColor:
+                                    file.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.25)' :
+                                    file.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.25)' :
+                                    file.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.25)' :
+                                    'rgba(16, 185, 129, 0.25)',
+                                }}
+                              >
+                                {file.riskLevel === 'CRITICAL' || file.riskLevel === 'HIGH' ? (
+                                  <AlertTriangle className="h-2.5 w-2.5" />
+                                ) : (
+                                  <ShieldCheck className="h-2.5 w-2.5" />
+                                )}
+                                {file.riskLevel} {file.defectProbability !== undefined ? `(${(file.defectProbability * 100).toFixed(0)}%)` : ''}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="py-8 text-center text-slate-500">
+                        <Flame className="mx-auto h-8 w-8 text-slate-300 dark:text-slate-600 mb-2" />
+                        <p className="text-sm">No architecture defect hotspots detected.</p>
+                        <p className="text-xs text-slate-400 mt-1">AST complexity metrics are calculated automatically as commits are ingested.</p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </div>
