@@ -40,23 +40,6 @@ import {
   Copy,
 } from 'lucide-react';
 
-const PRESETS = {
-  clean: {
-    name: 'Clean Utility',
-    path: 'src/utils/math.ts',
-    code: `export function add(a: number, b: number): number {\n  return a + b;\n}\n\nexport function multiply(a: number, b: number): number {\n  return a * b;\n}`,
-  },
-  parser: {
-    name: 'Token Parser',
-    path: 'src/core/parser.ts',
-    code: `export function parseToken(stream: any[], state: number): number {\n  let ret = 0;\n  if (state === 1) {\n    for (let i = 0; i < stream.length; i++) {\n      if (stream[i] === 10) ret += 1;\n      else if (stream[i] === 20) ret += 2;\n      else while (stream[i] > 0) { stream[i]--; ret++; }\n    }\n  } else if (state === 2) {\n    switch (stream.length) {\n      case 1: ret = 100; break;\n      case 2: ret = 200; break;\n      default: ret = -1;\n    }\n  }\n  return ret;\n}`,
-  },
-  monolith: {
-    name: 'God Function Monolith',
-    path: 'legacy/monolith.ts',
-    code: `export function executeMonolithTransaction(ctx: any, payload: any, fallback: boolean) {\n  let state = 0;\n  if (!ctx || !ctx.user || !ctx.session) throw new Error("Unauthorized");\n  for (let i = 0; i < payload.items.length; i++) {\n    if (payload.items[i].active && (payload.items[i].priority > 5 || fallback)) {\n      for (let j = 0; j < payload.items[i].rules.length; j++) {\n        if (payload.items[i].rules[j].valid && payload.items[i].rules[j].score > 80) {\n          state += payload.items[i].rules[j].weight * 1.5;\n        } else if (payload.items[i].rules[j].critical) {\n          state -= 50;\n        } else {\n          while (state < 0) { state += 10; }\n        }\n      }\n    } else {\n      switch (payload.code) {\n        case 1: state = 10; break;\n        case 2: state = 20; break;\n        case 3: state = 30; break;\n        default: state = -1;\n      }\n    }\n  }\n  return state;\n}`,
-  },
-};
 
 export const CodeIntelligencePage: React.FC = () => {
   // Top-Level Studio Mode: LIVE Explorer vs PRE-COMMIT Sandbox
@@ -162,8 +145,8 @@ export const CodeIntelligencePage: React.FC = () => {
   const [activeSandboxTab, setActiveSandboxTab] = useState('ast');
 
   // Sandbox Tab 1: AST Defect State
-  const [codeContent, setCodeContent] = useState(PRESETS.clean.code);
-  const [filePath, setFilePath] = useState(PRESETS.clean.path);
+  const [selectedLanguage, setSelectedLanguage] = useState<'typescript' | 'javascript' | 'python'>('typescript');
+  const [codeContent, setCodeContent] = useState('');
   const [astLoading, setAstLoading] = useState(false);
   const [astResult, setAstResult] = useState<AstDefectResponse | null>(null);
 
@@ -211,8 +194,9 @@ export const CodeIntelligencePage: React.FC = () => {
     if (!codeContent.trim()) return;
     setAstLoading(true);
     try {
+      const ext = selectedLanguage === 'python' ? 'py' : selectedLanguage === 'javascript' ? 'js' : 'ts';
       const res = await codeIntelligenceService.predictAstDefect({
-        filePath,
+        filePath: `draft.${ext}`,
         content: codeContent,
       });
       setAstResult(res);
@@ -1008,45 +992,52 @@ export const CodeIntelligencePage: React.FC = () => {
                     <CardHeader className="pb-3">
                       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                         <div>
-                          <CardTitle className="text-base">Source Code Workbench</CardTitle>
-                          <CardDescription>Paste code or select benchmark presets</CardDescription>
+                          <CardTitle className="text-base">Pre-Commit Code Inspector</CardTitle>
+                          <CardDescription>Paste draft code to analyze AST complexity and NASA defect probability</CardDescription>
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-xs text-slate-500 font-medium mr-1">Presets:</span>
-                          {Object.entries(PRESETS).map(([key, item]) => (
-                            <Button
-                              key={key}
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs px-2.5"
-                              onClick={() => {
-                                setCodeContent(item.code);
-                                setFilePath(item.path);
-                              }}
+                        <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-900 p-1 rounded-lg border border-slate-200 dark:border-slate-800 self-start sm:self-auto">
+                          {(['typescript', 'javascript', 'python'] as const).map((lang) => (
+                            <button
+                              key={lang}
+                              type="button"
+                              onClick={() => setSelectedLanguage(lang)}
+                              className={`text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${
+                                selectedLanguage === lang
+                                  ? 'bg-blue-600 text-white shadow-xs'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100'
+                              }`}
                             >
-                              {item.name}
-                            </Button>
+                              {lang === 'typescript' ? 'TypeScript' : lang === 'javascript' ? 'JavaScript' : 'Python'}
+                            </button>
                           ))}
                         </div>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div>
-                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">File Path</label>
-                        <input
-                          type="text"
-                          value={filePath}
-                          onChange={(e) => setFilePath(e.target.value)}
-                          className="w-full mt-1 px-3 py-1.5 text-sm font-mono rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Source Code (TypeScript / Python / JavaScript)</label>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                            Draft Source Code ({selectedLanguage === 'typescript' ? 'TypeScript' : selectedLanguage === 'javascript' ? 'JavaScript' : 'Python'})
+                          </label>
+                          {codeContent && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCodeContent('');
+                                setAstResult(null);
+                              }}
+                              className="text-xs text-slate-400 hover:text-red-500 transition-colors"
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
                         <textarea
-                          rows={12}
+                          rows={14}
                           value={codeContent}
                           onChange={(e) => setCodeContent(e.target.value)}
-                          className="w-full mt-1 p-3 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-950 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                          placeholder={`// Paste your uncommitted ${selectedLanguage === 'python' ? 'Python' : selectedLanguage === 'javascript' ? 'JavaScript' : 'TypeScript'} code here to inspect before committing...`}
+                          className="w-full p-3 text-xs font-mono rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-950 text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
                         />
                       </div>
 
