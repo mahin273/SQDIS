@@ -17,9 +17,52 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 1,
-  "id": null,
-  "links": [],
-  "liveNow": true,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "⚡ API Health",
+      "type": "link",
+      "url": "/d/api-health/api-health-and-system-metrics"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "🐳 Container Performance",
+      "type": "link",
+      "url": "/d/cadvisor/container-performance-cadvisor"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "🤖 ML Service",
+      "type": "link",
+      "url": "/d/ml-service/ml-service-and-score-analytics"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "🗄️ Database",
+      "type": "link",
+      "url": "/d/database/database-performance"
+    }
+  ],
   "panels": [
     {
       "collapsed": false,
