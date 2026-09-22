@@ -401,7 +401,7 @@ export class OrganizationsController {
     // Only OWNER and ADMIN can invite members
     await this.organizationsService.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
 
-    return this.organizationsService.createInvitation(id, dto.email);
+    return this.organizationsService.createInvitation(id, dto.email, userId);
   }
 
   /**
@@ -418,6 +418,49 @@ export class OrganizationsController {
     // Only OWNER and ADMIN can view invitations
     await this.organizationsService.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
     return this.organizationsService.getInvitations(id);
+  }
+
+  /**
+   * Get discovered repository contributors from connected repositories
+   */
+  @Get(':id/repository-contributors')
+  @ApiOperation({ summary: 'Get discovered repository contributors from connected repositories' })
+  @ApiParam({ name: 'id', description: 'Organization ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of discovered repository contributors',
+  })
+  async getRepositoryContributors(@Param('id') id: string, @GetUser('id') userId: string) {
+    await this.organizationsService.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
+    return this.organizationsService.getRepositoryContributors(id);
+  }
+
+  /**
+   * Invite all uninvited members and contributors
+   */
+  @Post(':id/invite-all')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.OWNER)
+  @AuditLog({
+    action: 'CREATE',
+    resourceType: 'OrganizationInvitation',
+    resourceIdParam: 'id',
+    captureSnapshot: false,
+    includeRequestBody: false,
+    includeResponseBody: true,
+  })
+  @ApiOperation({ summary: 'Invite all uninvited members and contributors' })
+  @ApiParam({ name: 'id', description: 'Organization ID' })
+  @ApiResponse({
+    status: 201,
+    description: 'Bulk invitations processed successfully',
+  })
+  async inviteAll(
+    @Param('id') id: string,
+    @GetUser('id') userId: string,
+  ) {
+    await this.organizationsService.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
+    return this.organizationsService.inviteAll(id, userId);
   }
 
   /**

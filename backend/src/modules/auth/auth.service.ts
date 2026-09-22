@@ -56,7 +56,29 @@ export class AuthService {
     });
 
     if (existingUser) {
-      throw new ConflictException('Email already exists');
+      const isActivated = !!(existingUser.passwordHash || existingUser.githubId || existingUser.googleId);
+      if (isActivated) {
+        throw new ConflictException('Email already exists');
+      }
+
+      // Activate placeholder user created during git commit ingestion
+      const passwordHash = await hashPassword(dto.password);
+      const dtoAny = dto as unknown as { name?: string; firstName?: string; lastName?: string; email: string };
+      const derivedName =
+        dtoAny.name?.trim() ||
+        [dtoAny.firstName, dtoAny.lastName].filter(Boolean).join(' ').trim() ||
+        existingUser.name ||
+        dtoAny.email?.split('@')[0]?.trim();
+
+      const user = await this.prisma.user.update({
+        where: { id: existingUser.id },
+        data: {
+          passwordHash,
+          name: derivedName,
+        },
+      });
+
+      return this.generateAuthResponse(user);
     }
 
     // Hash password with bcrypt cost factor 12

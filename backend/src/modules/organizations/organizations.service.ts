@@ -6,13 +6,17 @@ import {
   ForbiddenException,
   BadRequestException,
   GoneException,
+  Logger,
+  Optional,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { Role } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { AuditLogService } from '../audit/services/audit-log.service';
+import { EmailQueueService } from '../notifications/email';
 
 /**
  * Response type for organization data
@@ -42,6 +46,8 @@ export interface OrganizationMemberResponse {
   userId: string;
   role: Role;
   joinedAt: Date;
+  status: 'ACTIVE' | 'INVITED' | 'UNINVITED';
+  invitationId?: string | null;
   user: {
     id: string;
     email: string;
@@ -63,11 +69,31 @@ export interface InvitationResponse {
   organizationId: string;
 }
 
+/**
+ * Response type for discovered repository contributor
+ */
+export interface RepositoryContributorResponse {
+  email: string;
+  name: string;
+  commitCount: number;
+  lastCommittedAt: Date | null;
+  repositories: string[];
+  isMember: boolean;
+  isInvited: boolean;
+  memberRole?: Role | null;
+  invitationId?: string | null;
+  userId?: string | null;
+}
+
 @Injectable()
 export class OrganizationsService {
+  private readonly logger = new Logger(OrganizationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly auditLogService: AuditLogService,
+    @Optional() private readonly emailQueueService?: EmailQueueService,
+    @Optional() private readonly configService?: ConfigService,
   ) {}
 
   /**
@@ -281,25 +307,64 @@ export class OrganizationsService {
             email: true,
             name: true,
             avatarUrl: true,
+            passwordHash: true,
+            githubId: true,
+            googleId: true,
           },
         },
       },
       orderBy: { joinedAt: 'asc' },
     });
 
-    return members.map((member) => ({
-      id: member.id,
-      userId: member.userId,
-      role: member.role,
-      joinedAt: member.joinedAt,
-      user: member.user,
-    }));
+    const pendingInvitations = await this.prisma.invitation.findMany({
+      where: {
+        organizationId,
+        acceptedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true, email: true },
+    });
+
+    const invitationMap = new Map<string, string>();
+    for (const inv of pendingInvitations) {
+      invitationMap.set(inv.email.toLowerCase().trim(), inv.id);
+    }
+
+    return members.map((member) => {
+      const u = member.user;
+      const isActivated = !!(u.passwordHash || u.githubId || u.googleId);
+      const pendingInvitationId = invitationMap.get(u.email.toLowerCase().trim()) || null;
+
+      let status: 'ACTIVE' | 'INVITED' | 'UNINVITED' = 'ACTIVE';
+      if (!isActivated) {
+        status = pendingInvitationId ? 'INVITED' : 'UNINVITED';
+      }
+
+      return {
+        id: member.id,
+        userId: member.userId,
+        role: member.role,
+        joinedAt: member.joinedAt,
+        status,
+        invitationId: pendingInvitationId,
+        user: {
+          id: u.id,
+          email: u.email,
+          name: u.name,
+          avatarUrl: u.avatarUrl,
+        },
+      };
+    });
   }
 
   /**
-   * Create invitation with 7-day expiry token
+   * Create invitation with 7-day expiry token and queue email dispatch
    */
-  async createInvitation(organizationId: string, email: string): Promise<InvitationResponse> {
+  async createInvitation(
+    organizationId: string,
+    email: string,
+    inviterUserId?: string,
+  ): Promise<InvitationResponse> {
     // Check if organization exists
     const existingOrg = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -324,7 +389,10 @@ export class OrganizationsService {
       });
 
       if (existingMembership) {
-        throw new ConflictException('User is already a member of this organization');
+        const isActivated = !!(existingUser.passwordHash || existingUser.githubId || existingUser.googleId);
+        if (isActivated) {
+          throw new ConflictException('User is already an active member of this organization');
+        }
       }
     }
 
@@ -354,6 +422,46 @@ export class OrganizationsService {
         expiresAt,
       },
     });
+
+    // Queue email invitation
+    if (this.emailQueueService) {
+      try {
+        let inviterName = existingOrg.name;
+        if (inviterUserId) {
+          const inviter = await this.prisma.user.findUnique({
+            where: { id: inviterUserId },
+            select: { name: true, email: true },
+          });
+          if (inviter?.name) {
+            inviterName = inviter.name;
+          } else if (inviter?.email) {
+            inviterName = inviter.email;
+          }
+        }
+
+        const frontendUrl =
+          this.configService?.get<string>('FRONTEND_URL') ||
+          process.env.FRONTEND_URL ||
+          'http://localhost:5173';
+        const invitationUrl = `${frontendUrl}/invitations/${token}`;
+
+        await this.emailQueueService.queueInvitationEmail(invitation.email, {
+          inviterName,
+          organizationName: existingOrg.name,
+          invitationUrl,
+          expiresIn: '7 days',
+        });
+        this.logger.log(
+          `Queued invitation email for ${invitation.email} to join ${existingOrg.name}`,
+        );
+      } catch (emailError) {
+        this.logger.warn(
+          `Failed to queue invitation email for ${invitation.email}: ${
+            emailError instanceof Error ? emailError.message : String(emailError)
+          }`,
+        );
+      }
+    }
 
     return {
       id: invitation.id,
@@ -448,17 +556,16 @@ export class OrganizationsService {
       },
     });
 
-    if (existingMembership) {
-      throw new ConflictException('User is already a member of this organization');
-    }
+    let membership: any;
 
-    const [membership] = await this.prisma.$transaction([
-      this.prisma.organizationMember.create({
-        data: {
-          organizationId: invitation.organizationId,
-          userId,
-          role: Role.DEVELOPER,
-        },
+    if (existingMembership) {
+      await this.prisma.invitation.update({
+        where: { id: invitation.id },
+        data: { acceptedAt: new Date() },
+      });
+
+      membership = await this.prisma.organizationMember.findUnique({
+        where: { id: existingMembership.id },
         include: {
           user: {
             select: {
@@ -469,24 +576,69 @@ export class OrganizationsService {
             },
           },
         },
-      }),
-      this.prisma.invitation.update({
-        where: { id: invitation.id },
-        data: { acceptedAt: new Date() },
-      }),
-    ]);
+      });
+    } else {
+      const [createdMembership] = await this.prisma.$transaction([
+        this.prisma.organizationMember.create({
+          data: {
+            organizationId: invitation.organizationId,
+            userId,
+            role: Role.DEVELOPER,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                name: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        }),
+        this.prisma.invitation.update({
+          where: { id: invitation.id },
+          data: { acceptedAt: new Date() },
+        }),
+      ]);
+      membership = createdMembership;
+    }
+
+    // Attribute any unmapped commits with this email to the user
+    try {
+      await this.prisma.commit.updateMany({
+        where: {
+          authorEmail: invitation.email.toLowerCase(),
+          developerId: null,
+        },
+        data: {
+          developerId: userId,
+        },
+      });
+
+      await this.prisma.unmappedEmail.deleteMany({
+        where: {
+          organizationId: invitation.organizationId,
+          email: invitation.email.toLowerCase(),
+        },
+      });
+    } catch (attributionErr) {
+      this.logger.warn(`Commit attribution skipped during invitation accept: ${attributionErr}`);
+    }
 
     return {
       id: membership.id,
       userId: membership.userId,
       role: membership.role,
       joinedAt: membership.joinedAt,
+      status: 'ACTIVE',
+      invitationId: null,
       user: membership.user,
     };
   }
 
   /**
-   * Resend invitation (creates new token with fresh expiry)
+   * Resend invitation (creates new token with fresh expiry and re-queues email)
    */
   async resendInvitation(organizationId: string, email: string): Promise<InvitationResponse> {
     // Find existing invitation
@@ -514,6 +666,34 @@ export class OrganizationsService {
         expiresAt,
       },
     });
+
+    if (this.emailQueueService) {
+      try {
+        const org = await this.prisma.organization.findUnique({
+          where: { id: organizationId },
+          select: { name: true },
+        });
+        const frontendUrl =
+          this.configService?.get<string>('FRONTEND_URL') ||
+          process.env.FRONTEND_URL ||
+          'http://localhost:5173';
+        const invitationUrl = `${frontendUrl}/invitations/${token}`;
+
+        await this.emailQueueService.queueInvitationEmail(invitation.email, {
+          inviterName: org?.name || 'Administrator',
+          organizationName: org?.name || 'Organization',
+          invitationUrl,
+          expiresIn: '7 days',
+        });
+        this.logger.log(`Resent invitation email to ${invitation.email}`);
+      } catch (err) {
+        this.logger.warn(
+          `Failed to queue resent invitation email to ${invitation.email}: ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
 
     return {
       id: invitation.id,
@@ -545,7 +725,7 @@ export class OrganizationsService {
     }
 
     // Find the target membership
-    const targetMembership = await this.prisma.organizationMember.findUnique({
+    let targetMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
           organizationId,
@@ -555,11 +735,20 @@ export class OrganizationsService {
     });
 
     if (!targetMembership) {
+      targetMembership = await this.prisma.organizationMember.findFirst({
+        where: {
+          id: targetUserId,
+          organizationId,
+        },
+      });
+    }
+
+    if (!targetMembership) {
       throw new NotFoundException('Member not found in this organization');
     }
 
     // Prevent changing own role
-    if (targetUserId === requestingUserId) {
+    if (targetMembership.userId === requestingUserId) {
       throw new ForbiddenException('You cannot change your own role');
     }
 
@@ -598,7 +787,7 @@ export class OrganizationsService {
 
     await this.auditLogService.logRoleChange({
       userId: requestingUserId,
-      targetUserId,
+      targetUserId: targetMembership.userId,
       organizationId,
       oldRole,
       newRole,
@@ -609,6 +798,7 @@ export class OrganizationsService {
       userId: updatedMembership.userId,
       role: updatedMembership.role,
       joinedAt: updatedMembership.joinedAt,
+      status: 'ACTIVE',
       user: updatedMembership.user,
     };
   }
@@ -631,7 +821,7 @@ export class OrganizationsService {
     }
 
     // Find the target membership
-    const targetMembership = await this.prisma.organizationMember.findUnique({
+    let targetMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
           organizationId,
@@ -641,11 +831,20 @@ export class OrganizationsService {
     });
 
     if (!targetMembership) {
+      targetMembership = await this.prisma.organizationMember.findFirst({
+        where: {
+          id: targetUserId,
+          organizationId,
+        },
+      });
+    }
+
+    if (!targetMembership) {
       throw new NotFoundException('Member not found in this organization');
     }
 
     // Prevent removing self (use leave organization instead)
-    if (targetUserId === requestingUserId) {
+    if (targetMembership.userId === requestingUserId) {
       throw new ForbiddenException('You cannot remove yourself. Use leave organization instead.');
     }
 
@@ -693,6 +892,244 @@ export class OrganizationsService {
       acceptedAt: invitation.acceptedAt,
       organizationId: invitation.organizationId,
       organization: this.mapToResponse(invitation.organization),
+    };
+  }
+
+  /**
+   * Get discovered repository contributors across enabled repositories for an organization
+   */
+  async getRepositoryContributors(organizationId: string): Promise<RepositoryContributorResponse[]> {
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${organizationId}' not found`);
+    }
+
+    // 1. Find all enabled repositories for this organization
+    const repositories = await this.prisma.repository.findMany({
+      where: { organizationId, isEnabled: true },
+      select: { id: true, name: true, fullName: true },
+    });
+
+    if (!repositories.length) {
+      return [];
+    }
+
+    const repoMap = new Map<string, string>(repositories.map((r) => [r.id, r.name]));
+    const repoIds = repositories.map((r) => r.id);
+
+    // 2. Query all commits for enabled repositories
+    const commits = await this.prisma.commit.findMany({
+      where: { repositoryId: { in: repoIds } },
+      select: {
+        authorEmail: true,
+        authorName: true,
+        committedAt: true,
+        repositoryId: true,
+      },
+      orderBy: { committedAt: 'desc' },
+    });
+
+    // 3. Aggregate contributors by lowercase email
+    const contributorMap = new Map<
+      string,
+      {
+        email: string;
+        name: string;
+        commitCount: number;
+        lastCommittedAt: Date | null;
+        repositories: Set<string>;
+      }
+    >();
+
+    for (const commit of commits) {
+      if (!commit.authorEmail) continue;
+      const email = commit.authorEmail.toLowerCase().trim();
+      const repoName = repoMap.get(commit.repositoryId) || 'Repository';
+      const existing = contributorMap.get(email);
+
+      if (existing) {
+        existing.commitCount += 1;
+        existing.repositories.add(repoName);
+        if (!existing.lastCommittedAt || commit.committedAt > existing.lastCommittedAt) {
+          existing.lastCommittedAt = commit.committedAt;
+          if (commit.authorName && commit.authorName.trim()) {
+            existing.name = commit.authorName;
+          }
+        }
+      } else {
+        contributorMap.set(email, {
+          email,
+          name: commit.authorName || email.split('@')[0],
+          commitCount: 1,
+          lastCommittedAt: commit.committedAt,
+          repositories: new Set([repoName]),
+        });
+      }
+    }
+
+    // Also include any recorded unmapped emails if not yet collected
+    try {
+      const unmapped = await this.prisma.unmappedEmail.findMany({
+        where: { organizationId },
+      });
+      for (const u of unmapped) {
+        const email = u.email.toLowerCase().trim();
+        const existing = contributorMap.get(email);
+        if (!existing) {
+          contributorMap.set(email, {
+            email,
+            name: u.authorName || email.split('@')[0],
+            commitCount: u.commitCount,
+            lastCommittedAt: u.lastSeenAt,
+            repositories: new Set(repositories.map((r) => r.name)),
+          });
+        }
+      }
+    } catch (unmappedErr) {
+      this.logger.debug(`Could not query unmapped_emails table: ${unmappedErr}`);
+    }
+
+    // 4. Fetch existing organization members (including verified aliases)
+    const members = await this.prisma.organizationMember.findMany({
+      where: { organizationId },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            passwordHash: true,
+            githubId: true,
+            googleId: true,
+            emailAliases: {
+              select: { email: true, isVerified: true },
+            },
+          },
+        },
+      },
+    });
+
+    const memberMap = new Map<string, { role: Role; userId: string; name: string; isRealAccount: boolean }>();
+    for (const m of members) {
+      const isRealAccount = !!(m.user?.passwordHash || m.user?.githubId || m.user?.googleId);
+      if (m.user?.email) {
+        memberMap.set(m.user.email.toLowerCase().trim(), {
+          role: m.role,
+          userId: m.user.id,
+          name: m.user.name || '',
+          isRealAccount,
+        });
+      }
+      if (m.user?.emailAliases) {
+        for (const alias of m.user.emailAliases) {
+          if (alias.isVerified && alias.email) {
+            memberMap.set(alias.email.toLowerCase().trim(), {
+              role: m.role,
+              userId: m.user.id,
+              name: m.user.name || '',
+              isRealAccount,
+            });
+          }
+        }
+      }
+    }
+
+    // 5. Fetch pending invitations for this organization
+    const pendingInvitations = await this.prisma.invitation.findMany({
+      where: {
+        organizationId,
+        acceptedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      select: { id: true, email: true },
+    });
+
+    const invitationMap = new Map<string, string>();
+    for (const inv of pendingInvitations) {
+      invitationMap.set(inv.email.toLowerCase().trim(), inv.id);
+    }
+
+    // 6. Map into response array
+    const result: RepositoryContributorResponse[] = Array.from(contributorMap.values()).map((c) => {
+      const memberInfo = memberMap.get(c.email);
+      const pendingInvitationId = invitationMap.get(c.email);
+      const isMember = !!(memberInfo && memberInfo.isRealAccount);
+      const isInvited = !isMember && !!pendingInvitationId;
+
+      return {
+        email: c.email,
+        name: memberInfo?.name || c.name,
+        commitCount: c.commitCount,
+        lastCommittedAt: c.lastCommittedAt,
+        repositories: Array.from(c.repositories),
+        isMember,
+        isInvited,
+        memberRole: memberInfo?.role || null,
+        invitationId: pendingInvitationId || null,
+        userId: memberInfo?.userId || null,
+      };
+    });
+
+    result.sort((a, b) => b.commitCount - a.commitCount);
+    return result;
+  }
+
+  /**
+   * Invite all uninvited members and contributors
+   */
+  async inviteAll(
+    organizationId: string,
+    inviterUserId?: string,
+  ): Promise<{ totalInvited: number; emails: string[] }> {
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${organizationId}' not found`);
+    }
+
+    // Fetch members and repo contributors
+    const members = await this.getMembers(organizationId);
+    const uninvitedMembers = members.filter((m) => m.status === 'UNINVITED');
+
+    const contributors = await this.getRepositoryContributors(organizationId);
+    const uninvitedContributors = contributors.filter((c) => !c.isMember && !c.isInvited);
+
+    // Deduplicate emails across members and contributors
+    const targetEmails = new Set<string>();
+    for (const m of uninvitedMembers) {
+      if (m.user?.email) {
+        targetEmails.add(m.user.email.toLowerCase().trim());
+      }
+    }
+    for (const c of uninvitedContributors) {
+      if (c.email) {
+        targetEmails.add(c.email.toLowerCase().trim());
+      }
+    }
+
+    const invitedEmails: string[] = [];
+
+    for (const email of targetEmails) {
+      try {
+        await this.createInvitation(organizationId, email, inviterUserId);
+        invitedEmails.push(email);
+      } catch (err: any) {
+        this.logger.warn(`Could not invite ${email} during inviteAll: ${err?.message || err}`);
+      }
+    }
+
+    this.logger.log(
+      `Dispatched bulk invitations for organization ${organizationId}: ${invitedEmails.length} invitations queued`,
+    );
+
+    return {
+      totalInvited: invitedEmails.length,
+      emails: invitedEmails,
     };
   }
 

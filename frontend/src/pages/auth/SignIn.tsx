@@ -13,7 +13,7 @@ export default function SignIn() {
     () => import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
     []
   )
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => searchParams.get('email') || '')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
 

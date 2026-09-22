@@ -3,11 +3,13 @@ import { useNavigate, useParams, Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { organizationService } from '@/services/organization.service'
 import { PageLoader } from '@/components/common/PageLoader'
+import { useAuthStore } from '@/stores/authStore'
 import type { Invitation } from '@/types'
 
 export function AcceptInvitationPage() {
   const { token } = useParams<{ token: string }>()
   const navigate = useNavigate()
+  const { isAuthenticated } = useAuthStore()
   const [invitation, setInvitation] = useState<Invitation | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
@@ -67,13 +69,37 @@ export function AcceptInvitationPage() {
           <div className="rounded-md bg-slate-50 p-4 dark:bg-slate-800">
             <p className="text-xs text-slate-500 dark:text-slate-400">Invited Email</p>
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{invitation.email}</p>
+            <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Target Workspace</p>
+            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{invitation.organization?.name || 'SQDIS Workspace'}</p>
             <p className="mt-2 text-xs text-slate-500 dark:text-slate-400">Role</p>
             <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{invitation.role}</p>
           </div>
 
-          <Button onClick={handleAccept} className="w-full" isLoading={submitting}>
-            Accept Invitation
-          </Button>
+          {!isAuthenticated ? (
+            <div className="space-y-3 pt-2">
+              <p className="text-xs text-slate-600 dark:text-slate-400">
+                To join this workspace, create an account or sign in with your email:
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Link
+                  to={`/register?email=${encodeURIComponent(invitation.email)}&invitationToken=${token}`}
+                  className="inline-flex items-center justify-center rounded-md bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700 transition-colors shadow-sm text-center"
+                >
+                  Create Account
+                </Link>
+                <Link
+                  to={`/login?email=${encodeURIComponent(invitation.email)}&invitationToken=${token}`}
+                  className="inline-flex items-center justify-center rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-750 transition-colors shadow-sm text-center"
+                >
+                  Sign In
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <Button onClick={handleAccept} className="w-full" isLoading={submitting}>
+              Accept Invitation
+            </Button>
+          )}
         </div>
       )}
 

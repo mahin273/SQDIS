@@ -36,6 +36,7 @@ describe('OrganizationsService', () => {
     email: 'member@example.com',
     name: 'Member User',
     avatarUrl: null,
+    passwordHash: 'hashed_password',
   };
 
   beforeEach(async () => {
@@ -49,6 +50,7 @@ describe('OrganizationsService', () => {
       organizationMember: {
         findMany: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         count: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
@@ -62,16 +64,30 @@ describe('OrganizationsService', () => {
         findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
+        findMany: jest.fn(),
+      },
+      repository: {
+        findMany: jest.fn(),
+      },
+      commit: {
+        findMany: jest.fn(),
+        updateMany: jest.fn(),
+      },
+      unmappedEmail: {
+        findMany: jest.fn(),
+        deleteMany: jest.fn(),
       },
       $transaction: jest.fn((operations) => Promise.all(operations)),
     };
     auditLogService = { logRoleChange: jest.fn() };
+    const emailQueueService = { queueInvitationEmail: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         OrganizationsService,
         { provide: PrismaService, useValue: prisma },
         { provide: AuditLogService, useValue: auditLogService },
+        { provide: 'EmailQueueService', useValue: emailQueueService },
       ],
     }).compile();
 
@@ -197,6 +213,7 @@ describe('OrganizationsService', () => {
         user: memberUser,
       },
     ]);
+    prisma.invitation.findMany.mockResolvedValueOnce([]);
 
     await expect(service.getMembers('org-1')).resolves.toEqual([
       {
@@ -204,7 +221,14 @@ describe('OrganizationsService', () => {
         userId: memberUser.id,
         role: Role.DEVELOPER,
         joinedAt: new Date('2026-01-03T00:00:00.000Z'),
-        user: memberUser,
+        status: 'ACTIVE',
+        invitationId: null,
+        user: {
+          id: memberUser.id,
+          email: memberUser.email,
+          name: memberUser.name,
+          avatarUrl: memberUser.avatarUrl,
+        },
       },
     ]);
   });
@@ -245,7 +269,7 @@ describe('OrganizationsService', () => {
 
   it('prevents inviting an existing organization member', async () => {
     prisma.organization.findUnique.mockResolvedValue(organization);
-    prisma.user.findUnique.mockResolvedValue({ id: 'user-2' });
+    prisma.user.findUnique.mockResolvedValue({ id: 'user-2', passwordHash: 'hashed_password' });
     prisma.organizationMember.findUnique.mockResolvedValue({ id: 'member-1' });
 
     await expect(service.createInvitation('org-1', 'member@example.com')).rejects.toBeInstanceOf(
@@ -386,6 +410,20 @@ describe('OrganizationsService', () => {
     );
   });
 
+  it('removes members when membership ID is passed instead of userId', async () => {
+    prisma.organization.findUnique.mockResolvedValue(organization);
+    prisma.organizationMember.findUnique.mockResolvedValueOnce(null);
+    prisma.organizationMember.findFirst.mockResolvedValueOnce({
+      id: 'member-by-id',
+      userId: 'target-user',
+      role: Role.DEVELOPER,
+    });
+    prisma.organizationMember.delete.mockResolvedValueOnce({});
+
+    await expect(service.removeMember('org-1', 'member-by-id', 'requesting-user')).resolves.toBeUndefined();
+    expect(prisma.organizationMember.delete).toHaveBeenCalledWith({ where: { id: 'member-by-id' } });
+  });
+
   it('resends and retrieves invitation details', async () => {
     prisma.invitation.findFirst.mockResolvedValueOnce({
       id: 'inv-1',
@@ -420,5 +458,116 @@ describe('OrganizationsService', () => {
       id: 'inv-1',
       organization,
     });
+  });
+
+  it('aggregates repository contributors across enabled repositories and tags member and invitation states', async () => {
+    prisma.organization.findUnique.mockResolvedValue(organization);
+    prisma.repository.findMany.mockResolvedValue([
+      { id: 'repo-1', name: 'sqdis-core' },
+      { id: 'repo-2', name: 'sqdis-ml' },
+    ]);
+    prisma.commit.findMany.mockResolvedValue([
+      {
+        authorEmail: 'dev1@example.com',
+        authorName: 'Developer One',
+        committedAt: new Date('2026-02-01T10:00:00.000Z'),
+        repositoryId: 'repo-1',
+      },
+      {
+        authorEmail: 'dev1@example.com',
+        authorName: 'Developer One',
+        committedAt: new Date('2026-02-02T10:00:00.000Z'),
+        repositoryId: 'repo-2',
+      },
+      {
+        authorEmail: 'guest@example.com',
+        authorName: 'Guest Contributor',
+        committedAt: new Date('2026-01-15T10:00:00.000Z'),
+        repositoryId: 'repo-1',
+      },
+    ]);
+    prisma.unmappedEmail.findMany.mockResolvedValue([]);
+    prisma.organizationMember.findMany.mockResolvedValue([
+      {
+        role: Role.DEVELOPER,
+        user: {
+          id: 'user-dev1',
+          email: 'dev1@example.com',
+          name: 'Developer One',
+          passwordHash: 'hashed_pw',
+          emailAliases: [],
+        },
+      },
+    ]);
+    prisma.invitation.findMany.mockResolvedValue([
+      {
+        id: 'inv-guest',
+        email: 'guest@example.com',
+      },
+    ]);
+
+    const result = await service.getRepositoryContributors('org-1');
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatchObject({
+      email: 'dev1@example.com',
+      commitCount: 2,
+      isMember: true,
+      isInvited: false,
+      memberRole: Role.DEVELOPER,
+      repositories: ['sqdis-core', 'sqdis-ml'],
+    });
+    expect(result[1]).toMatchObject({
+      email: 'guest@example.com',
+      commitCount: 1,
+      isMember: false,
+      isInvited: true,
+      invitationId: 'inv-guest',
+      repositories: ['sqdis-core'],
+    });
+  });
+
+  it('returns empty array when organization has no enabled repositories', async () => {
+    prisma.organization.findUnique.mockResolvedValue(organization);
+    prisma.repository.findMany.mockResolvedValue([]);
+
+    const result = await service.getRepositoryContributors('org-1');
+    expect(result).toEqual([]);
+  });
+
+  it('invites all uninvited members and contributors', async () => {
+    prisma.organization.findUnique.mockResolvedValue(organization);
+    prisma.organizationMember.findMany.mockResolvedValue([
+      {
+        id: 'member-uninvited',
+        userId: 'user-uninvited',
+        role: Role.DEVELOPER,
+        joinedAt: new Date('2026-01-03T00:00:00.000Z'),
+        user: {
+          id: 'user-uninvited',
+          email: 'uninvited@example.com',
+          name: 'Uninvited User',
+          passwordHash: null,
+          githubId: null,
+          googleId: null,
+        },
+      },
+    ]);
+    prisma.invitation.findMany.mockResolvedValue([]);
+    prisma.repository.findMany.mockResolvedValue([]);
+    prisma.user.findUnique.mockResolvedValue(null);
+    prisma.invitation.findFirst.mockResolvedValue(null);
+    prisma.invitation.create.mockResolvedValue({
+      id: 'inv-1',
+      organizationId: 'org-1',
+      email: 'uninvited@example.com',
+      token: 'token-1',
+      expiresAt: new Date(),
+      createdAt: new Date(),
+      acceptedAt: null,
+    });
+
+    const result = await service.inviteAll('org-1', 'admin-1');
+    expect(result.totalInvited).toBe(1);
+    expect(result.emails).toEqual(['uninvited@example.com']);
   });
 });
