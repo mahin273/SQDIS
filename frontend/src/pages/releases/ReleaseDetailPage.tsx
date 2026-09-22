@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -69,11 +69,14 @@ export function ReleaseDetailPage() {
   })
 
   const reposQuery = useQuery({
-    queryKey: ['github', 'repositories'],
-    queryFn: () => repositoriesService.getAll(),
+    queryKey: ['github', 'repositories', 'connected'],
+    queryFn: () => repositoriesService.getConnected(),
   })
 
-  const repos = reposQuery.data || []
+  const repos = useMemo(() => {
+    const list = Array.isArray(reposQuery.data) ? reposQuery.data : (reposQuery.data as any)?.data ?? []
+    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
+  }, [reposQuery.data])
 
   const shipMutation = useMutation({
     mutationFn: (req: ShipReleaseRequest) => releasesService.ship(id!, req),
@@ -434,7 +437,7 @@ export function ReleaseDetailPage() {
               onChange={(e) => setSelectedRepoId(e.target.value)}
               className="w-full rounded-md border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-xs text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
-              {repos.map((r) => (
+              {repos.map((r: any) => (
                 <option key={r.id} value={r.id}>
                   {r.fullName || r.name}
                 </option>

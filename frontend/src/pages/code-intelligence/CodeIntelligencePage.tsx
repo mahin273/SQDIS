@@ -58,17 +58,18 @@ export const CodeIntelligencePage: React.FC = () => {
   const [expandedCommitSha, setExpandedCommitSha] = useState<string | null>(null);
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
 
-  // Fetch all accessible repositories for the organization
+  // Fetch only connected / ingested repositories for the organization
   const reposQuery = useQuery({
-    queryKey: ['repositories'],
-    queryFn: () => repositoriesService.getAll(),
+    queryKey: ['repositories', 'connected'],
+    queryFn: () => repositoriesService.getConnected(),
   });
 
   const repos = useMemo(() => {
     const data = reposQuery.data;
-    if (Array.isArray(data)) return data;
-    if (data && typeof data === 'object' && Array.isArray((data as any).data)) return (data as any).data;
-    return [];
+    let list: any[] = [];
+    if (Array.isArray(data)) list = data;
+    else if (data && typeof data === 'object' && Array.isArray((data as any).data)) list = (data as any).data;
+    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id);
   }, [reposQuery.data]);
 
   const activeRepo = useMemo(() => {
@@ -336,7 +337,7 @@ export const CodeIntelligencePage: React.FC = () => {
               <GitBranch className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
               <div>
                 <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Select Ingested Repository
+                  Select Connected Repository
                 </label>
                 <select
                   value={activeRepoId}
@@ -348,7 +349,7 @@ export const CodeIntelligencePage: React.FC = () => {
                       {r.fullName || r.name} ({r.defaultBranch || 'main'})
                     </option>
                   ))}
-                  {repos.length === 0 && <option value="">No repositories available</option>}
+                  {repos.length === 0 && <option value="">No connected repositories available</option>}
                 </select>
               </div>
             </div>

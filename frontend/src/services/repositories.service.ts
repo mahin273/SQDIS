@@ -4,20 +4,34 @@ import type { Repository } from '@/types';
 export const repositoriesService = {
   /**
    * Get all repositories for the current organization
+   * If options.onlyConnected is true, queries and filters for connected/enabled repositories only
    */
-  async getAll(): Promise<Repository[]> {
+  async getAll(options?: { onlyConnected?: boolean }): Promise<Repository[]> {
     try {
-      const response = await api.get<Repository[]>('/github/repositories');
-      return (response.data || []).map((repo: any) => ({
+      const response = await api.get<Repository[]>('/github/repositories', {
+        params: options?.onlyConnected ? { connected: 'true' } : undefined,
+      });
+      const repos = (response.data || []).map((repo: any) => ({
         ...repo,
         isActive: repo.isActive ?? repo.isEnabled ?? false,
       }));
+      if (options?.onlyConnected) {
+        return repos.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id);
+      }
+      return repos;
     } catch (err: any) {
       if (err?.response?.status === 404) {
         return [];
       }
       throw err;
     }
+  },
+
+  /**
+   * Get only connected / active repositories
+   */
+  async getConnected(): Promise<Repository[]> {
+    return this.getAll({ onlyConnected: true });
   },
 
   /**

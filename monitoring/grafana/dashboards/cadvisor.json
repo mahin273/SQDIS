@@ -17,9 +17,30 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
-  "links": [],
-  "liveNow": false,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "doc",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "📋 Logs & Traces Explorer",
+      "type": "link",
+      "url": "/d/logs-and-traces/logs-and-traces-explorer"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "⚡ API Health",
+      "type": "link",
+      "url": "/d/api-health/api-health-and-system-metrics"
+    }
+  ],
   "panels": [
     {
       "id": 1,
@@ -54,6 +75,13 @@
             "lineInterpolation": "smooth",
             "lineWidth": 2
           },
+          "links": [
+            {
+              "title": "🔍 Drilldown: View Logs for ${__field.labels.name}",
+              "url": "/d/logs-and-traces/logs-and-traces-explorer?var-container=${__field.labels.name}&from=${__from}&to=${__to}",
+              "targetBlank": true
+            }
+          ],
           "unit": "percent"
         },
         "overrides": []
@@ -107,6 +135,13 @@
             "lineInterpolation": "smooth",
             "lineWidth": 2
           },
+          "links": [
+            {
+              "title": "🔍 Drilldown: View Logs for ${__field.labels.name}",
+              "url": "/d/logs-and-traces/logs-and-traces-explorer?var-container=${__field.labels.name}&from=${__from}&to=${__to}",
+              "targetBlank": true
+            }
+          ],
           "unit": "bytes"
         },
         "overrides": []
@@ -160,6 +195,13 @@
             "lineInterpolation": "smooth",
             "lineWidth": 2
           },
+          "links": [
+            {
+              "title": "🔍 Drilldown: View Logs for ${__field.labels.name}",
+              "url": "/d/logs-and-traces/logs-and-traces-explorer?var-container=${__field.labels.name}&from=${__from}&to=${__to}",
+              "targetBlank": true
+            }
+          ],
           "unit": "Bps"
         },
         "overrides": []
@@ -213,6 +255,13 @@
             "lineInterpolation": "smooth",
             "lineWidth": 2
           },
+          "links": [
+            {
+              "title": "🔍 Drilldown: View Logs for ${__field.labels.name}",
+              "url": "/d/logs-and-traces/logs-and-traces-explorer?var-container=${__field.labels.name}&from=${__from}&to=${__to}",
+              "targetBlank": true
+            }
+          ],
           "unit": "Bps"
         },
         "overrides": []

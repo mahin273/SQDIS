@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { PageHeader } from '../pageUtils'
@@ -28,12 +29,17 @@ export default function Dashboard() {
     queryFn: () => dashboardService.getStats(),
   })
 
-  const { data: repos } = useQuery({
-    queryKey: ['repositories'],
-    queryFn: () => repositoriesService.getAll(),
+  const { data: rawRepos } = useQuery({
+    queryKey: ['repositories', 'connected'],
+    queryFn: () => repositoriesService.getConnected(),
   })
 
-  const primaryRepoId = (repos && Array.isArray(repos) && repos.length > 0) ? repos[0].id : ''
+  const repos = useMemo(() => {
+    const list = Array.isArray(rawRepos) ? rawRepos : (rawRepos as any)?.data ?? []
+    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
+  }, [rawRepos])
+
+  const primaryRepoId = (repos && repos.length > 0) ? repos[0].id : ''
 
   const { data: commitsRisk } = useQuery({
     queryKey: ['commits-risk', primaryRepoId],

@@ -17,9 +17,30 @@
   "editable": true,
   "fiscalYearStartMonth": 0,
   "graphTooltip": 0,
-  "id": null,
-  "links": [],
-  "liveNow": false,
+  "links": [
+    {
+      "asDropdown": false,
+      "icon": "doc",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "📋 Logs & Traces Explorer",
+      "type": "link",
+      "url": "/d/logs-and-traces/logs-and-traces-explorer"
+    },
+    {
+      "asDropdown": false,
+      "icon": "dashboard",
+      "includeVars": true,
+      "keepTime": true,
+      "tags": [],
+      "targetBlank": false,
+      "title": "🐳 Container Performance",
+      "type": "link",
+      "url": "/d/cadvisor/container-performance-cadvisor"
+    }
+  ],
   "panels": [
     {
       "id": 1,
@@ -172,6 +193,13 @@
           "color": {
             "mode": "thresholds"
           },
+          "links": [
+            {
+              "title": "🔍 Drilldown: View Backend Errors in Logs & Traces",
+              "url": "/d/logs-and-traces/logs-and-traces-explorer?var-container=sqdis-backend&var-search=error&from=${__from}&to=${__to}",
+              "targetBlank": true
+            }
+          ],
           "mappings": [],
           "thresholds": {
             "mode": "absolute",
@@ -258,6 +286,13 @@
             "lineInterpolation": "smooth",
             "lineWidth": 2
           },
+          "links": [
+            {
+              "title": "🔍 Drilldown: View Backend Logs & Traces",
+              "url": "/d/logs-and-traces/logs-and-traces-explorer?var-container=sqdis-backend&from=${__from}&to=${__to}",
+              "targetBlank": true
+            }
+          ],
           "unit": "s"
         },
         "overrides": []
@@ -311,6 +346,13 @@
             "lineInterpolation": "smooth",
             "lineWidth": 2
           },
+          "links": [
+            {
+              "title": "🔍 Drilldown: View Backend Logs & Traces",
+              "url": "/d/logs-and-traces/logs-and-traces-explorer?var-container=sqdis-backend&from=${__from}&to=${__to}",
+              "targetBlank": true
+            }
+          ],
           "unit": "reqps"
         },
         "overrides": []

@@ -39,8 +39,8 @@ export function CoveragePage() {
   })
 
   const repositoriesQuery = useQuery({
-    queryKey: queryKeys.repositories.all(),
-    queryFn: () => repositoriesService.getAll(),
+    queryKey: ['repositories', 'connected'],
+    queryFn: () => repositoriesService.getConnected(),
   })
 
   // Detailed report query for the inspection modal
@@ -50,7 +50,11 @@ export function CoveragePage() {
     enabled: !!viewingReportId,
   })
 
-  const repositories: Repository[] = repositoriesQuery.data ?? []
+  const rawRepos = repositoriesQuery.data ?? []
+  const repositories: Repository[] = useMemo(() => {
+    const list = Array.isArray(rawRepos) ? rawRepos : (rawRepos as any)?.data ?? []
+    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
+  }, [rawRepos])
 
   // Auto-select first repository if none selected
   useEffect(() => {
