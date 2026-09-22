@@ -426,17 +426,31 @@ export class OrganizationsService {
     // Queue email invitation
     if (this.emailQueueService) {
       try {
-        let inviterName = existingOrg.name;
+        let inviterName = 'An administrator';
+        let inviterEmail: string | undefined;
+
         if (inviterUserId) {
           const inviter = await this.prisma.user.findUnique({
             where: { id: inviterUserId },
             select: { name: true, email: true },
           });
-          if (inviter?.name) {
-            inviterName = inviter.name;
+          if (inviter?.name && inviter.name.trim()) {
+            inviterName = inviter.name.trim();
           } else if (inviter?.email) {
             inviterName = inviter.email;
           }
+          inviterEmail = inviter?.email;
+        } else {
+          const ownerMember = await this.prisma.organizationMember.findFirst({
+            where: { organizationId, role: Role.OWNER },
+            include: { user: { select: { name: true, email: true } } },
+          });
+          if (ownerMember?.user?.name && ownerMember.user.name.trim()) {
+            inviterName = ownerMember.user.name.trim();
+          } else if (ownerMember?.user?.email) {
+            inviterName = ownerMember.user.email;
+          }
+          inviterEmail = ownerMember?.user?.email;
         }
 
         const frontendUrl =
@@ -447,9 +461,11 @@ export class OrganizationsService {
 
         await this.emailQueueService.queueInvitationEmail(invitation.email, {
           inviterName,
+          inviterEmail,
           organizationName: existingOrg.name,
           invitationUrl,
           expiresIn: '7 days',
+          recipientEmail: invitation.email,
         });
         this.logger.log(
           `Queued invitation email for ${invitation.email} to join ${existingOrg.name}`,
@@ -640,7 +656,11 @@ export class OrganizationsService {
   /**
    * Resend invitation (creates new token with fresh expiry and re-queues email)
    */
-  async resendInvitation(organizationId: string, email: string): Promise<InvitationResponse> {
+  async resendInvitation(
+    organizationId: string,
+    email: string,
+    inviterUserId?: string,
+  ): Promise<InvitationResponse> {
     // Find existing invitation
     const existingInvitation = await this.prisma.invitation.findFirst({
       where: {
@@ -673,6 +693,34 @@ export class OrganizationsService {
           where: { id: organizationId },
           select: { name: true },
         });
+
+        let inviterName = org?.name || 'An administrator';
+        let inviterEmail: string | undefined;
+
+        if (inviterUserId) {
+          const inviter = await this.prisma.user.findUnique({
+            where: { id: inviterUserId },
+            select: { name: true, email: true },
+          });
+          if (inviter?.name && inviter.name.trim()) {
+            inviterName = inviter.name.trim();
+          } else if (inviter?.email) {
+            inviterName = inviter.email;
+          }
+          inviterEmail = inviter?.email;
+        } else {
+          const ownerMember = await this.prisma.organizationMember.findFirst({
+            where: { organizationId, role: Role.OWNER },
+            include: { user: { select: { name: true, email: true } } },
+          });
+          if (ownerMember?.user?.name && ownerMember.user.name.trim()) {
+            inviterName = ownerMember.user.name.trim();
+          } else if (ownerMember?.user?.email) {
+            inviterName = ownerMember.user.email;
+          }
+          inviterEmail = ownerMember?.user?.email;
+        }
+
         const frontendUrl =
           this.configService?.get<string>('FRONTEND_URL') ||
           process.env.FRONTEND_URL ||
@@ -680,12 +728,14 @@ export class OrganizationsService {
         const invitationUrl = `${frontendUrl}/invitations/${token}`;
 
         await this.emailQueueService.queueInvitationEmail(invitation.email, {
-          inviterName: org?.name || 'Administrator',
+          inviterName,
+          inviterEmail,
           organizationName: org?.name || 'Organization',
           invitationUrl,
           expiresIn: '7 days',
+          recipientEmail: invitation.email,
         });
-        this.logger.log(`Resent invitation email to ${invitation.email}`);
+        this.logger.log(`Resent invitation email to ${invitation.email} for ${org?.name}`);
       } catch (err) {
         this.logger.warn(
           `Failed to queue resent invitation email to ${invitation.email}: ${

@@ -573,7 +573,7 @@ export class OrganizationsController {
     // Only OWNER and ADMIN can resend invitations
     await this.organizationsService.verifyUserRole(id, userId, [Role.OWNER, Role.ADMIN]);
 
-    return this.organizationsService.resendInvitation(id, dto.email);
+    return this.organizationsService.resendInvitation(id, dto.email, userId);
   }
 
   /**
