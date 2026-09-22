@@ -29,8 +29,8 @@ export function CommitsPage() {
   })
 
   const reposQuery = useQuery({
-    queryKey: ['repositories'],
-    queryFn: () => repositoriesService.getAll(),
+    queryKey: ['repositories', 'connected'],
+    queryFn: () => repositoriesService.getConnected(),
   })
 
   const rawCommits = commitsQuery.data
@@ -40,8 +40,13 @@ export function CommitsPage() {
     ? (rawCommits as any).data
     : []
 
-  const primaryRepoId = (reposQuery.data && Array.isArray(reposQuery.data) && reposQuery.data.length > 0)
-    ? reposQuery.data[0].id
+  const connectedRepos = useMemo(() => {
+    const list = Array.isArray(reposQuery.data) ? reposQuery.data : (reposQuery.data as any)?.data ?? []
+    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
+  }, [reposQuery.data])
+
+  const primaryRepoId = (connectedRepos.length > 0)
+    ? connectedRepos[0].id
     : commits[0]?.repositoryId || ''
 
   const commitsRiskQuery = useQuery({

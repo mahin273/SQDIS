@@ -100,12 +100,17 @@ export function ReviewsPage() {
   const allReviews = reviewsListResponse?.data ?? []
 
   const reposQuery = useQuery({
-    queryKey: ['repositories'],
-    queryFn: () => repositoriesService.getAll(),
+    queryKey: ['repositories', 'connected'],
+    queryFn: () => repositoriesService.getConnected(),
   })
 
-  const primaryRepoId = (reposQuery.data && Array.isArray(reposQuery.data) && reposQuery.data.length > 0)
-    ? reposQuery.data[0].id
+  const connectedRepos = useMemo(() => {
+    const list = Array.isArray(reposQuery.data) ? reposQuery.data : (reposQuery.data as any)?.data ?? []
+    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
+  }, [reposQuery.data])
+
+  const primaryRepoId = (connectedRepos.length > 0)
+    ? connectedRepos[0].id
     : allReviews[0]?.repositoryId || allReviews[0]?.repository?.id || ''
 
   const testImpactQuery = useQuery({

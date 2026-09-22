@@ -422,8 +422,24 @@ export class GitHubService {
 
   /**
    * List available repositories from GitHub using Octokit pagination
+   * When onlyConnected is true, returns only connected/enabled repositories from the database
    */
-  async listRepositories(organizationId: string): Promise<RepositoryResponse[]> {
+  async listRepositories(organizationId: string, onlyConnected: boolean = false): Promise<RepositoryResponse[]> {
+    if (onlyConnected) {
+      const dbRepos = await this.prisma.repository.findMany({
+        where: { organizationId, isEnabled: true },
+        orderBy: { name: 'asc' },
+      });
+      return dbRepos.map((repo) => ({
+        id: repo.id,
+        githubId: repo.githubId,
+        name: repo.name,
+        fullName: repo.fullName,
+        isEnabled: repo.isEnabled,
+        lastSyncAt: repo.lastSyncAt,
+      }));
+    }
+
     const connection = await this.prisma.gitHubConnection.findUnique({
       where: { organizationId },
     });

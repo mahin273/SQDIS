@@ -308,9 +308,12 @@ export class GitHubController {
     status: 404,
     description: 'No GitHub connection found',
   })
-  async listRepositories(@GetOrganization('id') organizationId: string | undefined) {
+  async listRepositories(
+    @GetOrganization('id') organizationId: string | undefined,
+    @Query('connected') connected?: string,
+  ) {
     const orgId = this.validateOrganizationContext(organizationId);
-    return this.githubService.listRepositories(orgId);
+    return this.githubService.listRepositories(orgId, connected === 'true');
   }
 
   /**
