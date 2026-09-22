@@ -1,11 +1,12 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { authService, organizationService } from '@/services'
 import { useAuthStore, useOrganizationStore } from '@/stores'
 import type { LoginRequest, RegisterRequest } from '@/types'
 
 export function useLoginMutation() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const setUser = useAuthStore((state) => state.setUser)
   const setOrganizations = useOrganizationStore((state) => state.setOrganizations)
@@ -14,12 +15,23 @@ export function useLoginMutation() {
     mutationFn: (credentials: LoginRequest) => authService.login(credentials),
     onSuccess: async (data) => {
       setUser(data.user)
-      
+      const redirect = searchParams.get('redirect')
+      const invitationToken = searchParams.get('invitationToken')
+
+      if (invitationToken) {
+        navigate(`/invitations/${invitationToken}`)
+        return
+      }
+      if (redirect) {
+        navigate(redirect)
+        return
+      }
+
       // Fetch organizations
       try {
         const orgs = await organizationService.getAll()
         setOrganizations(orgs)
-        
+
         if (orgs.length === 0) {
           navigate('/setup/organization')
         } else {
@@ -28,7 +40,7 @@ export function useLoginMutation() {
       } catch {
         navigate('/')
       }
-      
+
       queryClient.invalidateQueries({ queryKey: ['user'] })
     },
   })
@@ -36,6 +48,7 @@ export function useLoginMutation() {
 
 export function useRegisterMutation() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const setUser = useAuthStore((state) => state.setUser)
 
@@ -44,7 +57,15 @@ export function useRegisterMutation() {
     onSuccess: (data) => {
       setUser(data.user)
       queryClient.invalidateQueries({ queryKey: ['user'] })
-      navigate('/setup/organization')
+      const invitationToken = searchParams.get('invitationToken')
+      const redirect = searchParams.get('redirect')
+      if (invitationToken) {
+        navigate(`/invitations/${invitationToken}`)
+      } else if (redirect) {
+        navigate(redirect)
+      } else {
+        navigate('/setup/organization')
+      }
     },
   })
 }

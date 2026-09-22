@@ -174,7 +174,7 @@ describe('AuthService', () => {
   });
 
   it('rejects duplicate registration emails', async () => {
-    prisma.user.findUnique.mockResolvedValue(user);
+    prisma.user.findUnique.mockResolvedValue({ ...user, passwordHash: 'stored-hash' });
 
     await expect(
       service.register({
@@ -184,6 +184,32 @@ describe('AuthService', () => {
       }),
     ).rejects.toBeInstanceOf(ConflictException);
     expect(prisma.user.create).not.toHaveBeenCalled();
+  });
+
+  it('activates an unactivated placeholder user on registration', async () => {
+    prisma.user.findUnique.mockResolvedValue({
+      ...user,
+      passwordHash: null,
+      githubId: null,
+      googleId: null,
+    });
+    prisma.user.update.mockResolvedValue({
+      ...user,
+      passwordHash: 'new-hash',
+    });
+
+    const result = await service.register({
+      email: 'dev@example.com',
+      password: 'Str0ngPass!',
+      name: 'Activated User',
+    });
+
+    expect(prisma.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: user.id },
+      }),
+    );
+    expect(result).toHaveProperty('accessToken');
   });
 
   it('logs in with a valid password and rejects invalid credentials', async () => {

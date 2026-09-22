@@ -7,6 +7,7 @@ import type {
   InviteMemberRequest,
   Invitation,
   UpdateMemberRequest,
+  RepositoryContributor,
 } from '@/types';
 
 export const organizationService = {
@@ -80,10 +81,33 @@ export const organizationService = {
   },
 
   /**
+   * Get discovered repository contributors from connected repositories
+   */
+  async getRepositoryContributors(id: string): Promise<RepositoryContributor[]> {
+    try {
+      const response = await api.get<RepositoryContributor[]>(`/organizations/${id}/repository-contributors`);
+      return response.data || [];
+    } catch (err: any) {
+      if (err?.response?.status === 404) {
+        return [];
+      }
+      throw err;
+    }
+  },
+
+  /**
    * Invite a member to the organization
    */
   async inviteMember(id: string, data: InviteMemberRequest): Promise<Invitation> {
     const response = await api.post<Invitation>(`/organizations/${id}/invite`, data);
+    return response.data;
+  },
+
+  /**
+   * Invite all uninvited members and contributors
+   */
+  async inviteAll(id: string): Promise<{ totalInvited: number; emails: string[] }> {
+    const response = await api.post<{ totalInvited: number; emails: string[] }>(`/organizations/${id}/invite-all`);
     return response.data;
   },
 

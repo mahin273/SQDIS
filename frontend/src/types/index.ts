@@ -142,6 +142,8 @@ export interface OrganizationMember {
   role: UserRole;
   user: User;
   joinedAt: string;
+  status?: 'ACTIVE' | 'INVITED' | 'UNINVITED';
+  invitationId?: string | null;
 }
 
 export interface UpdateMemberRequest {
@@ -166,6 +168,19 @@ export interface Invitation {
 
 export interface AcceptInvitationRequest {
   token: string;
+}
+
+export interface RepositoryContributor {
+  email: string;
+  name: string;
+  commitCount: number;
+  lastCommittedAt: string | null;
+  repositories: string[];
+  isMember: boolean;
+  isInvited: boolean;
+  memberRole?: UserRole | null;
+  invitationId?: string | null;
+  userId?: string | null;
 }
 
 // ============== DASHBOARD ==============
