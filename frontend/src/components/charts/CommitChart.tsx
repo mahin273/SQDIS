@@ -31,7 +31,7 @@ export function CommitChart({ data, height = 300, className }: CommitChartProps)
           <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
           <XAxis dataKey="date" tickLine={false} axisLine={false} fontSize={12} stroke="#64748b" />
           <YAxis tickLine={false} axisLine={false} fontSize={12} stroke="#64748b" />
-          <Tooltip contentStyle={{ borderRadius: 8, borderColor: '#cbd5e1' }} />
+          <Tooltip cursor={false} contentStyle={{ borderRadius: 8, borderColor: '#cbd5e1' }} />
           <Legend />
           <Bar dataKey="commits" fill="#2563eb" radius={[4, 4, 0, 0]} />
           <Bar dataKey="additions" fill="#16a34a" radius={[4, 4, 0, 0]} />
