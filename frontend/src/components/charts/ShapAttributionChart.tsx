@@ -10,7 +10,6 @@ import {
   Cell,
   ReferenceLine
 } from 'recharts'
-import { formatNumber } from '@/lib/utils'
 
 interface ShapAttributionChartProps {
   shapValues: Record<string, number>
