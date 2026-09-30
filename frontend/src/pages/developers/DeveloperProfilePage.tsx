@@ -3,8 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { GitCommit, ShieldCheck, TrendingUp, MessageSquare, Bug, Activity, Clock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ChartSuspense, TrendChart } from '@/components/charts'
-import { developersService } from '@/services'
+import { ChartSuspense, TrendChart, ShapAttributionChart } from '@/components/charts'
+import { developersService, scoresService } from '@/services'
 import { formatDate, formatNumber } from '@/lib/utils'
 import { MetricTile, PageHeader, QueryState, formatScore } from '../pageUtils'
 
@@ -20,9 +20,15 @@ export function DeveloperProfilePage() {
     queryFn: () => developersService.getStats(id),
     enabled: !!id,
   })
+  const shapQuery = useQuery({
+    queryKey: ['developers', 'shap', id],
+    queryFn: () => scoresService.getDQSExplanation(id),
+    enabled: !!id,
+  })
 
   const developer = developerQuery.data
   const stats = statsQuery.data
+  const shapData = shapQuery.data
 
   const bugfixRatio = stats ? (stats.techDebtResolved / Math.max(1, stats.techDebtIntroduced + stats.techDebtResolved)) * 100 : 0
   const turnaroundStr = stats?.avgReviewTurnaround 
@@ -37,11 +43,12 @@ export function DeveloperProfilePage() {
         action={developer?.status && <Badge variant={developer.status === 'ACTIVE' ? 'success' : 'secondary'}>{developer.status}</Badge>}
       />
       <QueryState
-        isLoading={developerQuery.isLoading || statsQuery.isLoading}
-        error={developerQuery.error || statsQuery.error}
+        isLoading={developerQuery.isLoading || statsQuery.isLoading || shapQuery.isLoading}
+        error={developerQuery.error || statsQuery.error || shapQuery.error}
         onRetry={() => {
           developerQuery.refetch()
           statsQuery.refetch()
+          shapQuery.refetch()
         }}
       >
         <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
@@ -86,6 +93,19 @@ export function DeveloperProfilePage() {
                   </p>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="mt-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>SHAP Feature Attribution Radar Chart</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ChartSuspense>
+                <ShapAttributionChart shapValues={shapData?.shapValues ?? {}} />
+              </ChartSuspense>
             </CardContent>
           </Card>
         </div>
