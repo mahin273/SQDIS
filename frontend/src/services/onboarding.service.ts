@@ -94,10 +94,14 @@ export const onboardingService = {
    * Get available mentors for assignment
    */
   async getAvailableMentors(): Promise<Array<{ id: string; name: string; avatarUrl?: string; currentMentees: number }>> {
-    const response = await api.get<Array<{ id: string; name: string; avatarUrl?: string; currentMentees: number }>>(
+    const response = await api.get<Array<any>>(
       '/onboarding/mentors/available'
     );
-    return response.data;
+    return response.data.map(m => ({
+      id: m.mentorId,
+      name: m.mentorName,
+      currentMentees: m.currentMenteeCount,
+    }));
   },
 
   /**

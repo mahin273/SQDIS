@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Modal } from '@/components/ui/modal'
 import { Button } from '@/components/ui/button'
 export interface MentorOption {
@@ -23,6 +23,12 @@ export function AssignMentorModal({
   isPending?: boolean
 }) {
   const [selectedMentorId, setSelectedMentorId] = useState('')
+
+  useEffect(() => {
+    if (open) {
+      setSelectedMentorId('')
+    }
+  }, [open])
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()

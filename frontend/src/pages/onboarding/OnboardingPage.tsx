@@ -46,6 +46,7 @@ export function OnboardingPage() {
       onboardingService.assignMentor(trackId, mentorId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.all() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.onboarding.availableMentors })
       setSelectedTrackId(null)
     },
   })
