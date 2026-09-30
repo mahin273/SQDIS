@@ -54,6 +54,7 @@ export default function CommitActivityChart() {
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} width={36} allowDecimals={false} />
             <Tooltip
+              cursor={false}
               formatter={(value) => [value, 'Commits']}
               contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '8px', border: 'none', color: '#fff' }}
             />
