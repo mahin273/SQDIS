@@ -1,6 +1,6 @@
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { GitCommit, ShieldCheck, TrendingUp } from 'lucide-react'
+import { GitCommit, ShieldCheck, TrendingUp, MessageSquare, Bug, Activity, Clock } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ChartSuspense, TrendChart } from '@/components/charts'
@@ -24,6 +24,11 @@ export function DeveloperProfilePage() {
   const developer = developerQuery.data
   const stats = statsQuery.data
 
+  const bugfixRatio = stats ? (stats.techDebtResolved / Math.max(1, stats.techDebtIntroduced + stats.techDebtResolved)) * 100 : 0
+  const turnaroundStr = stats?.avgReviewTurnaround 
+    ? (stats.avgReviewTurnaround > 60 ? `${(stats.avgReviewTurnaround/60).toFixed(1)}h` : `${stats.avgReviewTurnaround}m`) 
+    : '0m'
+
   return (
     <div>
       <PageHeader
@@ -39,10 +44,14 @@ export function DeveloperProfilePage() {
           statsQuery.refetch()
         }}
       >
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
           <MetricTile label="DQS" value={formatScore(stats?.dqs ?? developer?.dqs)} icon={<TrendingUp className="h-5 w-5" />} />
-          <MetricTile label="Commits" value={formatNumber(stats?.commits ?? 0)} icon={<GitCommit className="h-5 w-5" />} />
-          <MetricTile label="Coverage" value={`${formatScore(stats?.codeCoverage)}%`} icon={<ShieldCheck className="h-5 w-5" />} />
+          <MetricTile label="Commit Cadence" value={formatNumber(stats?.commits ?? 0)} icon={<GitCommit className="h-5 w-5" />} />
+          <MetricTile label="Test Coverage of Touched Files" value={`${formatScore(stats?.codeCoverage)}%`} icon={<ShieldCheck className="h-5 w-5" />} />
+          <MetricTile label="Review Contributions" value={formatNumber((stats?.reviewsGiven ?? 0) + (stats?.reviewsReceived ?? 0))} icon={<MessageSquare className="h-5 w-5" />} />
+          <MetricTile label="Bugfix Ratio" value={`${bugfixRatio.toFixed(1)}%`} icon={<Bug className="h-5 w-5" />} />
+          <MetricTile label="Code Churn Volatility" value={formatNumber((stats?.insertions ?? 0) + (stats?.deletions ?? 0))} icon={<Activity className="h-5 w-5" />} />
+          <MetricTile label="Review Turnaround Latency" value={turnaroundStr} icon={<Clock className="h-5 w-5" />} />
         </div>
 
         <div className="mt-6 grid gap-6 xl:grid-cols-2">
