@@ -66,8 +66,14 @@ export const scoresService = {
    * Get risky modules for a project
    */
   async getRiskyModules(projectId: string): Promise<RiskModule[]> {
-    const response = await api.get<RiskModule[]>(`/scores/sqs/${projectId}/risks`);
-    return response.data;
+    const response = await api.get<any>(`/scores/sqs/${projectId}/risks`);
+    if (Array.isArray(response.data)) {
+      return response.data;
+    }
+    if (Array.isArray(response.data?.riskyModules)) {
+      return response.data.riskyModules;
+    }
+    return [];
   },
 
   /**

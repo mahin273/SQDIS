@@ -175,12 +175,21 @@ export function ScoresPage() {
                             {module.modulePath}
                           </p>
                           <p className="text-xs text-slate-500">
-                            Recommendation: {module.recommendation} | Risk Factors: {module.riskFactors.join(', ')}
+                            Recommendation: {module.recommendation} | Risk Factors: {Array.isArray(module.riskFactors) && module.riskFactors.length > 0 ? module.riskFactors.join(', ') : (module.reason || 'High churn or complexity')}
                           </p>
                         </div>
                       </div>
-                      <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/40 dark:text-rose-400">
-                        Score: {module.riskScore}
+                      <Badge
+                        variant="outline"
+                        className={
+                          module.risk_level === 'CRITICAL'
+                            ? 'bg-rose-100 text-rose-800 border-rose-300 dark:bg-rose-950/40 dark:text-rose-400'
+                            : module.risk_level === 'HIGH'
+                            ? 'bg-orange-100 text-orange-800 border-orange-300 dark:bg-orange-950/40 dark:text-orange-400'
+                            : 'bg-amber-100 text-amber-800 border-amber-300 dark:bg-amber-950/40 dark:text-amber-400'
+                        }
+                      >
+                        {module.risk_level ? `${module.risk_level} (${module.riskScore})` : `Score: ${module.riskScore}`}
                       </Badge>
                     </div>
                   ))}

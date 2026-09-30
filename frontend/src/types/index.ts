@@ -1697,6 +1697,9 @@ export interface RiskModule {
   riskScore: number;
   riskFactors: string[];
   recommendation: string;
+  path?: string;
+  risk_level?: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | string;
+  reason?: string;
 }
 
 export interface RecalculateRequest {
