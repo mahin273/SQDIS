@@ -38,10 +38,24 @@ export const scoresService = {
    * Get SHAP explanations for developer DQS score
    */
   async getDQSExplanation(developerId: string): Promise<{ shapValues: Record<string, number>; recommendation: string }> {
-    const response = await api.get<{ shapValues: Record<string, number>; recommendation: string }>(
+    const response = await api.get<any>(
       `/scores/dqs/${developerId}/explain`
     );
-    return response.data;
+    
+    const shapValues: Record<string, number> = {};
+    if (response.data?.explanation?.topFeatures) {
+      response.data.explanation.topFeatures.forEach((f: any) => {
+        shapValues[f.feature] = f.impact;
+      });
+    } else if (response.data?.shapValues) {
+      // Fallback if backend gets updated
+      Object.assign(shapValues, response.data.shapValues);
+    }
+
+    return {
+      shapValues,
+      recommendation: response.data?.recommendation || "Focus on improving areas with negative impact.",
+    };
   },
 
   /**
