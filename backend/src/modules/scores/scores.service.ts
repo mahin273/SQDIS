@@ -529,29 +529,45 @@ export class ScoresService {
         recommendation?: string;
       }>) || [];
 
-    // Filter to only HIGH and CRITICAL risk modules
-    const highRiskModules = riskyModules
+    // Filter to prioritized risky modules (CRITICAL, HIGH, and MEDIUM)
+    const prioritizedModules = riskyModules
       .filter(
         (m) =>
-          m.risk_level === 'HIGH' ||
           m.risk_level === 'CRITICAL' ||
-          (m.riskScore !== undefined && m.riskScore >= 70),
+          m.risk_level === 'HIGH' ||
+          m.risk_level === 'MEDIUM' ||
+          (m.riskScore !== undefined && m.riskScore >= 30),
       )
-      .map((m) => ({
-        path: m.path || m.modulePath || '',
-        modulePath: m.modulePath || m.path || '',
-        risk_level: m.risk_level || (m.riskScore && m.riskScore >= 90 ? 'CRITICAL' : 'HIGH'),
-        reason: m.reason || (m.riskFactors ? m.riskFactors.join(', ') : 'High complexity and churn'),
-        riskScore: m.riskScore ?? (m.risk_level === 'CRITICAL' ? 90 : 75),
-        riskFactors: m.riskFactors ?? (m.reason ? [m.reason] : ['High complexity']),
-        recommendation: m.recommendation ?? `Review and refactor ${m.path || m.modulePath || 'module'}`,
-      }));
+      .map((m) => {
+        const level =
+          m.risk_level ||
+          (m.riskScore && m.riskScore >= 90
+            ? 'CRITICAL'
+            : m.riskScore && m.riskScore >= 70
+            ? 'HIGH'
+            : 'MEDIUM');
+        const defaultScore = level === 'CRITICAL' ? 90 : level === 'HIGH' ? 75 : 50;
+        return {
+          path: m.path || m.modulePath || '',
+          modulePath: m.modulePath || m.path || '',
+          risk_level: level,
+          reason: m.reason || (m.riskFactors ? m.riskFactors.join(', ') : 'High complexity and churn'),
+          riskScore: m.riskScore ?? defaultScore,
+          riskFactors: m.riskFactors ?? (m.reason ? [m.reason] : ['High complexity']),
+          recommendation: m.recommendation ?? `Review and refactor ${m.path || m.modulePath || 'module'}`,
+        };
+      })
+      .sort((a, b) => b.riskScore - a.riskScore);
+
+    const highCriticalCount = prioritizedModules.filter(
+      (m) => m.risk_level === 'CRITICAL' || m.risk_level === 'HIGH' || m.riskScore >= 70,
+    ).length;
 
     const result = {
       projectId: targetProjectId,
-      riskyModules: highRiskModules,
+      riskyModules: prioritizedModules,
       totalRiskyModules: riskyModules.length,
-      highCriticalCount: highRiskModules.length,
+      highCriticalCount,
       calculatedAt: latestScore.calculatedAt,
     };
 
