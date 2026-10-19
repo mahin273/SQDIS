@@ -65,7 +65,9 @@ export default function SQSTrendChart() {
                 const v = typeof value === 'number' ? value.toFixed(1) : String(value)
                 return [v, 'Avg SQS']
               }}
-              contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '8px', border: 'none', color: '#fff' }}
+              contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderRadius: '8px', border: '1px solid #334155', color: '#fff' }}
+              labelStyle={{ color: '#f8fafc', fontWeight: 600, marginBottom: '4px' }}
+              itemStyle={{ color: '#818cf8', fontWeight: 500 }}
             />
             <Line
               type="monotone"

@@ -76,8 +76,10 @@ export default function TeamPerformanceChart() {
                 return [v, 'Avg DQS']
               }}
               contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderRadius: '8px', border: '1px solid #334155', color: '#fff' }}
+              labelStyle={{ color: '#f8fafc', fontWeight: 600, marginBottom: '4px' }}
+              itemStyle={{ color: '#34d399', fontWeight: 500 }}
             />
-            <Bar dataKey="avgDqs" radius={[0, 4, 4, 0]} maxBarSize={36}>
+            <Bar dataKey="avgDqs" fill="#10b981" radius={[0, 4, 4, 0]} maxBarSize={36}>
               {data.map((entry) => (
                 <Cell key={entry.id} fill={toneForScore(entry.avgDqs || 0)} />
               ))}

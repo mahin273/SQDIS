@@ -56,7 +56,9 @@ export default function CommitActivityChart() {
             <Tooltip
               cursor={false}
               formatter={(value) => [value, 'Commits']}
-              contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.9)', borderRadius: '8px', border: 'none', color: '#fff' }}
+              contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', borderRadius: '8px', border: '1px solid #334155', color: '#fff' }}
+              labelStyle={{ color: '#f8fafc', fontWeight: 600, marginBottom: '4px' }}
+              itemStyle={{ color: '#60a5fa', fontWeight: 500 }}
             />
             <Bar dataKey="commits" fill="#3b82f6" radius={[4, 4, 0, 0]} />
           </BarChart>
