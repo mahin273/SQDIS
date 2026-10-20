@@ -41,10 +41,10 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
   const medianXPercent = (medianChurn / maxChurn) * 100;
 
   return (
-    <div className="flex flex-col h-full space-y-3">
+    <div className="flex flex-col h-full space-y-4">
       {/* Matrix Canvas Container */}
       <div className="relative w-full h-[460px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner p-6 select-none">
-        {/* Background Quadrant Shading & Watermarks */}
+        {/* Background Quadrant Shading & Corner Header Badges */}
         {/* Quadrant 1 (Top-Right): DANGER ZONE */}
         <div
           style={{
@@ -53,15 +53,12 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
             width: `${100 - medianXPercent}%`,
             height: `${thresholdYPercent}%`,
           }}
-          className="absolute bg-rose-500/10 border-l border-b border-rose-500/20 p-3 pointer-events-none flex flex-col justify-between"
+          className="absolute bg-rose-500/10 border-l border-b border-rose-500/20 p-3 pointer-events-none"
         >
-          <div className="flex items-center gap-1.5 text-rose-400 font-bold text-xs uppercase tracking-wider">
-            <Flame className="w-4 h-4 text-rose-500" />
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold text-xs uppercase tracking-wider w-fit backdrop-blur-xs">
+            <Flame className="w-3.5 h-3.5 text-rose-500" />
             <span>Danger Zone</span>
           </div>
-          <span className="text-[10px] text-rose-300/60 max-w-[200px]">
-            High Churn & High Complexity — Origin of ~80% of Production Outages
-          </span>
         </div>
 
         {/* Quadrant 2 (Top-Left): STABLE COMPLEX */}
@@ -72,15 +69,12 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
             width: `${medianXPercent}%`,
             height: `${thresholdYPercent}%`,
           }}
-          className="absolute bg-amber-500/5 border-b border-amber-500/20 p-3 pointer-events-none flex flex-col justify-between"
+          className="absolute bg-amber-500/5 border-b border-amber-500/20 p-3 pointer-events-none"
         >
-          <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs uppercase tracking-wider">
-            <AlertOctagon className="w-4 h-4 text-amber-500" />
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold text-xs uppercase tracking-wider w-fit backdrop-blur-xs">
+            <AlertOctagon className="w-3.5 h-3.5 text-amber-500" />
             <span>Stable Complex</span>
           </div>
-          <span className="text-[10px] text-amber-300/60 max-w-[180px]">
-            High Complexity, Low Churn — Legacy logic; avoid unnecessary refactoring
-          </span>
         </div>
 
         {/* Quadrant 3 (Bottom-Right): ACTIVE SIMPLE */}
@@ -91,18 +85,15 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
             width: `${100 - medianXPercent}%`,
             height: `${100 - thresholdYPercent}%`,
           }}
-          className="absolute bg-blue-500/5 border-l border-blue-500/20 p-3 pointer-events-none flex flex-col justify-between"
+          className="absolute bg-blue-500/5 border-l border-blue-500/20 p-3 pointer-events-none flex flex-col justify-end"
         >
-          <div className="flex items-center gap-1.5 text-blue-400 font-bold text-xs uppercase tracking-wider">
-            <RefreshCw className="w-4 h-4 text-blue-500" />
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold text-xs uppercase tracking-wider w-fit backdrop-blur-xs">
+            <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
             <span>Active Simple</span>
           </div>
-          <span className="text-[10px] text-blue-300/60 max-w-[180px]">
-            High Churn, Low Complexity — Well-factored frequently updated modules
-          </span>
         </div>
 
-        {/* Quadrant 4 (Bottom-Left): HEALTHY */}
+        {/* Quadrant 4 (Bottom-Left): HEALTHY BASELINE */}
         <div
           style={{
             left: 0,
@@ -110,31 +101,28 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
             width: `${medianXPercent}%`,
             height: `${100 - thresholdYPercent}%`,
           }}
-          className="absolute bg-emerald-500/5 p-3 pointer-events-none flex flex-col justify-between"
+          className="absolute bg-emerald-500/5 p-3 pointer-events-none flex flex-col justify-end"
         >
-          <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs uppercase tracking-wider">
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs uppercase tracking-wider w-fit backdrop-blur-xs">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
             <span>Healthy Baseline</span>
           </div>
-          <span className="text-[10px] text-emerald-300/60 max-w-[180px]">
-            Low Churn & Low Complexity — Well-structured, stable code
-          </span>
         </div>
 
-        {/* Threshold Reference Lines */}
+        {/* Threshold Reference Lines with Solid Dark Margin Badges */}
         <div
           style={{ top: `${thresholdYPercent}%` }}
-          className="absolute left-0 right-0 border-t border-dashed border-slate-600 pointer-events-none z-10"
+          className="absolute left-0 right-0 border-t border-dashed border-slate-600/80 pointer-events-none z-10"
         >
-          <span className="absolute right-2 -top-4 text-[10px] font-mono text-slate-400">
+          <span className="absolute right-3 -top-3 text-[10px] font-mono text-slate-300 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-700/80 shadow-xs z-30">
             Complexity Threshold (CC = {complexityThreshold})
           </span>
         </div>
         <div
           style={{ left: `${medianXPercent}%` }}
-          className="absolute top-0 bottom-0 border-l border-dashed border-slate-600 pointer-events-none z-10"
+          className="absolute top-0 bottom-0 border-l border-dashed border-slate-600/80 pointer-events-none z-10"
         >
-          <span className="absolute -left-16 bottom-2 text-[10px] font-mono text-slate-400">
+          <span className="absolute -left-12 bottom-3 text-[10px] font-mono text-slate-300 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-700/80 shadow-xs z-30">
             Median Churn ({medianChurn})
           </span>
         </div>
@@ -190,8 +178,51 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
         })}
       </div>
 
+      {/* 4-Card Quadrant Architectural Health Guide Strip */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5">
+        <div className="p-3 rounded-xl border border-rose-500/20 bg-rose-500/5 text-left space-y-1">
+          <div className="flex items-center gap-1.5 text-rose-400 font-bold text-xs uppercase tracking-wider">
+            <Flame className="w-3.5 h-3.5 text-rose-500 shrink-0" />
+            <span>Danger Zone</span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            High churn & high complexity. Primary origin of ~80% of production outages. Immediate refactoring priority.
+          </p>
+        </div>
+
+        <div className="p-3 rounded-xl border border-amber-500/20 bg-amber-500/5 text-left space-y-1">
+          <div className="flex items-center gap-1.5 text-amber-400 font-bold text-xs uppercase tracking-wider">
+            <AlertOctagon className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <span>Stable Complex</span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            High complexity, low churn. Legacy logic with low modification velocity; avoid risky or unnecessary refactoring.
+          </p>
+        </div>
+
+        <div className="p-3 rounded-xl border border-blue-500/20 bg-blue-500/5 text-left space-y-1">
+          <div className="flex items-center gap-1.5 text-blue-400 font-bold text-xs uppercase tracking-wider">
+            <RefreshCw className="w-3.5 h-3.5 text-blue-500 shrink-0" />
+            <span>Active Simple</span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            High churn, low complexity. Well-factored, modular code updated frequently with minimal architectural risk.
+          </p>
+        </div>
+
+        <div className="p-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 text-left space-y-1">
+          <div className="flex items-center gap-1.5 text-emerald-400 font-bold text-xs uppercase tracking-wider">
+            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>Healthy Baseline</span>
+          </div>
+          <p className="text-[11px] text-slate-400 leading-relaxed">
+            Low churn & low complexity. Stable foundation of the codebase operating in an optimal architectural state.
+          </p>
+        </div>
+      </div>
+
       {/* Axis Information Banner */}
-      <div className="flex items-center justify-between text-xs text-slate-500 px-1 pt-1">
+      <div className="flex items-center justify-between text-xs text-slate-500 px-1 pt-0.5">
         <div className="flex items-center gap-2">
           <span className="font-semibold text-slate-600 dark:text-slate-400">Axes:</span>
           <span>Horizontal = Commit Churn (Touches)</span>
