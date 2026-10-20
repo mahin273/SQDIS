@@ -296,14 +296,45 @@ export interface DashboardAlert {
 
 // ============== TEAMS ==============
 
+export interface TeamMemberProfile extends User {
+  dqsScore?: number;
+  commits?: number;
+}
+
+export interface TeamProjectSummary extends Project {
+  sqsScore?: number;
+}
+
+export interface TeamCommit {
+  id: string;
+  sha: string;
+  message: string;
+  classification?: string | null;
+  linesAdded: number;
+  linesDeleted: number;
+  committedAt: string;
+  authorName: string;
+  authorEmail: string;
+  repository?: {
+    id: string;
+    name: string;
+  };
+  developer?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  };
+}
+
 export interface Team {
   id: string;
   name: string;
   description?: string;
   leadId?: string;
   lead?: User | null;
-  members?: User[];
-  projects?: Project[];
+  members?: TeamMemberProfile[];
+  projects?: TeamProjectSummary[];
   score?: number;
   avgDqs?: number;
   commits?: number;
@@ -351,8 +382,9 @@ export interface TeamMetrics {
   teamId: string;
   teamName: string;
   memberCount: number;
-  avgDqs: number;
-  avgSqs: number;
+  avgDqs?: number;
+  avgSqs?: number;
+  aggregatedDQS?: number;
   totalCommits: number;
   reviewsCompleted: number;
   avgReviewTurnaround: number;

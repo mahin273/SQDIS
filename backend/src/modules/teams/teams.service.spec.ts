@@ -18,6 +18,7 @@ describe('TeamsService', () => {
     user: Record<string, jest.Mock>;
     commit: Record<string, jest.Mock>;
     dQSScore: Record<string, jest.Mock>;
+    sQSScore: Record<string, jest.Mock>;
     $transaction: jest.Mock;
   };
   let cacheService: { deletePattern: jest.Mock };
@@ -54,10 +55,15 @@ describe('TeamsService', () => {
         findFirst: jest.fn(),
       },
       commit: {
-        count: jest.fn(),
+        count: jest.fn().mockResolvedValue(0),
+        groupBy: jest.fn().mockResolvedValue([]),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       dQSScore: {
-        findFirst: jest.fn(),
+        findFirst: jest.fn().mockResolvedValue(null),
+      },
+      sQSScore: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
       $transaction: jest.fn((operations) => Promise.all(operations)),
     };
@@ -175,5 +181,19 @@ describe('TeamsService', () => {
       data: { isActive: false },
     });
     expect(cacheService.deletePattern).toHaveBeenCalled();
+  });
+
+  it('retrieves commits authored by squad members', async () => {
+    prisma.team.findUnique.mockResolvedValueOnce({
+      ...team,
+      memberships: [{ userId: 'user-1' }],
+    });
+    prisma.commit.findMany.mockResolvedValueOnce([
+      { id: 'commit-1', message: 'feat: add team workbench' },
+    ]);
+
+    const result = await service.getTeamCommits('team-1', 20);
+    expect(result).toHaveLength(1);
+    expect(prisma.commit.findMany).toHaveBeenCalled();
   });
 });

@@ -263,7 +263,144 @@ export class TeamsService {
       throw new NotFoundException('Team not found');
     }
 
-    return team;
+    const memberUserIds = (team.memberships ?? []).map((m) => m.user.id);
+
+    // Fetch latest DQS scores for all members
+    const dqsScores = await Promise.all(
+      memberUserIds.map((userId) =>
+        this.prisma.dQSScore.findFirst({
+          where: { developerId: userId },
+          orderBy: { calculatedAt: 'desc' },
+          select: { score: true, developerId: true },
+        }),
+      ),
+    );
+    const dqsMap = new Map<string, number>();
+    dqsScores.filter(Boolean).forEach((s) => {
+      if (s) dqsMap.set(s.developerId, s.score);
+    });
+
+    // Fetch commit counts for all members
+    const commitCounts = await this.prisma.commit.groupBy({
+      by: ['developerId'],
+      where: {
+        developerId: { in: memberUserIds },
+        repository: { organizationId: team.organizationId },
+      },
+      _count: { id: true },
+    });
+    const commitMap = new Map<string, number>();
+    let totalCommits = 0;
+    commitCounts.forEach((c) => {
+      if (c.developerId) {
+        commitMap.set(c.developerId, c._count.id);
+        totalCommits += c._count.id;
+      }
+    });
+
+    // Enrich members
+    const members = (team.memberships ?? []).map((m) => {
+      const u = m.user;
+      const dqsScore = dqsMap.get(u.id) ?? null;
+      const commits = commitMap.get(u.id) ?? 0;
+      return {
+        ...u,
+        dqsScore,
+        commits,
+      };
+    });
+
+    // Calculate squad avgDqs
+    const validScores = Array.from(dqsMap.values());
+    const avgDqs = validScores.length > 0
+      ? Math.round((validScores.reduce((a, b) => a + b, 0) / validScores.length) * 10) / 10
+      : null;
+
+    // Enrich project assignments with latest SQS score
+    const projects = await Promise.all(
+      (team.projectAssignments ?? []).map(async (pa) => {
+        const p = pa.project;
+        const latestSQS = await this.prisma.sQSScore.findFirst({
+          where: { projectId: p.id },
+          orderBy: { calculatedAt: 'desc' },
+          select: { score: true },
+        });
+        return {
+          ...p,
+          sqsScore: latestSQS?.score ? Number(latestSQS.score.toFixed(1)) : null,
+        };
+      }),
+    );
+
+    return {
+      ...team,
+      avgDqs,
+      score: avgDqs,
+      commits: totalCommits,
+      memberCount: team._count?.memberships ?? members.length,
+      projectCount: team._count?.projectAssignments ?? projects.length,
+      members,
+      projects,
+    };
+  }
+
+  /**
+   * Get recent commits authored by team members
+   */
+  async getTeamCommits(teamId: string, limit: number = 20) {
+    const team = await this.prisma.team.findUnique({
+      where: { id: teamId },
+      include: {
+        memberships: {
+          where: { leftAt: null },
+          select: { userId: true },
+        },
+      },
+    });
+
+    if (!team || !team.memberships || team.memberships.length === 0) {
+      return [];
+    }
+
+    const memberUserIds = team.memberships.map((m) => m.userId);
+
+    const commits = await this.prisma.commit.findMany({
+      where: {
+        developerId: { in: memberUserIds },
+        repository: {
+          organizationId: team.organizationId,
+        },
+      },
+      orderBy: { committedAt: 'desc' },
+      take: limit,
+      select: {
+        id: true,
+        sha: true,
+        message: true,
+        classification: true,
+        linesAdded: true,
+        linesDeleted: true,
+        committedAt: true,
+        authorName: true,
+        authorEmail: true,
+        repository: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        developer: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+            avatarUrl: true,
+          },
+        },
+      },
+    });
+
+    return commits;
   }
 
   /**

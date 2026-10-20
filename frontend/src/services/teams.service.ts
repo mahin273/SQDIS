@@ -36,11 +36,22 @@ export const teamsService = {
 
     return {
       ...team,
-      members: (team.memberships ?? []).map((membership: any) => membership.user),
-      projects: (team.projectAssignments ?? []).map((assignment: any) => assignment.project),
+      score: team.avgDqs ?? team.score,
+      avgDqs: team.avgDqs ?? team.score,
+      members: team.members ?? (team.memberships ?? []).map((membership: any) => membership.user).filter(Boolean),
+      projects: team.projects ?? (team.projectAssignments ?? []).map((assignment: any) => assignment.project).filter(Boolean),
       memberCount: team.memberCount ?? team._count?.memberships ?? team.memberships?.length ?? 0,
       projectCount: team.projectCount ?? team._count?.projectAssignments ?? team.projectAssignments?.length ?? 0,
+      commits: team.commits ?? 0,
     };
+  },
+
+  /**
+   * Get recent commits authored by team members
+   */
+  async getCommits(id: string, limit: number = 20): Promise<any[]> {
+    const response = await api.get<any[]>(`/teams/${id}/commits`, { params: { limit } });
+    return response.data;
   },
 
   /**

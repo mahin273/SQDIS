@@ -154,6 +154,33 @@ export class TeamsController {
   }
 
   /**
+   * Get recent commits authored by team members
+   */
+  @Get(':id/commits')
+  @ApiOperation({ summary: 'Get recent commits authored by team members' })
+  @ApiParam({ name: 'id', description: 'Team ID' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Number of commits to return (default: 20)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Recent commits authored by squad members',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Team not found',
+  })
+  async getTeamCommits(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+    @Query('limit') limit?: number,
+  ) {
+    if (!organizationId) {
+      throw new BadRequestException('Organization ID is required');
+    }
+    await this.teamsService.verifyTeamAccess(id, '', organizationId);
+    return this.teamsService.getTeamCommits(id, limit ? Number(limit) : 20);
+  }
+
+  /**
    * Get team metrics
    */
   @Get(':id/metrics')
