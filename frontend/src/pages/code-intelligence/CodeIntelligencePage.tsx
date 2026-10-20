@@ -367,11 +367,6 @@ export const CodeIntelligencePage: React.FC = () => {
                   </select>
                 </div>
 
-                <div className="flex items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-slate-500 dark:border-slate-800 dark:bg-slate-900">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
-                  <span>NASA MDP & Kamei JIT Active</span>
-                </div>
-
                 {repoStats && (
                   <div className="flex items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-slate-500 dark:border-slate-800 dark:bg-slate-900">
                     <GitCommit className="h-3.5 w-3.5 text-emerald-500" />
