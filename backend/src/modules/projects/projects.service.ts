@@ -246,7 +246,7 @@ export class ProjectsService {
   }
 
   /**
-   * Find all projects for an organization with role-based filtering
+   * Find all projects for an organization with role-based filtering and enriched telemetry
    */
   async findAll(organizationId: string, userId: string, userRole: Role) {
     // Apply role-based filtering using DataFilterService
@@ -256,12 +256,37 @@ export class ProjectsService {
       organizationId,
     );
 
-    return this.prisma.project.findMany({
+    const projects = await this.prisma.project.findMany({
       where: {
         ...filter,
         isActive: true,
       },
       include: {
+        repositories: {
+          include: {
+            repository: {
+              select: {
+                id: true,
+                name: true,
+                fullName: true,
+                isEnabled: true,
+                lastSyncAt: true,
+              },
+            },
+          },
+        },
+        teamAssignments: {
+          where: { endDate: null },
+          include: {
+            team: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
+              },
+            },
+          },
+        },
         _count: {
           select: {
             repositories: true,
@@ -275,6 +300,88 @@ export class ProjectsService {
         name: 'asc',
       },
     });
+
+    // Enrich each project with latest SQS score, trend, and commit counts
+    const enrichedProjects = await Promise.all(
+      projects.map(async (project) => {
+        const repoList = project.repositories ?? [];
+        const repoIds = repoList.map((pr: any) => pr.repositoryId || pr.repository?.id).filter(Boolean);
+
+        // Fetch latest SQS score (checking direct projectId, then linked repoIds)
+        let latestSQS = await this.prisma.sQSScore.findFirst({
+          where: { projectId: project.id },
+          orderBy: { calculatedAt: 'desc' },
+        });
+
+        if (!latestSQS && repoIds.length > 0) {
+          latestSQS = await this.prisma.sQSScore.findFirst({
+            where: { projectId: { in: repoIds } },
+            orderBy: { calculatedAt: 'desc' },
+          });
+        }
+
+        let previousSQS = null;
+        if (latestSQS) {
+          previousSQS = await this.prisma.sQSScore.findFirst({
+            where: {
+              projectId: project.id,
+              id: { not: latestSQS.id },
+            },
+            orderBy: { calculatedAt: 'desc' },
+          });
+
+          if (!previousSQS && repoIds.length > 0) {
+            previousSQS = await this.prisma.sQSScore.findFirst({
+              where: {
+                projectId: { in: repoIds },
+                id: { not: latestSQS.id },
+              },
+              orderBy: { calculatedAt: 'desc' },
+            });
+          }
+        }
+
+        const sqs = latestSQS?.score ? Number(latestSQS.score.toFixed(1)) : 0;
+        const prevScore = previousSQS?.score ? Number(previousSQS.score.toFixed(1)) : 0;
+        const trend = latestSQS && previousSQS ? Number((sqs - prevScore).toFixed(1)) : 0;
+
+        // Fetch commit count for this project
+        let totalCommits = 0;
+        if (repoIds.length > 0) {
+          totalCommits = await this.prisma.commit.count({
+            where: { repositoryId: { in: repoIds } },
+          });
+        }
+
+        const teams = (project.teamAssignments ?? []).map((ta: any) => ({
+          id: ta.team.id,
+          name: ta.team.name,
+          description: ta.team.description,
+        }));
+
+        const repositories = repoList.map((pr: any) => ({
+          id: pr.repository?.id || pr.repositoryId,
+          name: pr.repository?.name || '',
+          fullName: pr.repository?.fullName || '',
+          isEnabled: pr.repository?.isEnabled ?? true,
+          lastSyncAt: pr.repository?.lastSyncAt,
+        }));
+
+        return {
+          ...project,
+          sqs,
+          sqsScore: sqs,
+          trend,
+          totalCommits,
+          repositoryCount: project._count?.repositories ?? repositories.length,
+          teamCount: project._count?.teamAssignments ?? teams.length,
+          repositories,
+          teams,
+        };
+      })
+    );
+
+    return enrichedProjects;
   }
 
   /**

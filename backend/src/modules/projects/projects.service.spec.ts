@@ -119,7 +119,19 @@ describe('ProjectsService', () => {
   it('finds all projects using role-based filters', async () => {
     prisma.project.findMany.mockResolvedValue([project]);
 
-    await expect(service.findAll('org-1', 'user-1', Role.ADMIN)).resolves.toEqual([project]);
+    await expect(service.findAll('org-1', 'user-1', Role.ADMIN)).resolves.toEqual([
+      {
+        ...project,
+        sqs: 0,
+        sqsScore: 0,
+        trend: 0,
+        totalCommits: 0,
+        repositoryCount: 0,
+        teamCount: 0,
+        repositories: [],
+        teams: [],
+      },
+    ]);
     expect(dataFilterService.createProjectFilter).toHaveBeenCalledWith('user-1', Role.ADMIN, 'org-1');
     expect(prisma.project.findMany).toHaveBeenCalledWith(
       expect.objectContaining({

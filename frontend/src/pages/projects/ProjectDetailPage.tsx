@@ -232,7 +232,7 @@ export function ProjectDetailPage() {
     if (project) {
       setName(project.name)
       setDescription(project.description || '')
-      setKey(project.key)
+      setKey(project.key || '')
       setIsEditOpen(true)
     }
   }

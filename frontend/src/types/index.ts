@@ -376,7 +376,7 @@ export interface Project {
   id: string;
   name: string;
   description?: string;
-  key: string;
+  key?: string;
   color?: string;
   organizationId: string;
   repositories?: (Repository & { assignmentId?: string; repositoryId?: string; repository?: any })[];
@@ -385,6 +385,8 @@ export interface Project {
   sprints?: Sprint[];
   sqs?: number;
   sqsScore?: number;
+  trend?: number;
+  totalCommits?: number;
   repositoryCount?: number;
   teamCount?: number;
   createdAt: string;
@@ -395,7 +397,7 @@ export interface Project {
 export interface CreateProjectRequest {
   name: string;
   description?: string;
-  key: string;
+  key?: string;
   color?: string;
 }
 

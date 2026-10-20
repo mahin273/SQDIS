@@ -19,8 +19,12 @@ export const projectsService = {
       ...project,
       sqs: project.sqs ?? project.sqsScore ?? 0,
       sqsScore: project.sqsScore ?? project.sqs ?? 0,
+      trend: project.trend ?? 0,
+      totalCommits: project.totalCommits ?? 0,
       repositoryCount: project.repositoryCount ?? project._count?.repositories ?? project.repositories?.length ?? 0,
       teamCount: project.teamCount ?? project._count?.teamAssignments ?? project.teams?.length ?? 0,
+      repositories: project.repositories ?? [],
+      teams: project.teams ?? [],
     }));
   },
 
