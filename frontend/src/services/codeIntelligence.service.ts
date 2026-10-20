@@ -133,6 +133,7 @@ export interface CommitRiskItem {
   };
   message: string;
   authorName: string;
+  developerId?: string | null;
   linesAdded: number;
   linesDeleted: number;
   committedAt: string;

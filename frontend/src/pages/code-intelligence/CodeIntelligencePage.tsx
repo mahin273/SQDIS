@@ -1,9 +1,18 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Card, CardHeader, CardTitle, CardContent, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Avatar } from '@/components/ui/avatar';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from '@/components/ui/sheet';
 import { DefectRiskGauge } from './components/DefectRiskGauge';
 import { ArchitectureTreemapCard } from './components/ArchitectureTreemapCard';
 import {
@@ -19,6 +28,8 @@ import {
   type TestImpactResult,
   type ModuleBusFactorResult,
 } from '@/services';
+import type { RemediationResponse } from '@/types';
+import { formatDate } from '@/lib/utils';
 import {
   BrainCircuit,
   Code2,
@@ -39,8 +50,11 @@ import {
   ChevronDown,
   ChevronUp,
   Copy,
+  ExternalLink,
+  Lightbulb,
+  Sparkles,
+  ArrowUpRight,
 } from 'lucide-react';
-
 
 export const CodeIntelligencePage: React.FC = () => {
   // Top-Level Studio Mode: LIVE Explorer vs PRE-COMMIT Sandbox
@@ -57,6 +71,12 @@ export const CodeIntelligencePage: React.FC = () => {
   const [commitSearch, setCommitSearch] = useState('');
   const [expandedCommitSha, setExpandedCommitSha] = useState<string | null>(null);
   const [copiedFile, setCopiedFile] = useState<string | null>(null);
+
+  // Drawer States
+  const [selectedHotspot, setSelectedHotspot] = useState<RepositoryHotspot | null>(null);
+  const [remediationAdvice, setRemediationAdvice] = useState<RemediationResponse | null>(null);
+  const [remediationLoading, setRemediationLoading] = useState(false);
+  const [selectedCommit, setSelectedCommit] = useState<CommitRiskItem | null>(null);
 
   // Fetch only connected / ingested repositories for the organization
   const reposQuery = useQuery({
@@ -102,10 +122,10 @@ export const CodeIntelligencePage: React.FC = () => {
   });
   const commitsRisk: CommitRiskItem[] = commitsRiskQuery.data || [];
 
-  // 3. Live TIA Query
+  // 3. Live TIA Query (bound dynamically to active repo)
   const testImpactQuery = useQuery({
     queryKey: ['live-test-impact', activeRepoId],
-    queryFn: () => codeIntelligenceService.getPullRequestTestImpact(activeRepoId, ['src/services/auth.service.ts']),
+    queryFn: () => codeIntelligenceService.getPullRequestTestImpact(activeRepoId, []),
     enabled: !!activeRepoId && studioMode === 'LIVE',
   });
   const liveTia = testImpactQuery.data as TestImpactResult | undefined;
@@ -149,6 +169,34 @@ export const CodeIntelligencePage: React.FC = () => {
     setTimeout(() => setCopiedFile(null), 2000);
   };
 
+  const handleOpenHotspotDrawer = async (hotspot: RepositoryHotspot) => {
+    setSelectedHotspot(hotspot);
+    setRemediationAdvice(null);
+    setRemediationLoading(true);
+    try {
+      const ext = hotspot.filePath.endsWith('.py')
+        ? 'python'
+        : hotspot.filePath.endsWith('.js')
+        ? 'javascript'
+        : 'typescript';
+      const advice = await codeIntelligenceService.getRemediationAdvice({
+        code: `// File: ${hotspot.filePath}\n// McCabe Cyclomatic: ${hotspot.cyclomaticComplexity}\n// Cognitive: ${hotspot.cognitiveComplexity}`,
+        filePath: hotspot.filePath,
+        cyclomaticComplexity: hotspot.cyclomaticComplexity,
+        language: ext,
+      });
+      setRemediationAdvice(advice);
+    } catch (err) {
+      console.warn('Could not generate automatic remediation recipe for hotspot:', err);
+    } finally {
+      setRemediationLoading(false);
+    }
+  };
+
+  const handleOpenCommitDrawer = (commit: CommitRiskItem) => {
+    setSelectedCommit(commit);
+  };
+
   // =========================================================================
   // MODE 2: PRE-COMMIT SANDBOX STATE & HANDLERS
   // =========================================================================
@@ -173,7 +221,7 @@ export const CodeIntelligencePage: React.FC = () => {
   // Sandbox Tab 3: Test Impact Analysis State
   const [tiaLoading, setTiaLoading] = useState(false);
   const [tiaResult, setTiaResult] = useState<TestImpactResponse | null>(null);
-  const [selectedChangedFiles, setSelectedChangedFiles] = useState<string[]>([
+  const [selectedChangedFiles] = useState<string[]>([
     'src/modules/auth/auth.service.ts',
   ]);
 
@@ -218,7 +266,7 @@ export const CodeIntelligencePage: React.FC = () => {
   };
 
   // Handle Commit Risk Simulation
-  const handleSimulateCommit = async () => {
+  const handleAnalyzeCommit = async () => {
     setCommitLoading(true);
     try {
       const res = await codeIntelligenceService.predictCommitRisk({
@@ -231,36 +279,28 @@ export const CodeIntelligencePage: React.FC = () => {
       });
       setCommitResult(res);
     } catch (err) {
-      console.error('Commit risk simulation failed:', err);
+      console.error('Commit risk analysis failed:', err);
     } finally {
       setCommitLoading(false);
     }
   };
 
-  // Handle TIA Execution
-  const handleRunTia = async () => {
+  // Handle Test Impact Analysis Simulation
+  const handleAnalyzeTia = async () => {
     setTiaLoading(true);
     try {
       const res = await codeIntelligenceService.analyzeTestImpact({
         changedFiles: selectedChangedFiles,
-        testFiles: [
-          'test/auth.e2e-spec.ts',
-          'src/modules/auth/auth.service.spec.ts',
-          'src/modules/billing/billing.service.spec.ts',
-          'src/modules/projects/projects.service.spec.ts',
-          'src/modules/teams/teams.service.spec.ts',
-          'src/modules/commits/commits.service.spec.ts',
-        ],
       });
       setTiaResult(res);
     } catch (err) {
-      console.error('TIA analysis failed:', err);
+      console.error('TIA failed:', err);
     } finally {
       setTiaLoading(false);
     }
   };
 
-  // Handle Bus Factor Analysis
+  // Handle Team Bus Factor Analysis
   const handleAnalyzeBusFactor = async () => {
     if (!selectedTeamId) return;
     setBusLoading(true);
@@ -432,7 +472,7 @@ export const CodeIntelligencePage: React.FC = () => {
             >
               <Zap className="h-4 w-4" />
               <span>Smart Test Impact (TIA)</span>
-              {liveTia && (
+              {liveTia && liveTia.prunedPercentage > 0 && (
                 <Badge variant="outline" className="text-[10px] ml-1 text-emerald-600 border-emerald-300">
                   {liveTia.prunedPercentage}% Saved
                 </Badge>
@@ -465,155 +505,162 @@ export const CodeIntelligencePage: React.FC = () => {
 
               <Card>
                 <CardHeader className="pb-4">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div>
-                    <CardTitle className="flex items-center gap-2 text-base">
-                      <Flame className="h-5 w-5 text-rose-500" /> Repository Defect Hotspots
-                    </CardTitle>
-                    <CardDescription>
-                      Files ranked by Cyclomatic Complexity, Cognitive Complexity, and Defect Probability.
-                    </CardDescription>
-                  </div>
-
-                  {/* Filter & Search Bar */}
-                  <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
-                      <input
-                        type="text"
-                        placeholder="Search file paths..."
-                        value={hotspotSearch}
-                        onChange={(e) => setHotspotSearch(e.target.value)}
-                        className="rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                      />
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle className="flex items-center gap-2 text-base">
+                        <Flame className="h-5 w-5 text-rose-500" /> Repository Defect Hotspots
+                      </CardTitle>
+                      <CardDescription>
+                        Files ranked by Cyclomatic Complexity, Cognitive Complexity, and Defect Probability. Click any row to inspect code smells and refactoring blueprints.
+                      </CardDescription>
                     </div>
 
-                    {/* Risk Filter Buttons */}
-                    <div className="flex items-center rounded-lg border border-slate-200 p-0.5 text-xs dark:border-slate-800">
-                      {(['ALL', 'CRITICAL', 'HIGH', 'MODERATE', 'LOW'] as const).map((tier) => (
-                        <button
-                          key={tier}
-                          type="button"
-                          onClick={() => setHotspotRiskFilter(tier)}
-                          className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
-                            hotspotRiskFilter === tier
-                              ? 'bg-blue-600 text-white dark:bg-blue-600'
-                              : 'text-slate-600 hover:text-slate-900 dark:text-slate-400'
-                          }`}
+                    {/* Filter & Search Bar */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <div className="relative">
+                        <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Search file paths..."
+                          value={hotspotSearch}
+                          onChange={(e) => setHotspotSearch(e.target.value)}
+                          className="rounded-lg border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs text-slate-900 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      {/* Risk Filter Buttons */}
+                      <div className="flex items-center rounded-lg border border-slate-200 p-0.5 text-xs dark:border-slate-800">
+                        {(['ALL', 'CRITICAL', 'HIGH', 'MODERATE', 'LOW'] as const).map((tier) => (
+                          <button
+                            key={tier}
+                            type="button"
+                            onClick={() => setHotspotRiskFilter(tier)}
+                            className={`rounded px-2 py-1 text-[11px] font-medium transition-colors ${
+                              hotspotRiskFilter === tier
+                                ? 'bg-blue-600 text-white dark:bg-blue-600'
+                                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400'
+                            }`}
+                          >
+                            {tier}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Sort Selector */}
+                      <select
+                        value={hotspotSortBy}
+                        onChange={(e) => setHotspotSortBy(e.target.value as any)}
+                        className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
+                      >
+                        <option value="cc">Sort: Highest McCabe CC</option>
+                        <option value="mi">Sort: Lowest Maintainability</option>
+                        <option value="risk">Sort: Highest Defect Risk</option>
+                      </select>
+                    </div>
+                  </div>
+                </CardHeader>
+
+                <CardContent>
+                  {hotspotsQuery.isLoading ? (
+                    <div className="py-12 text-center text-xs text-slate-500">
+                      <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" />
+                      Analyzing repository files for complexity and defect risk...
+                    </div>
+                  ) : filteredHotspots.length > 0 ? (
+                    <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
+                      {filteredHotspots.map((file, idx) => (
+                        <div
+                          key={file.id || file.filePath}
+                          onClick={() => handleOpenHotspotDrawer(file)}
+                          className="flex flex-col sm:flex-row sm:items-center justify-between py-3.5 px-3 rounded-lg gap-2 hover:bg-slate-50 dark:hover:bg-slate-900/60 transition-colors cursor-pointer group"
                         >
-                          {tier}
-                        </button>
+                          <div className="min-w-0 flex-1 pr-4">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-bold text-slate-400 w-5">#{idx + 1}</span>
+                              <FileCode className="h-4 w-4 text-slate-400 shrink-0 group-hover:text-indigo-600 transition-colors" />
+                              <span className="font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate" title={file.filePath}>
+                                {file.filePath}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyPath(file.filePath);
+                                }}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                                title="Copy path"
+                              >
+                                {copiedFile === file.filePath ? (
+                                  <Check className="h-3 w-3 text-emerald-500" />
+                                ) : (
+                                  <Copy className="h-3 w-3" />
+                                )}
+                              </button>
+                            </div>
+                            <div className="flex items-center gap-4 mt-1.5 text-[11px] text-slate-500 pl-7">
+                              <span>
+                                Cyclomatic CC: <strong className="text-slate-800 dark:text-slate-200">{file.cyclomaticComplexity}</strong>
+                              </span>
+                              <span>
+                                Cognitive: <strong className="text-slate-800 dark:text-slate-200">{file.cognitiveComplexity}</strong>
+                              </span>
+                              <span>
+                                Maintainability Index: <strong className={file.maintainabilityIndex < 65 ? 'text-rose-500 font-bold' : 'text-emerald-600'}>
+                                  {file.maintainabilityIndex?.toFixed(0) ?? 'N/A'}/100
+                                </strong>
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-3 shrink-0 pl-7 sm:pl-0">
+                            <span
+                              className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold border"
+                              style={{
+                                backgroundColor:
+                                  file.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.12)' :
+                                  file.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.12)' :
+                                  file.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.12)' :
+                                  'rgba(16, 185, 129, 0.12)',
+                                color:
+                                  file.riskLevel === 'CRITICAL' ? '#ef4444' :
+                                  file.riskLevel === 'HIGH' ? '#f97316' :
+                                  file.riskLevel === 'MODERATE' ? '#d97706' :
+                                  '#10b981',
+                                borderColor:
+                                  file.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.25)' :
+                                  file.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.25)' :
+                                  file.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.25)' :
+                                  'rgba(16, 185, 129, 0.25)',
+                              }}
+                            >
+                              {file.riskLevel === 'CRITICAL' || file.riskLevel === 'HIGH' ? (
+                                <AlertTriangle className="h-3 w-3" />
+                              ) : (
+                                <ShieldCheck className="h-3 w-3" />
+                              )}
+                              {file.riskLevel} {file.defectProbability !== undefined ? `(${(file.defectProbability * 100).toFixed(0)}%)` : ''}
+                            </span>
+                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                              <span>Inspect</span>
+                              <ArrowUpRight className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
                       ))}
                     </div>
-
-                    {/* Sort Selector */}
-                    <select
-                      value={hotspotSortBy}
-                      onChange={(e) => setHotspotSortBy(e.target.value as any)}
-                      className="rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-700 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-300"
-                    >
-                      <option value="cc">Sort: Highest McCabe CC</option>
-                      <option value="mi">Sort: Lowest Maintainability</option>
-                      <option value="risk">Sort: Highest Defect Risk</option>
-                    </select>
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent>
-                {hotspotsQuery.isLoading ? (
-                  <div className="py-12 text-center text-xs text-slate-500">
-                    <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" />
-                    Analyzing repository files for complexity and defect risk...
-                  </div>
-                ) : filteredHotspots.length > 0 ? (
-                  <div className="divide-y divide-slate-100 dark:divide-slate-800 border-t border-slate-100 dark:border-slate-800">
-                    {filteredHotspots.map((file, idx) => (
-                      <div
-                        key={file.id || file.filePath}
-                        className="flex flex-col sm:flex-row sm:items-center justify-between py-3.5 gap-2 hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-colors"
-                      >
-                        <div className="min-w-0 flex-1 pr-4">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-slate-400 w-5">#{idx + 1}</span>
-                            <FileCode className="h-4 w-4 text-slate-400 shrink-0" />
-                            <span className="font-mono text-xs font-semibold text-slate-900 dark:text-slate-100 truncate" title={file.filePath}>
-                              {file.filePath}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => handleCopyPath(file.filePath)}
-                              className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                              title="Copy path"
-                            >
-                              {copiedFile === file.filePath ? (
-                                <Check className="h-3 w-3 text-emerald-500" />
-                              ) : (
-                                <Copy className="h-3 w-3" />
-                              )}
-                            </button>
-                          </div>
-                          <div className="flex items-center gap-4 mt-1.5 text-[11px] text-slate-500 pl-7">
-                            <span>
-                              Cyclomatic CC: <strong className="text-slate-800 dark:text-slate-200">{file.cyclomaticComplexity}</strong>
-                            </span>
-                            <span>
-                              Cognitive: <strong className="text-slate-800 dark:text-slate-200">{file.cognitiveComplexity}</strong>
-                            </span>
-                            <span>
-                              Maintainability Index: <strong className={file.maintainabilityIndex < 65 ? 'text-rose-500 font-bold' : 'text-emerald-600'}>
-                                {file.maintainabilityIndex?.toFixed(0) ?? 'N/A'}/100
-                              </strong>
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3 shrink-0 pl-7 sm:pl-0">
-                          <span
-                            className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold border"
-                            style={{
-                              backgroundColor:
-                                file.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.12)' :
-                                file.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.12)' :
-                                file.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.12)' :
-                                'rgba(16, 185, 129, 0.12)',
-                              color:
-                                file.riskLevel === 'CRITICAL' ? '#ef4444' :
-                                file.riskLevel === 'HIGH' ? '#f97316' :
-                                file.riskLevel === 'MODERATE' ? '#d97706' :
-                                '#10b981',
-                              borderColor:
-                                file.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.25)' :
-                                file.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.25)' :
-                                file.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.25)' :
-                                'rgba(16, 185, 129, 0.25)',
-                            }}
-                          >
-                            {file.riskLevel === 'CRITICAL' || file.riskLevel === 'HIGH' ? (
-                              <AlertTriangle className="h-3 w-3" />
-                            ) : (
-                              <ShieldCheck className="h-3 w-3" />
-                            )}
-                            {file.riskLevel} {file.defectProbability !== undefined ? `(${(file.defectProbability * 100).toFixed(0)}%)` : ''}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="py-12 text-center text-slate-500">
-                    <Flame className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-2" />
-                    <p className="text-sm font-medium">No architecture defect hotspots found.</p>
-                    <p className="text-xs text-slate-400 mt-1">
-                      {hotspotSearch ? 'Try clearing your search query.' : 'Complexity analysis is generated as commits are ingested.'}
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
+                  ) : (
+                    <div className="py-12 text-center text-slate-500">
+                      <Flame className="mx-auto h-10 w-10 text-slate-300 dark:text-slate-600 mb-2" />
+                      <p className="text-sm font-medium">No architecture defect hotspots found.</p>
+                      <p className="text-xs text-slate-400 mt-1">
+                        {hotspotSearch ? 'Try clearing your search query.' : 'Complexity analysis is generated as commits are ingested.'}
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* ------------------------------------------------------------- */}
           {/* LIVE TAB 2: COMMIT DEFECT RISK STREAM */}
@@ -627,7 +674,7 @@ export const CodeIntelligencePage: React.FC = () => {
                       <GitCommit className="h-5 w-5 text-blue-600" /> Commit Defect Risk Stream
                     </CardTitle>
                     <CardDescription>
-                      Commit-level defect prediction based on code churn, file diffusion, and author history.
+                      Commit-level defect prediction based on code churn, file diffusion, and author history. Click any commit to inspect drivers and author telemetry.
                     </CardDescription>
                   </div>
 
@@ -691,18 +738,27 @@ export const CodeIntelligencePage: React.FC = () => {
                                 </span>
                               </div>
                               <div className="flex items-center gap-3 mt-1 text-[11px] text-slate-500">
-                                <span>{c.authorName || 'Author'}</span>
-                                <span>·</span>
+                                {c.developerId ? (
+                                  <Link
+                                    to={`/developers/${c.developerId}`}
+                                    className="font-medium text-slate-700 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 hover:underline"
+                                  >
+                                    {c.authorName || 'Author'}
+                                  </Link>
+                                ) : (
+                                  <span>{c.authorName || 'Author'}</span>
+                                )}
+                                <span>&bull;</span>
                                 <span className="font-mono">{c.commitSha ? c.commitSha.slice(0, 7) : 'head'}</span>
                                 {c.committedAt && (
                                   <>
-                                    <span>·</span>
+                                    <span>&bull;</span>
                                     <span>{new Date(c.committedAt).toLocaleDateString()}</span>
                                   </>
                                 )}
                                 {(c.linesAdded !== undefined || c.linesDeleted !== undefined) && (
                                   <>
-                                    <span>·</span>
+                                    <span>&bull;</span>
                                     <span className="text-emerald-600 font-medium">+{c.linesAdded || 0}</span>
                                     <span className="text-rose-600 font-medium">-{c.linesDeleted || 0}</span>
                                   </>
@@ -710,15 +766,25 @@ export const CodeIntelligencePage: React.FC = () => {
                               </div>
                             </div>
 
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setExpandedCommitSha(isExpanded ? null : c.commitSha)}
-                              className="text-xs h-7 gap-1 self-start sm:self-center"
-                            >
-                              <span>Risk Drivers</span>
-                              {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                            </Button>
+                            <div className="flex items-center gap-2 self-start sm:self-center">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleOpenCommitDrawer(c)}
+                                className="text-xs h-7 gap-1"
+                              >
+                                <span>Inspect</span>
+                                <ArrowUpRight className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setExpandedCommitSha(isExpanded ? null : c.commitSha)}
+                                className="text-xs h-7 gap-1 text-slate-400"
+                              >
+                                {isExpanded ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                              </Button>
+                            </div>
                           </div>
 
                           {/* Collapsible Commit Risk Driver Details */}
@@ -785,9 +851,9 @@ export const CodeIntelligencePage: React.FC = () => {
                     <Card className="p-4 bg-slate-50 dark:bg-slate-900/60">
                       <span className="text-xs font-medium text-slate-500">Impacted Test Suites</span>
                       <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                        {liveTia.impactedTests?.length ?? 1}
+                        {liveTia.impactedTests?.length ?? 0}
                       </p>
-                      <span className="text-[10px] text-slate-400">Of {liveTia.totalTests ?? 4} total suites</span>
+                      <span className="text-[10px] text-slate-400">Of {liveTia.totalTests ?? 0} total suites</span>
                     </Card>
 
                     <Card className="p-4 bg-slate-50 dark:bg-slate-900/60">
@@ -810,12 +876,18 @@ export const CodeIntelligencePage: React.FC = () => {
                       </CardHeader>
                       <CardContent>
                         <div className="space-y-2">
-                          {(liveTia.impactedTests || ['tests/unit/test_auth.py']).map((t, idx) => (
-                            <div key={idx} className="p-2.5 rounded-lg border border-rose-200 bg-rose-50/40 text-xs font-mono text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-200 flex items-center gap-2">
-                              <span className="h-2 w-2 rounded-full bg-rose-500" />
-                              <span>{t}</span>
+                          {liveTia.impactedTests && liveTia.impactedTests.length > 0 ? (
+                            liveTia.impactedTests.map((t, idx) => (
+                              <div key={idx} className="p-2.5 rounded-lg border border-rose-200 bg-rose-50/40 text-xs font-mono text-rose-900 dark:border-rose-900/50 dark:bg-rose-950/20 dark:text-rose-200 flex items-center gap-2">
+                                <span className="h-2 w-2 rounded-full bg-rose-500" />
+                                <span>{t}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <div className="p-4 rounded-lg border border-slate-200 bg-slate-50 text-xs text-slate-500 dark:border-slate-800 dark:bg-slate-950">
+                              No downstream test suites impacted by the current module diff.
                             </div>
-                          ))}
+                          )}
                         </div>
                       </CardContent>
                     </Card>
@@ -828,13 +900,14 @@ export const CodeIntelligencePage: React.FC = () => {
                         <CardDescription>Independent test suites untouched by changes</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <div className="space-y-2">
-                          {['tests/e2e/test_billing.py', 'tests/unit/test_reports.py', 'tests/integration/test_teams.py'].map((t, idx) => (
-                            <div key={idx} className="p-2.5 rounded-lg border border-emerald-200 bg-emerald-50/40 text-xs font-mono text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200 flex items-center gap-2">
-                              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                              <span>{t}</span>
-                            </div>
-                          ))}
+                        <div className="p-4 rounded-lg border border-emerald-200 bg-emerald-50/40 text-xs text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/20 dark:text-emerald-200 space-y-1.5">
+                          <p className="font-semibold flex items-center gap-1.5">
+                            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            {liveTia.prunedPercentage}% of total suites pruned
+                          </p>
+                          <p className="text-[11px] text-emerald-800 dark:text-emerald-300">
+                            Static dependency analysis confirms independent modules are isolated from current changes, saving ~{Math.round((liveTia.estimatedTimeSavedSeconds || 180) / 60)} minutes of build execution.
+                          </p>
                         </div>
                       </CardContent>
                     </Card>
@@ -901,8 +974,18 @@ export const CodeIntelligencePage: React.FC = () => {
                         <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-1">
                           {busResult.overall_bus_factor}
                         </p>
-                        <span className="text-[10px] text-rose-500 font-semibold">
-                          {busResult.overall_bus_factor === 1 ? '🔴 Critical Key-Person Risk' : '🟢 Resilient Team'}
+                        <span className="inline-flex items-center gap-1 text-[10px] font-semibold mt-1">
+                          {busResult.overall_bus_factor === 1 ? (
+                            <>
+                              <AlertTriangle className="h-3 w-3 text-rose-500" />
+                              <span className="text-rose-500">Critical Key-Person Risk</span>
+                            </>
+                          ) : (
+                            <>
+                              <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                              <span className="text-emerald-500">Resilient Team</span>
+                            </>
+                          )}
                         </span>
                       </Card>
                       <Card className="p-4 bg-slate-50 dark:bg-slate-900/60">
@@ -952,8 +1035,11 @@ export const CodeIntelligencePage: React.FC = () => {
                             <p className="text-xs text-slate-600 dark:text-slate-400">
                               <span className="font-semibold">Key Owners (80% Frontier):</span> {mod.key_owners?.join(', ') || 'Unassigned'}
                             </p>
-                            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 text-xs text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
-                              💡 <span className="font-semibold">Remediation:</span> {mod.cross_training_recommendation}
+                            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 text-xs text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800 flex items-start gap-1.5">
+                              <Sparkles className="h-3.5 w-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                              <div>
+                                <span className="font-semibold">Remediation:</span> {mod.cross_training_recommendation}
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1098,63 +1184,27 @@ export const CodeIntelligencePage: React.FC = () => {
                       />
 
                       <div className="grid grid-cols-2 gap-3">
-                        <Card className="p-4 bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
-                          <p className="text-xs font-medium text-slate-500">Cyclomatic Complexity</p>
-                          <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                            {astResult.metrics_analyzed?.v_g ?? 1}
+                        <Card className="p-3 bg-slate-50 dark:bg-slate-900/60">
+                          <span className="text-[11px] text-slate-400 font-medium">Cyclomatic CC</span>
+                          <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                            {astResult.metrics_analyzed?.cyclomatic_complexity != null ? Math.round(astResult.metrics_analyzed.cyclomatic_complexity) : 'N/A'}
                           </p>
-                          <span className="text-[10px] text-slate-400">Independent Paths</span>
+                          <span className="text-[10px] text-slate-400">McCabe Decision paths</span>
                         </Card>
-                        <Card className="p-4 bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
-                          <p className="text-xs font-medium text-slate-500">Lines of Code</p>
-                          <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                            {astResult.metrics_analyzed?.loc ?? 10}
+                        <Card className="p-3 bg-slate-50 dark:bg-slate-900/60">
+                          <span className="text-[11px] text-slate-400 font-medium">Halstead Volume</span>
+                          <p className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                            {astResult.metrics_analyzed?.halstead_volume != null ? Math.round(astResult.metrics_analyzed.halstead_volume) : 'N/A'}
                           </p>
-                          <span className="text-[10px] text-slate-400">Executable LOC</span>
-                        </Card>
-                        <Card className="p-4 bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
-                          <p className="text-xs font-medium text-slate-500">Halstead Difficulty</p>
-                          <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                            {astResult.metrics_analyzed?.d ? Number(astResult.metrics_analyzed.d).toFixed(1) : '6.0'}
-                          </p>
-                          <span className="text-[10px] text-slate-400">Operand/Operator Nesting</span>
-                        </Card>
-                        <Card className="p-4 bg-slate-50 dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
-                          <p className="text-xs font-medium text-slate-500">Halstead Effort (E)</p>
-                          <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mt-1">
-                            {astResult.metrics_analyzed?.e ? Number(astResult.metrics_analyzed.e).toLocaleString() : '216'}
-                          </p>
-                          <span className="text-[10px] text-slate-400">Mental Discriminations</span>
+                          <span className="text-[10px] text-slate-400">Program size & vocabulary</span>
                         </Card>
                       </div>
-
-                      <Card>
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm">Risk Assessment & Drivers</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                          {astResult.top_risk_drivers.map((driver: string, idx: number) => (
-                            <div key={idx} className="flex items-start gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
-                              {astResult.is_defect_prone ? (
-                                <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                              ) : (
-                                <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                              )}
-                              <span>{driver}</span>
-                            </div>
-                          ))}
-                        </CardContent>
-                      </Card>
                     </>
                   ) : (
-                    <Card className="p-8 text-center border-dashed">
-                      <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-600 mb-3">
-                        <Code2 className="w-6 h-6" />
-                      </div>
-                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Awaiting Source Code</h3>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Click "Analyze Defect Risk" to evaluate code complexity and defect probability.
-                      </p>
+                    <Card className="p-12 text-center text-slate-400 border-dashed">
+                      <Code2 className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm font-medium">No Code Analyzed Yet</p>
+                      <p className="text-xs text-slate-500 mt-1">Paste a code snippet to view instant complexity metrics.</p>
                     </Card>
                   )}
                 </div>
@@ -1164,173 +1214,129 @@ export const CodeIntelligencePage: React.FC = () => {
             {/* TAB 2: COMMIT RISK SIMULATOR */}
             <TabsContent value="commit" className="space-y-6">
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-7 space-y-4">
+                <div className="lg:col-span-7">
                   <Card>
-                    <CardHeader>
+                    <CardHeader className="pb-3">
                       <CardTitle className="text-base">Commit Risk Simulator</CardTitle>
-                      <CardDescription>Simulate commit metrics to predict bug insertion risk before pushing</CardDescription>
+                      <CardDescription>Adjust prospective commit parameters to simulate JIT defect classification</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <div className="grid grid-cols-2 gap-4">
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Added Lines (LA)</label>
+                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Lines Added ({addedLines})</label>
                           <input
-                            type="number"
+                            type="range"
+                            min="1"
+                            max="1000"
                             value={addedLines}
                             onChange={(e) => setAddedLines(Number(e.target.value))}
-                            className="w-full mt-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                            className="w-full mt-2"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Deleted Lines (LD)</label>
+                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Lines Deleted ({deletedLines})</label>
                           <input
-                            type="number"
+                            type="range"
+                            min="0"
+                            max="500"
                             value={deletedLines}
                             onChange={(e) => setDeletedLines(Number(e.target.value))}
-                            className="w-full mt-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                            className="w-full mt-2"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Modified Files (NF)</label>
+                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Modified Files ({modifiedFiles})</label>
                           <input
-                            type="number"
+                            type="range"
+                            min="1"
+                            max="50"
                             value={modifiedFiles}
                             onChange={(e) => setModifiedFiles(Number(e.target.value))}
-                            className="w-full mt-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                            className="w-full mt-2"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Cyclomatic Complexity</label>
+                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Complexity Delta ({complexity})</label>
                           <input
-                            type="number"
+                            type="range"
+                            min="1"
+                            max="50"
                             value={complexity}
                             onChange={(e) => setComplexity(Number(e.target.value))}
-                            className="w-full mt-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                            className="w-full mt-2"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Author Experience (Commits)</label>
+                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Author Experience ({experience} commits)</label>
                           <input
-                            type="number"
+                            type="range"
+                            min="1"
+                            max="200"
                             value={experience}
                             onChange={(e) => setExperience(Number(e.target.value))}
-                            className="w-full mt-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                            className="w-full mt-2"
                           />
                         </div>
                         <div>
-                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">File Spread / Diffusion (H)</label>
+                          <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Directory Entropy ({entropy})</label>
                           <input
-                            type="number"
+                            type="range"
+                            min="0"
+                            max="5"
                             step="0.1"
                             value={entropy}
                             onChange={(e) => setEntropy(Number(e.target.value))}
-                            className="w-full mt-1 px-3 py-1.5 text-sm rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+                            className="w-full mt-2"
                           />
                         </div>
                       </div>
 
                       <Button
-                        onClick={handleSimulateCommit}
+                        onClick={handleAnalyzeCommit}
                         disabled={commitLoading}
-                        className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                        className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white mt-4"
                       >
                         {commitLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
-                        Simulate Commit Defect Risk
+                        Run Kamei JIT Defect Simulation
                       </Button>
                     </CardContent>
                   </Card>
                 </div>
 
-                <div className="lg:col-span-5 space-y-4">
+                <div className="lg:col-span-5">
                   {commitResult ? (
-                    <>
-                      <DefectRiskGauge
-                        probability={commitResult.defect_probability}
-                        riskLevel={commitResult.risk_level}
-                        isDefectProne={commitResult.is_defect_prone}
-                        benchmark="Commit Risk Model"
-                      />
-
-                      <Card>
-                        <CardHeader className="pb-2">
-                          <CardTitle className="text-sm">Identified Commit Risk Drivers</CardTitle>
-                        </CardHeader>
-                        <CardContent className="space-y-2">
-                          {commitResult.top_risk_drivers.map((driver: string, idx: number) => (
-                            <div key={idx} className="flex items-start gap-2 p-2.5 rounded-lg bg-slate-50 dark:bg-slate-900 text-xs text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
-                              <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                              <span>{driver}</span>
-                            </div>
-                          ))}
-                        </CardContent>
-                      </Card>
-                    </>
+                    <DefectRiskGauge
+                      probability={commitResult.defect_probability}
+                      riskLevel={commitResult.risk_level}
+                      isDefectProne={commitResult.is_defect_prone}
+                      benchmark="Kamei JIT Commit Model"
+                    />
                   ) : (
-                    <Card className="p-8 text-center border-dashed">
-                      <div className="mx-auto w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-950 flex items-center justify-center text-blue-600 mb-3">
-                        <GitCommit className="w-6 h-6" />
-                      </div>
-                      <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-200">Adjust Parameters</h3>
-                      <p className="text-xs text-slate-500 mt-1">
-                        Drag sliders and click "Simulate" to evaluate commit bug risk.
-                      </p>
+                    <Card className="p-12 text-center text-slate-400 border-dashed">
+                      <GitCommit className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm font-medium">Simulation Idle</p>
+                      <p className="text-xs text-slate-500 mt-1">Adjust parameters to simulate JIT commit risk.</p>
                     </Card>
                   )}
                 </div>
               </div>
             </TabsContent>
 
-            {/* TAB 3: TEST IMPACT ANALYSIS (DAG TIA) */}
+            {/* TAB 3: SMART TEST IMPACT ANALYSIS */}
             <TabsContent value="tia" className="space-y-6">
               <Card>
                 <CardHeader>
-                  <CardTitle className="text-base">Test Impact Analysis (TIA)</CardTitle>
-                  <CardDescription>
-                    Analyzes file dependencies to select and execute ONLY the test suites impacted by your changes.
-                  </CardDescription>
+                  <CardTitle className="text-base">Pre-Commit Smart Test Impact Analysis</CardTitle>
+                  <CardDescription>Simulates safe test suite pruning using the static dependency graph</CardDescription>
                 </CardHeader>
-                <CardContent className="space-y-6">
-                  <div>
-                    <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Select Modified Files in Pull Request</label>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-2">
-                      {[
-                        'src/modules/auth/auth.service.ts',
-                        'src/modules/billing/billing.service.ts',
-                        'src/modules/projects/projects.service.ts',
-                        'src/common/utils/crypto.ts',
-                      ].map((file) => {
-                        const isSelected = selectedChangedFiles.includes(file);
-                        return (
-                          <div
-                            key={file}
-                            onClick={() => {
-                              if (isSelected) {
-                                setSelectedChangedFiles(selectedChangedFiles.filter((f) => f !== file));
-                              } else {
-                                setSelectedChangedFiles([...selectedChangedFiles, file]);
-                              }
-                            }}
-                            className={`cursor-pointer p-3 rounded-xl border text-xs font-mono flex items-center justify-between transition-colors ${
-                              isSelected
-                                ? 'bg-blue-50/80 border-blue-300 dark:bg-blue-950/40 dark:border-blue-800 text-blue-900 dark:text-blue-200'
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-400'
-                            }`}
-                          >
-                            <span>{file}</span>
-                            {isSelected && <Check className="w-4 h-4 text-blue-600 shrink-0" />}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-
+                <CardContent className="space-y-4">
                   <Button
-                    onClick={handleRunTia}
-                    disabled={tiaLoading || selectedChangedFiles.length === 0}
-                    className="w-full gap-2 bg-blue-600 hover:bg-blue-700 text-white"
+                    onClick={handleAnalyzeTia}
+                    disabled={tiaLoading}
+                    className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {tiaLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
-                    Execute Test Impact Analysis
+                    Evaluate Test Impact
                   </Button>
 
                   {tiaResult && (
@@ -1355,7 +1361,9 @@ export const CodeIntelligencePage: React.FC = () => {
                           <p className="text-2xl font-bold text-purple-600 dark:text-purple-400 mt-1">
                             {tiaResult.time_saved_percentage.toFixed(1)}%
                           </p>
-                          <span className="text-[10px] text-slate-400">⚡ Execution Speedup</span>
+                          <span className="text-[10px] text-slate-400 flex items-center gap-1 justify-center mt-1">
+                            <Zap className="h-3 w-3 text-amber-500" /> Execution Speedup
+                          </span>
                         </Card>
                       </div>
 
@@ -1421,8 +1429,18 @@ export const CodeIntelligencePage: React.FC = () => {
                           <p className="text-3xl font-bold text-slate-900 dark:text-slate-100 mt-1">
                             {busResult.overall_bus_factor}
                           </p>
-                          <span className="text-[10px] text-rose-500 font-semibold">
-                            {busResult.overall_bus_factor === 1 ? '🔴 Critical Key-Person Risk' : '🟢 Resilient Team'}
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold mt-1">
+                            {busResult.overall_bus_factor === 1 ? (
+                              <>
+                                <AlertTriangle className="h-3 w-3 text-rose-500" />
+                                <span className="text-rose-500">Critical Key-Person Risk</span>
+                              </>
+                            ) : (
+                              <>
+                                <CheckCircle2 className="h-3 w-3 text-emerald-500" />
+                                <span className="text-emerald-500">Resilient Team</span>
+                              </>
+                            )}
                           </span>
                         </Card>
                         <Card className="p-4 bg-slate-50 dark:bg-slate-900/60">
@@ -1463,7 +1481,7 @@ export const CodeIntelligencePage: React.FC = () => {
                                     mod.risk_level === 'CRITICAL_SILO'
                                       ? 'border-rose-300 text-rose-600 bg-rose-50 dark:bg-rose-950/40'
                                       : 'border-emerald-300 text-emerald-600 bg-emerald-50 dark:bg-emerald-950/40'
-                                  }
+                                }
                                 >
                                   Bus Factor: {mod.bus_factor}
                                 </Badge>
@@ -1471,8 +1489,11 @@ export const CodeIntelligencePage: React.FC = () => {
                               <p className="text-xs text-slate-600 dark:text-slate-400">
                                 <span className="font-semibold">Key Owners (80% Frontier):</span> {mod.key_owners?.join(', ') || 'Unassigned'}
                               </p>
-                              <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 text-xs text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800">
-                                💡 <span className="font-semibold">Remediation:</span> {mod.cross_training_recommendation}
+                              <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-950 text-xs text-slate-700 dark:text-slate-300 border border-slate-100 dark:border-slate-800 flex items-start gap-1.5">
+                                <Sparkles className="h-3.5 w-3.5 text-indigo-500 shrink-0 mt-0.5" />
+                                <div>
+                                  <span className="font-semibold">Remediation:</span> {mod.cross_training_recommendation}
+                                </div>
                               </div>
                             </div>
                           ))}
@@ -1486,6 +1507,309 @@ export const CodeIntelligencePage: React.FC = () => {
           </Tabs>
         </div>
       )}
+
+      {/* ========================================================================= */}
+      {/* SLIDE-OVER QUICK INSPECTION DRAWER: ARCHITECTURE HOTSPOT */}
+      {/* ========================================================================= */}
+      <Sheet open={!!selectedHotspot} onOpenChange={(open) => !open && setSelectedHotspot(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-xl p-6 flex flex-col justify-between overflow-y-auto">
+          {selectedHotspot && (
+            <div className="space-y-6">
+              <SheetHeader className="text-left">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <FileCode className="h-4 w-4 text-indigo-500 shrink-0" />
+                      <span className="font-mono text-sm font-bold text-slate-900 dark:text-slate-100 truncate" title={selectedHotspot.filePath}>
+                        {selectedHotspot.filePath.split('/').pop()}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyPath(selectedHotspot.filePath)}
+                        className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0"
+                        title="Copy path"
+                      >
+                        {copiedFile === selectedHotspot.filePath ? (
+                          <Check className="h-3.5 w-3.5 text-emerald-500" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                      </button>
+                    </div>
+                    <SheetTitle className="text-xs font-mono text-slate-500 dark:text-slate-400 mt-1 break-all font-normal">
+                      {selectedHotspot.filePath}
+                    </SheetTitle>
+                    <SheetDescription className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Tree-sitter AST & Complexity Diagnostics
+                    </SheetDescription>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold border shrink-0"
+                    style={{
+                      backgroundColor:
+                        selectedHotspot.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.12)' :
+                        selectedHotspot.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.12)' :
+                        selectedHotspot.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.12)' :
+                        'rgba(16, 185, 129, 0.12)',
+                      color:
+                        selectedHotspot.riskLevel === 'CRITICAL' ? '#ef4444' :
+                        selectedHotspot.riskLevel === 'HIGH' ? '#f97316' :
+                        selectedHotspot.riskLevel === 'MODERATE' ? '#d97706' :
+                        '#10b981',
+                      borderColor:
+                        selectedHotspot.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.25)' :
+                        selectedHotspot.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.25)' :
+                        selectedHotspot.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.25)' :
+                        'rgba(16, 185, 129, 0.25)',
+                    }}
+                  >
+                    {selectedHotspot.riskLevel} RISK
+                  </span>
+                </div>
+              </SheetHeader>
+
+              {/* 4-Card Metric Grid */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
+                  <span className="text-[11px] text-slate-400 font-medium">McCabe CC</span>
+                  <p className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                    {selectedHotspot.cyclomaticComplexity}
+                  </p>
+                  <span className="text-[10px] text-slate-400">{selectedHotspot.cyclomaticComplexity > 15 ? 'High Risk' : 'Acceptable'}</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
+                  <span className="text-[11px] text-slate-400 font-medium">Cognitive</span>
+                  <p className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-0.5">
+                    {selectedHotspot.cognitiveComplexity}
+                  </p>
+                  <span className="text-[10px] text-slate-400">Mental load</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
+                  <span className="text-[11px] text-slate-400 font-medium">Maintainability</span>
+                  <p className={`text-lg font-bold mt-0.5 ${selectedHotspot.maintainabilityIndex < 65 ? 'text-rose-500' : 'text-emerald-600'}`}>
+                    {selectedHotspot.maintainabilityIndex?.toFixed(0) ?? 'N/A'}/100
+                  </p>
+                  <span className="text-[10px] text-slate-400">{selectedHotspot.maintainabilityIndex < 65 ? 'Difficult' : 'Healthy'}</span>
+                </div>
+                <div className="p-3 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/50">
+                  <span className="text-[11px] text-slate-400 font-medium">Defect Probability</span>
+                  <p className="text-lg font-bold text-rose-600 mt-0.5">
+                    {selectedHotspot.defectProbability !== undefined ? `${(selectedHotspot.defectProbability * 100).toFixed(0)}%` : 'N/A'}
+                  </p>
+                  <span className="text-[10px] text-slate-400">NASA MDP</span>
+                </div>
+              </div>
+
+              {/* Refactoring Guidance & Remediation Blueprint */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                    <Sparkles className="h-4 w-4 text-indigo-500" />
+                    Automated Code Remediation Blueprint
+                  </h4>
+                  {remediationLoading && (
+                    <span className="text-[11px] text-indigo-500 flex items-center gap-1">
+                      <RefreshCw className="h-3 w-3 animate-spin" /> Analyzing AST...
+                    </span>
+                  )}
+                </div>
+
+                {remediationLoading ? (
+                  <div className="py-8 text-center text-xs text-slate-400 border rounded-xl border-dashed">
+                    Synthesizing code smells and refactoring strategies...
+                  </div>
+                ) : remediationAdvice && remediationAdvice.recipes && remediationAdvice.recipes.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="p-3 rounded-xl bg-indigo-50/70 dark:bg-indigo-950/20 border border-indigo-100 dark:border-indigo-900/40 text-xs flex items-center justify-between">
+                      <div>
+                        <span className="font-semibold text-indigo-950 dark:text-indigo-200">
+                          {remediationAdvice.totalSmellsFound} Structural Smells Diagnosed
+                        </span>
+                        <p className="text-[11px] text-indigo-700 dark:text-indigo-300">
+                          Refactoring potential score: {remediationAdvice.refactoringPotentialScore}/100
+                        </p>
+                      </div>
+                    </div>
+
+                    {remediationAdvice.recipes.map((recipe, idx) => (
+                      <div key={idx} className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-3 bg-white dark:bg-slate-900">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="text-xs font-bold text-slate-900 dark:text-slate-100">
+                              {recipe.title}
+                            </span>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              Strategy: <span className="font-semibold text-indigo-600 dark:text-indigo-400">{recipe.recommendedStrategy}</span>
+                            </p>
+                          </div>
+                          <Badge variant="outline" className="text-emerald-700 bg-emerald-50 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300 text-[10px] py-0">
+                            -{recipe.estimatedComplexityReductionPct}% CC
+                          </Badge>
+                        </div>
+
+                        <p className="text-xs text-slate-600 dark:text-slate-300">
+                          {recipe.explanation}
+                        </p>
+
+                        {recipe.stepByStep && recipe.stepByStep.length > 0 && (
+                          <div className="space-y-1 text-[11px] text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-950 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800">
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 mb-1">Step-by-step action plan:</p>
+                            {recipe.stepByStep.map((step, sIdx) => (
+                              <div key={sIdx} className="flex items-start gap-1.5">
+                                <span className="text-indigo-500 font-bold">{sIdx + 1}.</span>
+                                <span>{step}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {recipe.afterSnippet && (
+                          <div className="space-y-1 text-xs">
+                            <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Target Refactored Pattern</span>
+                            <pre className="p-2.5 rounded-lg bg-slate-950 text-slate-100 font-mono text-[11px] overflow-x-auto border border-slate-800">
+                              <code>{recipe.afterSnippet}</code>
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 space-y-2 bg-slate-50/50 dark:bg-slate-900/40 text-xs">
+                    <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                      <Lightbulb className="h-4 w-4 text-amber-500" />
+                      Structural Complexity Remediation
+                    </span>
+                    <p className="text-slate-600 dark:text-slate-300">
+                      This file exhibits a McCabe cyclomatic complexity of {selectedHotspot.cyclomaticComplexity}. Recommended refactoring actions:
+                    </p>
+                    <ul className="space-y-1 text-slate-500 list-disc list-inside text-[11px]">
+                      <li>Invert deeply nested condition branches into early guard return statements.</li>
+                      <li>Decompose functions exceeding 30 lines into focused helper functions.</li>
+                      <li>Extract polymorphic switch/case statements into a strategy dispatch table.</li>
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
+
+      {/* ========================================================================= */}
+      {/* SLIDE-OVER QUICK INSPECTION DRAWER: COMMIT DEFECT RISK */}
+      {/* ========================================================================= */}
+      <Sheet open={!!selectedCommit} onOpenChange={(open) => !open && setSelectedCommit(null)}>
+        <SheetContent side="right" className="w-full sm:max-w-xl p-6 flex flex-col justify-between overflow-y-auto">
+          {selectedCommit && (
+            <div className="space-y-6">
+              <SheetHeader className="text-left">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-slate-900 dark:text-slate-100 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded">
+                        {selectedCommit.commitSha.slice(0, 7)}
+                      </span>
+                      <Badge variant="outline" className="text-[10px]">
+                        Kamei JIT Classifier
+                      </Badge>
+                    </div>
+                    <SheetTitle className="text-base font-bold text-slate-950 dark:text-white mt-2">
+                      {selectedCommit.message}
+                    </SheetTitle>
+                    <SheetDescription className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Committed on {formatDate(selectedCommit.committedAt)}
+                    </SheetDescription>
+                  </div>
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold border shrink-0"
+                    style={{
+                      backgroundColor:
+                        selectedCommit.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.12)' :
+                        selectedCommit.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.12)' :
+                        selectedCommit.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.12)' :
+                        'rgba(16, 185, 129, 0.12)',
+                      color:
+                        selectedCommit.riskLevel === 'CRITICAL' ? '#ef4444' :
+                        selectedCommit.riskLevel === 'HIGH' ? '#f97316' :
+                        selectedCommit.riskLevel === 'MODERATE' ? '#d97706' :
+                        '#10b981',
+                      borderColor:
+                        selectedCommit.riskLevel === 'CRITICAL' ? 'rgba(239, 68, 68, 0.25)' :
+                        selectedCommit.riskLevel === 'HIGH' ? 'rgba(249, 115, 22, 0.25)' :
+                        selectedCommit.riskLevel === 'MODERATE' ? 'rgba(245, 158, 11, 0.25)' :
+                        'rgba(16, 185, 129, 0.25)',
+                    }}
+                  >
+                    {selectedCommit.riskLevel} ({(selectedCommit.defectProbability * 100).toFixed(0)}%)
+                  </span>
+                </div>
+              </SheetHeader>
+
+              {/* Author Card */}
+              <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3.5 dark:border-slate-800 dark:bg-slate-900/60 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <Avatar name={selectedCommit.authorName} size="md" />
+                  <div>
+                    <p className="text-xs text-slate-400">Author</p>
+                    <p className="font-semibold text-sm text-slate-900 dark:text-slate-100">{selectedCommit.authorName}</p>
+                  </div>
+                </div>
+                {selectedCommit.developerId ? (
+                  <Link to={`/developers/${selectedCommit.developerId}`}>
+                    <Button size="sm" variant="outline" className="text-xs h-8 gap-1.5 text-indigo-600 dark:text-indigo-400">
+                      <span>View Contributor Profile</span>
+                      <ExternalLink className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <span className="text-xs text-slate-400 italic">Unlinked Author</span>
+                )}
+              </div>
+
+              {/* Change Footprint Metric Box */}
+              <div className="grid grid-cols-3 gap-3 text-center">
+                <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                  <span className="text-[11px] text-slate-400">Lines Added</span>
+                  <p className="text-lg font-bold text-emerald-600">+{selectedCommit.linesAdded || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                  <span className="text-[11px] text-slate-400">Lines Deleted</span>
+                  <p className="text-lg font-bold text-rose-600">-{selectedCommit.linesDeleted || 0}</p>
+                </div>
+                <div className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40">
+                  <span className="text-[11px] text-slate-400">Defect Probability</span>
+                  <p className="text-lg font-bold text-slate-900 dark:text-slate-100">
+                    {(selectedCommit.defectProbability * 100).toFixed(0)}%
+                  </p>
+                </div>
+              </div>
+
+              {/* Kamei JIT Defect Drivers */}
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                  Kamei JIT Defect Risk Drivers
+                </h4>
+                {selectedCommit.topRiskDrivers && selectedCommit.topRiskDrivers.length > 0 ? (
+                  <div className="divide-y divide-slate-100 dark:divide-slate-800 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                    {selectedCommit.topRiskDrivers.map((driver, i) => (
+                      <div key={i} className="p-3 text-xs text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-900 flex items-start gap-2">
+                        <span className="text-amber-500 font-bold">•</span>
+                        <span>{driver}</span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-400 italic">
+                    No anomalous defect risk drivers flagged for this changeset.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
     </div>
   );
 };
