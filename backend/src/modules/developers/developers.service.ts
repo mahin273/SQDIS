@@ -12,6 +12,7 @@ export interface DeveloperDto {
   team?: { id: string; name: string } | null;
   dqs?: number | null;
   dqsTrend?: number | null;
+  commitCount?: number;
   lastActive?: Date | null;
   status: 'ACTIVE' | 'INACTIVE';
 }
@@ -63,25 +64,42 @@ export class DevelopersService {
       return [];
     }
 
-    const members = await this.prisma.organizationMember.findMany({
-      where: { organizationId },
-      include: {
-        user: {
-          include: {
-            teamMemberships: {
-              where: { leftAt: null },
-              include: { team: { select: { id: true, name: true } } },
-            },
-            dqsScores: {
-              orderBy: { calculatedAt: 'desc' },
-              take: 1,
-              select: { score: true, calculatedAt: true },
+    const [members, commitGroups] = await Promise.all([
+      this.prisma.organizationMember.findMany({
+        where: { organizationId },
+        include: {
+          user: {
+            include: {
+              teamMemberships: {
+                where: { leftAt: null },
+                include: { team: { select: { id: true, name: true } } },
+              },
+              dqsScores: {
+                orderBy: { calculatedAt: 'desc' },
+                take: 2,
+                select: { score: true, calculatedAt: true },
+              },
             },
           },
         },
-      },
-      orderBy: { joinedAt: 'asc' },
-    });
+        orderBy: { joinedAt: 'asc' },
+      }),
+      this.prisma.commit.groupBy({
+        by: ['developerId'],
+        where: {
+          repository: { organizationId },
+          developerId: { not: null },
+        },
+        _count: { id: true },
+      }),
+    ]);
+
+    const commitMap = new Map<string, number>();
+    for (const cg of commitGroups || []) {
+      if (cg.developerId) {
+        commitMap.set(cg.developerId, cg._count?.id || 0);
+      }
+    }
 
     return Promise.all(
       members.map(async (member) => {
@@ -89,6 +107,16 @@ export class DevelopersService {
         const activeTeam = user.teamMemberships[0]?.team;
         let latestDqs = user.dqsScores[0]?.score ?? null;
         let lastActive = user.dqsScores[0]?.calculatedAt || null;
+        let dqsTrend: number | null = null;
+
+        if (
+          user.dqsScores &&
+          user.dqsScores.length >= 2 &&
+          user.dqsScores[0]?.score !== null &&
+          user.dqsScores[1]?.score !== null
+        ) {
+          dqsTrend = Number((user.dqsScores[0].score - user.dqsScores[1].score).toFixed(1));
+        }
 
         if (latestDqs === null) {
           try {
@@ -102,6 +130,8 @@ export class DevelopersService {
           }
         }
 
+        const commitCount = commitMap.get(user.id) || 0;
+
         return {
           id: user.id,
           name: user.name || user.email.split('@')[0],
@@ -111,7 +141,8 @@ export class DevelopersService {
           teamId: activeTeam?.id || null,
           team: activeTeam || null,
           dqs: latestDqs,
-          dqsTrend: null,
+          dqsTrend,
+          commitCount,
           lastActive,
           status: 'ACTIVE',
         };

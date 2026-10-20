@@ -2113,9 +2113,10 @@ export interface Developer {
   avatarUrl?: string;
   role: UserRole;
   teamId?: string;
-  team?: Team;
+  team?: Team | { id: string; name: string };
   dqs?: number;
   dqsTrend?: number;
+  commitCount?: number;
   lastActive?: string;
   status: 'ACTIVE' | 'INACTIVE';
 }
