@@ -18,9 +18,12 @@ export const teamsService = {
     return response.data.map((team) => ({
       ...team,
       score: team.avgDqs ?? team.score,
-      members: (team.memberships ?? []).map((membership: any) => membership.user),
+      avgDqs: team.avgDqs ?? team.score,
+      members: team.members ?? (team.memberships ?? []).map((membership: any) => membership.user).filter(Boolean),
+      projects: team.projects ?? (team.projectAssignments ?? []).map((assignment: any) => assignment.project).filter(Boolean),
       memberCount: team.memberCount ?? team._count?.memberships ?? team.memberships?.length ?? 0,
       projectCount: team.projectCount ?? team._count?.projectAssignments ?? 0,
+      commits: team.commits ?? 0,
     }));
   },
 

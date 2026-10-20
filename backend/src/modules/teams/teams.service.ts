@@ -95,6 +95,21 @@ export class TeamsService {
             user: {
               select: {
                 id: true,
+                name: true,
+                email: true,
+                avatarUrl: true,
+              },
+            },
+          },
+        },
+        projectAssignments: {
+          where: { endDate: null },
+          include: {
+            project: {
+              select: {
+                id: true,
+                name: true,
+                description: true,
               },
             },
           },
@@ -171,13 +186,18 @@ export class TeamsService {
           // Let's stick to current scores for now to ensure speed.
         }
 
+        const members = (team.memberships ?? []).map((m: any) => m.user).filter(Boolean);
+        const projects = (team.projectAssignments ?? []).map((pa: any) => pa.project).filter(Boolean);
+
         return {
           ...team,
           commits,
           avgDqs,
           trend,
-          projectCount: team._count.projectAssignments,
-          memberCount: team._count.memberships,
+          projectCount: team._count?.projectAssignments ?? projects.length,
+          memberCount: team._count?.memberships ?? members.length,
+          members,
+          projects,
         };
       }),
     );

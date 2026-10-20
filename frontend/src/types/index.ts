@@ -301,10 +301,13 @@ export interface Team {
   name: string;
   description?: string;
   leadId?: string;
-  lead?: User;
+  lead?: User | null;
   members?: User[];
   projects?: Project[];
   score?: number;
+  avgDqs?: number;
+  commits?: number;
+  trend?: number;
   organizationId: string;
   projectId?: string;
   project?: Project;
