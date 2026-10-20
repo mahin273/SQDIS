@@ -27,6 +27,7 @@ describe('CommitsService', () => {
     user: Record<string, jest.Mock>;
     emailAlias: Record<string, jest.Mock>;
     projectRepository: Record<string, jest.Mock>;
+    defectPrediction: Record<string, jest.Mock>;
   };
   let eventEmitter: { emit: jest.Mock };
   let githubService: { getOctokitForOrganization: jest.Mock };
@@ -86,6 +87,9 @@ describe('CommitsService', () => {
       },
       projectRepository: {
         findMany: jest.fn(),
+      },
+      defectPrediction: {
+        findFirst: jest.fn().mockResolvedValue(null),
       },
     };
     eventEmitter = { emit: jest.fn() };
@@ -202,6 +206,23 @@ describe('CommitsService', () => {
     prisma.commit.findUnique.mockResolvedValue(commit);
 
     await expect(service.findById('commit-1')).resolves.toEqual(commit);
+  });
+
+  it('enriches commit with defectPrediction when available', async () => {
+    const mockPrediction = {
+      id: 'pred-1',
+      defectProbability: 0.75,
+      riskLevel: 'HIGH',
+      topRiskDrivers: ['High complexity'],
+    };
+    prisma.commit.findUnique.mockResolvedValue(commit);
+    prisma.defectPrediction.findFirst.mockResolvedValue(mockPrediction);
+
+    const result = await service.findById('commit-1');
+    expect(result).toEqual({
+      ...commit,
+      defectPrediction: mockPrediction,
+    });
   });
 
   it('throws when a commit is not found', async () => {

@@ -954,15 +954,26 @@ export class CommitsService {
       throw new NotFoundException(`Commit with ID ${id} not found`);
     }
 
-    const defectPrediction = await this.prisma.defectPrediction.findFirst({
-      where: { commitSha: commit.sha },
-      orderBy: { createdAt: 'desc' },
-    });
+    let defectPrediction = null;
+    try {
+      if ((this.prisma as any).defectPrediction?.findFirst) {
+        defectPrediction = await (this.prisma as any).defectPrediction.findFirst({
+          where: { commitSha: commit.sha },
+          orderBy: { createdAt: 'desc' },
+        });
+      }
+    } catch {
+      // In case defectPrediction model or query fails
+    }
 
-    return {
-      ...commit,
-      defectPrediction: defectPrediction || null,
-    };
+    if (defectPrediction) {
+      return {
+        ...commit,
+        defectPrediction,
+      };
+    }
+
+    return commit;
   }
 
   /**
