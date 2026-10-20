@@ -46,6 +46,10 @@ export class LeaderboardService {
         startDate = new Date(endDate.getTime() - 90 * 24 * 60 * 60 * 1000);
         previousStartDate = new Date(startDate.getTime() - 90 * 24 * 60 * 60 * 1000);
         break;
+      case TimePeriod.YEAR:
+        startDate = new Date(endDate.getTime() - 365 * 24 * 60 * 60 * 1000);
+        previousStartDate = new Date(startDate.getTime() - 365 * 24 * 60 * 60 * 1000);
+        break;
       case TimePeriod.ALL:
       default:
         startDate = new Date(0);

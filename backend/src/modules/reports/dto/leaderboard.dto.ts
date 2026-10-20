@@ -30,6 +30,7 @@ export enum TimePeriod {
   WEEK = 'week',
   MONTH = 'month',
   QUARTER = 'quarter',
+  YEAR = 'year',
   ALL = 'all',
 }
 
