@@ -98,10 +98,10 @@ export default function Dashboard() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Mission Control
+            Engineering Overview
           </h1>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Executive release readiness, AI code intelligence, and live delivery stream.
+            Software quality metrics, repository health, and recent delivery activity.
           </p>
         </div>
 
@@ -206,7 +206,7 @@ export default function Dashboard() {
               </span>
             </div>
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Kamei ML model running on commit ingestion
+              Defect risk evaluated on commit ingestion
             </p>
           </CardContent>
         </Card>
@@ -289,7 +289,7 @@ export default function Dashboard() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                {isHealthy ? 'All Systems Nominal' : 'Code Health Action Required'}
+                {isHealthy ? 'All Quality Gates Passing' : 'Quality Gate Action Required'}
               </span>
               <span
                 className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ${
@@ -298,7 +298,7 @@ export default function Dashboard() {
                     : 'bg-amber-100 text-amber-800 dark:bg-amber-900/50 dark:text-amber-300'
                 }`}
               >
-                {isHealthy ? 'Quality Gates Passing' : 'Triage Priorities'}
+                {isHealthy ? 'Passing' : 'Attention Needed'}
               </span>
             </div>
             <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
@@ -327,19 +327,19 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Main 60/40 Asymmetric Command Grid */}
+      {/* Main Grid: Trends & Repositories on Left, Activity on Right */}
       <div className="grid gap-6 lg:grid-cols-12">
-        {/* Left Column (60%): Multi-Metric Workbench & Repository Command Center */}
+        {/* Left Column (60%): Trends & Repository Overview */}
         <div className="lg:col-span-7 xl:col-span-8 space-y-6">
-          {/* Multi-Metric Workbench Card */}
+          {/* Trends & Analytics Card */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
             <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-3 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
                   <TrendingUp className="h-5 w-5 text-indigo-500" />
-                  Engineering Analytics Workbench
+                  Trends & Analytics
                 </CardTitle>
-                <CardDescription>Multi-dimensional software health and delivery metrics</CardDescription>
+                <CardDescription>Quality scores, commit volume, and team distribution</CardDescription>
               </div>
 
               {/* Workbench Tab Switcher */}
@@ -386,15 +386,15 @@ export default function Dashboard() {
             </CardContent>
           </Card>
 
-          {/* Connected Repositories & Health Center (Unified Tabbed Component) */}
+          {/* Connected Repositories & Contributors */}
           <Card className="border-slate-200 dark:border-slate-800 shadow-sm">
             <CardHeader className="border-b border-slate-100 dark:border-slate-800 pb-3 flex flex-row items-center justify-between">
               <div>
                 <CardTitle className="text-base flex items-center gap-2">
                   <Box className="h-5 w-5 text-indigo-500" />
-                  Repository Command Center
+                  Repositories & Contributors
                 </CardTitle>
-                <CardDescription>Codebase health indices, coverage, and contributors</CardDescription>
+                <CardDescription>Repository quality scores, test coverage, and contributor activity</CardDescription>
               </div>
 
               {/* Repo Center Tabs */}
@@ -442,7 +442,7 @@ export default function Dashboard() {
           </Card>
         </div>
 
-        {/* Right Column (40%): Live Operations Stream with Slide-Over Drawer */}
+        {/* Right Column (40%): Recent Activity Feed */}
         <div className="lg:col-span-5 xl:col-span-4 space-y-6">
           <ActivityFeed onItemClick={(item) => setSelectedDrawerItem(item)} />
         </div>
