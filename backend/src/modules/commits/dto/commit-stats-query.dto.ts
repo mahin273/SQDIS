@@ -20,6 +20,11 @@ export class CommitStatsQueryDto {
   @IsUUID()
   developerId?: string;
 
+  @ApiPropertyOptional({ description: 'Author ID (alias for developerId)' })
+  @IsOptional()
+  @IsUUID()
+  authorId?: string;
+
   @ApiPropertyOptional({ description: 'Start date for statistics' })
   @IsOptional()
   @IsDateString()

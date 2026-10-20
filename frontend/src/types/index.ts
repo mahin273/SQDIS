@@ -949,7 +949,28 @@ export interface Commit {
   filesChanged: number;
   classification: CommitClassification;
   sqs?: number;
+  churnRatio?: number;
+  anomalyFlag?: boolean;
+  anomalyScore?: number;
   organizationId: string;
+  fileChanges?: Array<{
+    id: string;
+    commitId: string;
+    filePath: string;
+    additions: number;
+    deletions: number;
+    churnRatio?: number;
+  }>;
+  defectPrediction?: {
+    id: string;
+    defectProbability: number;
+    riskLevel: 'LOW' | 'MODERATE' | 'HIGH' | 'CRITICAL';
+    isDefectProne: boolean;
+    topRiskDrivers: string[];
+    metricsAnalyzed?: Record<string, any>;
+    modelVersion?: string;
+    benchmark?: string;
+  } | null;
 }
 
 export interface CommitFilters {
@@ -959,11 +980,13 @@ export interface CommitFilters {
   organizationId?: string;
   repositoryId?: string;
   authorId?: string;
+  developerId?: string;
   branch?: string;
   startDate?: string;
   endDate?: string;
   classification?: CommitClassification;
   search?: string;
+  anomalyOnly?: boolean;
 }
 
 export interface CommitStats {
@@ -979,6 +1002,7 @@ export interface CommitStats {
     authorId: string;
     name: string;
     count: number;
+    avatarUrl?: string | null;
   }>;
 }
 

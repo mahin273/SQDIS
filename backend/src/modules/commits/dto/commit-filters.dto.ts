@@ -31,6 +31,11 @@ export class CommitFiltersDto {
   @IsUUID()
   developerId?: string;
 
+  @ApiPropertyOptional({ description: 'Author ID (alias for developerId)' })
+  @IsOptional()
+  @IsUUID()
+  authorId?: string;
+
   @ApiPropertyOptional({ description: 'Commit classification', enum: CommitClassification })
   @IsOptional()
   @IsEnum(CommitClassification)

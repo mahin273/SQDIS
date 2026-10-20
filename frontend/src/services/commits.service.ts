@@ -1,6 +1,16 @@
 import { api } from './api';
 import type { Commit, CommitFilters, CommitStats, HeatmapData } from '@/types';
 
+export interface PaginatedCommitsResponse {
+  data: Commit[];
+  meta: {
+    total: number;
+    page: number;
+    limit: number;
+    totalPages: number;
+  };
+}
+
 export const commitsService = {
   /**
    * Get all commits with pagination and filters
@@ -18,6 +28,38 @@ export const commitsService = {
       if (Array.isArray(raw.items)) return raw.items;
     }
     return [];
+  },
+
+  /**
+   * Get paginated commits with pagination metadata
+   */
+  async getPaginated(filters?: CommitFilters): Promise<PaginatedCommitsResponse> {
+    const params = filters
+      ? { ...filters, limit: filters.limit ?? filters.pageSize ?? 20 }
+      : undefined;
+    const response = await api.get<any>('/commits', { params });
+    const raw = response.data;
+    if (raw && typeof raw === 'object' && Array.isArray(raw.data)) {
+      return {
+        data: raw.data,
+        meta: raw.meta || {
+          total: raw.data.length,
+          page: filters?.page || 1,
+          limit: filters?.limit || filters?.pageSize || 20,
+          totalPages: 1,
+        },
+      };
+    }
+    const arr = Array.isArray(raw) ? raw : [];
+    return {
+      data: arr,
+      meta: {
+        total: arr.length,
+        page: filters?.page || 1,
+        limit: filters?.limit || filters?.pageSize || 20,
+        totalPages: 1,
+      },
+    };
   },
 
   /**
