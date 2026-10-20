@@ -463,24 +463,66 @@ export class DashboardService {
   /**
    * Get unified engineering recent activity across commits, alerts, debt items, and releases
    */
-  async getRecentActivity(organizationId: string, limit: number = 15, type?: string) {
-    const fetchLimit = Math.min(Math.max(limit, 5), 50);
+  async getRecentActivity(
+    organizationId: string,
+    limit: number = 10,
+    type?: string,
+    page: number = 1,
+  ) {
+    const fetchLimit = Math.min(Math.max(limit, 1), 50);
+    const currentPage = Math.max(page, 1);
     const filterType = type?.toLowerCase();
+    const offset = (currentPage - 1) * fetchLimit;
 
     const shouldFetchCommits = !filterType || filterType === 'all' || filterType === 'commit';
     const shouldFetchAlerts = !filterType || filterType === 'all' || filterType === 'alert';
     const shouldFetchDebt = !filterType || filterType === 'all' || filterType === 'debt';
     const shouldFetchReleases = !filterType || filterType === 'all' || filterType === 'release';
 
-    const commitQuota = filterType === 'commit' ? fetchLimit : Math.max(fetchLimit - 5, 10);
-    const auxiliaryQuota = filterType ? fetchLimit : Math.min(fetchLimit, 5);
+    const [commitsCount, alertsCount, debtCount, releasesCount] = await Promise.all([
+      shouldFetchCommits && this.prisma.commit?.count
+        ? this.prisma.commit.count({ where: { repository: { organizationId } } })
+        : Promise.resolve(0),
+      shouldFetchAlerts && this.prisma.alert?.count
+        ? this.prisma.alert.count({ where: { organizationId } })
+        : Promise.resolve(0),
+      shouldFetchDebt && this.prisma.debtItem?.count
+        ? this.prisma.debtItem.count({ where: { repository: { organizationId } } })
+        : Promise.resolve(0),
+      shouldFetchReleases && this.prisma.release?.count
+        ? this.prisma.release.count({ where: { organizationId } })
+        : Promise.resolve(0),
+    ]);
+
+    const counts: Record<string, number> = {
+      all: (commitsCount || 0) + (alertsCount || 0) + (debtCount || 0) + (releasesCount || 0),
+      commit: commitsCount || 0,
+      alert: alertsCount || 0,
+      debt: debtCount || 0,
+      release: releasesCount || 0,
+    };
+
+    const total = filterType && filterType in counts ? counts[filterType] : counts.all;
+
+    const commitSkip = filterType === 'commit' ? offset : 0;
+    const commitTake = filterType === 'commit' ? fetchLimit : Math.min(offset + fetchLimit, 100);
+
+    const alertSkip = filterType === 'alert' ? offset : 0;
+    const alertTake = filterType === 'alert' ? fetchLimit : Math.min(offset + fetchLimit, 50);
+
+    const debtSkip = filterType === 'debt' ? offset : 0;
+    const debtTake = filterType === 'debt' ? fetchLimit : Math.min(offset + fetchLimit, 50);
+
+    const releaseSkip = filterType === 'release' ? offset : 0;
+    const releaseTake = filterType === 'release' ? fetchLimit : Math.min(offset + fetchLimit, 50);
 
     const [commits, alerts, debtItems, releases] = await Promise.all([
       shouldFetchCommits && this.prisma.commit?.findMany
         ? this.prisma.commit.findMany({
             where: { repository: { organizationId } },
             orderBy: { committedAt: 'desc' },
-            take: commitQuota,
+            skip: commitSkip,
+            take: commitTake,
             include: {
               developer: { select: { id: true, name: true, avatarUrl: true } },
               repository: { select: { id: true, name: true } },
@@ -491,14 +533,16 @@ export class DashboardService {
         ? this.prisma.alert.findMany({
             where: { organizationId },
             orderBy: { createdAt: 'desc' },
-            take: auxiliaryQuota,
+            skip: alertSkip,
+            take: alertTake,
           })
         : Promise.resolve([]),
       shouldFetchDebt && this.prisma.debtItem?.findMany
         ? this.prisma.debtItem.findMany({
             where: { repository: { organizationId } },
             orderBy: { createdAt: 'desc' },
-            take: auxiliaryQuota,
+            skip: debtSkip,
+            take: debtTake,
             include: {
               repository: { select: { id: true, name: true } },
               author: { select: { id: true, name: true } },
@@ -509,7 +553,8 @@ export class DashboardService {
         ? this.prisma.release.findMany({
             where: { organizationId },
             orderBy: { createdAt: 'desc' },
-            take: auxiliaryQuota,
+            skip: releaseSkip,
+            take: releaseTake,
           })
         : Promise.resolve([]),
     ]);
@@ -608,7 +653,18 @@ export class DashboardService {
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
     );
 
-    return activities.slice(0, limit);
+    const pagedActivities = (!filterType || filterType === 'all')
+      ? activities.slice(offset, offset + fetchLimit)
+      : activities.slice(0, fetchLimit);
+
+    return {
+      data: pagedActivities,
+      total,
+      page: currentPage,
+      limit: fetchLimit,
+      totalPages: Math.ceil(total / fetchLimit) || 1,
+      counts,
+    };
   }
 
   /**

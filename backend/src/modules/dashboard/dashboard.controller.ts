@@ -102,17 +102,20 @@ export class DashboardController {
   @Get('recent-activity')
   @ApiOperation({ summary: 'Get recent repository activity' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max number of activities to return' })
+  @ApiQuery({ name: 'page', required: false, type: Number, description: 'Page number for pagination' })
   @ApiQuery({ name: 'type', required: false, type: String, description: 'Optional activity type filter (commit, alert, debt, release)' })
   @ApiResponse({ status: 200, description: 'Recent activity list retrieved successfully.' })
   async getRecentActivity(
     @GetOrganization() organizationId: string,
     @Query('limit') limit?: string,
+    @Query('page') page?: string,
     @Query('type') type?: string,
   ) {
     return this.dashboardService.getRecentActivity(
       organizationId,
-      limit ? parseInt(limit) : 15,
+      limit ? parseInt(limit, 10) : 10,
       type,
+      page ? parseInt(page, 10) : 1,
     );
   }
 

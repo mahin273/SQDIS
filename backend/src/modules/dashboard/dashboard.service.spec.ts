@@ -222,12 +222,42 @@ describe('DashboardService', () => {
         },
       ]);
 
+      prisma.commit.count.mockResolvedValue(1);
+      prisma.alert.count.mockResolvedValue(0);
+
       const activity = await service.getRecentActivity('org-1', 10);
 
-      expect(activity).toHaveLength(1);
-      expect(activity[0].type).toBe('commit');
-      expect(activity[0].message).toBe('feat: add metrics');
-      expect(activity[0].repository).toBe('core-api');
+      expect(activity.data).toHaveLength(1);
+      expect(activity.data[0].type).toBe('commit');
+      expect(activity.data[0].message).toBe('feat: add metrics');
+      expect(activity.data[0].repository).toBe('core-api');
+      expect(activity.total).toBe(1);
+    });
+
+    it('returns paginated items and page metadata', async () => {
+      prisma.commit.findMany.mockResolvedValue([
+        {
+          id: 'commit-2',
+          message: 'fix: resolve race condition',
+          authorName: 'Bob',
+          committedAt: new Date('2026-01-02T11:00:00.000Z'),
+          classification: 'BUG_FIX',
+          developer: { id: 'u-2', name: 'Bob', avatarUrl: null },
+          repository: { id: 'r-1', name: 'core-api' },
+        },
+      ]);
+
+      prisma.commit.count.mockResolvedValue(25);
+      prisma.alert.count.mockResolvedValue(5);
+
+      const activity = await service.getRecentActivity('org-1', 10, 'all', 2);
+
+      expect(activity.page).toBe(2);
+      expect(activity.limit).toBe(10);
+      expect(activity.total).toBe(30);
+      expect(activity.totalPages).toBe(3);
+      expect(activity.counts?.commit).toBe(25);
+      expect(activity.counts?.alert).toBe(5);
     });
   });
 

@@ -11,6 +11,7 @@ import {
   FiCheckCircle,
 } from 'react-icons/fi'
 import MetricTable from './MetricTable'
+import { Pagination } from '@/components/ui/pagination'
 import { dashboardService } from '@/services'
 import type { RecentActivity } from '@/types'
 
@@ -74,24 +75,34 @@ export interface ActivityFeedProps {
 export default function ActivityFeed({ onItemClick }: ActivityFeedProps = {}) {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabType>('all')
+  const [page, setPage] = useState<number>(1)
+  const [pageSize, setPageSize] = useState<number>(10)
 
-  const { data: items = [], isLoading } = useQuery({
-    queryKey: ['dashboard', 'recent-activity', activeTab],
+  const handleTabChange = (tab: TabType) => {
+    setActiveTab(tab)
+    setPage(1)
+  }
+
+  const { data: activityResponse, isLoading } = useQuery({
+    queryKey: ['dashboard', 'recent-activity', activeTab, page, pageSize],
     queryFn: () =>
-      dashboardService.getRecentActivity(
-        15,
-        activeTab === 'all' ? undefined : activeTab,
-      ),
+      dashboardService.getRecentActivity({
+        page,
+        limit: pageSize,
+        type: activeTab === 'all' ? undefined : activeTab,
+      }),
   })
 
-  const filteredItems = items
+  const items = activityResponse?.data ?? []
+  const totalItems = activityResponse?.total ?? 0
+  const totalPages = activityResponse?.totalPages ?? 1
 
   const counts: Record<TabType, number> = {
-    all: items.length,
-    commit: items.filter((i) => i.type?.toLowerCase() === 'commit').length,
-    alert: items.filter((i) => i.type?.toLowerCase() === 'alert').length,
-    debt: items.filter((i) => i.type?.toLowerCase() === 'debt').length,
-    release: items.filter((i) => i.type?.toLowerCase() === 'release').length,
+    all: activityResponse?.counts?.all ?? totalItems,
+    commit: activityResponse?.counts?.commit ?? 0,
+    alert: activityResponse?.counts?.alert ?? 0,
+    debt: activityResponse?.counts?.debt ?? 0,
+    release: activityResponse?.counts?.release ?? 0,
   }
 
   const handleRowClick = (item: RecentActivity) => {
@@ -115,13 +126,13 @@ export default function ActivityFeed({ onItemClick }: ActivityFeedProps = {}) {
     >
       <div className="mb-3 flex flex-wrap items-center gap-1.5 border-b border-slate-100 pb-3 dark:border-slate-800">
         {(['all', 'commit', 'alert', 'debt', 'release'] as TabType[]).map((tab) => {
-          if (tab !== 'all' && counts[tab] === 0) return null
+          if (tab !== 'all' && counts[tab] === 0 && activeTab !== tab) return null
           const isActive = activeTab === tab
           return (
             <button
               key={tab}
               type="button"
-              onClick={() => setActiveTab(tab)}
+              onClick={() => handleTabChange(tab)}
               className={`rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
                 isActive
                   ? 'bg-blue-600 text-white dark:bg-blue-500'
@@ -145,14 +156,14 @@ export default function ActivityFeed({ onItemClick }: ActivityFeedProps = {}) {
 
       {isLoading ? (
         <div className="py-6 text-center text-sm text-slate-500">Loading activity...</div>
-      ) : filteredItems.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="py-6 text-center text-sm text-slate-500">
           <p className="font-semibold text-slate-700 dark:text-slate-300">No recent activity</p>
           <p className="mt-1 text-xs text-slate-400">Events, commits, and quality alerts will appear here in real-time.</p>
         </div>
       ) : (
         <div className="divide-y divide-slate-100 dark:divide-slate-800/80">
-          {filteredItems.map((item: RecentActivity) => {
+          {items.map((item: RecentActivity) => {
             const headline = item.title || item.message || item.description || 'Activity update'
             const repo = item.repositoryName || item.repository
             const author = item.author || item.user?.name
@@ -242,6 +253,21 @@ export default function ActivityFeed({ onItemClick }: ActivityFeedProps = {}) {
             )
           })}
         </div>
+      )}
+
+      {totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={totalItems}
+          pageSize={pageSize}
+          onPageChange={(newPage) => setPage(newPage)}
+          onPageSizeChange={(newSize) => {
+            setPageSize(newSize)
+            setPage(1)
+          }}
+          className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800"
+        />
       )}
 
       <div className="mt-4 inline-flex items-center gap-2 text-xs text-slate-500">

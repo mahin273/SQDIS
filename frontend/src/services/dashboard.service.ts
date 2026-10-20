@@ -10,6 +10,15 @@ import type {
   DashboardAlert,
 } from '@/types';
 
+export interface PaginatedRecentActivity {
+  data: RecentActivity[];
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+  counts?: Record<string, number>;
+}
+
 export const dashboardService = {
   /**
    * Get organization-wide dashboard statistics
@@ -80,13 +89,58 @@ export const dashboardService = {
   },
 
   /**
-   * Get recent engineering activity
+   * Get recent engineering activity with optional pagination and type filter
    */
-  async getRecentActivity(limit?: number, type?: string): Promise<RecentActivity[]> {
-    const response = await api.get<RecentActivity[]>('/dashboard/recent-activity', {
-      params: { limit, type },
+  async getRecentActivity(
+    pageOrLimit?: number | { page?: number; limit?: number; type?: string },
+    limitOrType?: number | string,
+    typeFilter?: string,
+  ): Promise<PaginatedRecentActivity> {
+    let page = 1;
+    let limit = 10;
+    let type: string | undefined;
+
+    if (typeof pageOrLimit === 'object' && pageOrLimit !== null) {
+      page = pageOrLimit.page ?? 1;
+      limit = pageOrLimit.limit ?? 10;
+      type = pageOrLimit.type;
+    } else if (typeof pageOrLimit === 'number' && typeof limitOrType === 'string') {
+      limit = pageOrLimit;
+      type = limitOrType;
+    } else if (typeof pageOrLimit === 'number' && typeof limitOrType === 'number') {
+      page = pageOrLimit;
+      limit = limitOrType;
+      type = typeFilter;
+    } else if (typeof pageOrLimit === 'number') {
+      limit = pageOrLimit;
+    }
+
+    const response = await api.get('/dashboard/recent-activity', {
+      params: { page, limit, type },
     });
-    return response.data;
+
+    const raw = response.data;
+    if (Array.isArray(raw)) {
+      return {
+        data: raw,
+        total: raw.length,
+        page,
+        limit,
+        totalPages: Math.ceil(raw.length / limit) || 1,
+      };
+    }
+
+    return {
+      data: Array.isArray(raw?.data) ? raw.data : [],
+      total: typeof raw?.total === 'number' ? raw.total : (raw?.data?.length || 0),
+      page: typeof raw?.page === 'number' ? raw.page : page,
+      limit: typeof raw?.limit === 'number' ? raw.limit : limit,
+      totalPages:
+        typeof raw?.totalPages === 'number'
+          ? raw.totalPages
+          : Math.ceil((raw?.total || 0) / limit) || 1,
+      counts: raw?.counts,
+    };
   },
 
   /**
