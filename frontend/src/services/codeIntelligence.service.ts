@@ -138,6 +138,18 @@ export interface CommitRiskItem {
   committedAt: string;
 }
 
+export interface RepositoryIntelligenceStats {
+  analyzedFiles: number;
+  hotspots: {
+    total: number;
+    critical: number;
+    high: number;
+    moderateOrLow: number;
+  };
+  jitScreenedCommits: number;
+  totalCommits: number;
+}
+
 export const codeIntelligenceService = {
   async predictAstDefect(payload: AstDefectRequest): Promise<AstDefectResponse> {
     const resp = await api.post<AstDefectResponse>('/code-intelligence/ast-defect', payload);
@@ -204,6 +216,13 @@ export const codeIntelligenceService = {
     const resp = await api.get<import('@/types').RepositoryTreemapResponse>(
       `/code-intelligence/repositories/${repositoryId}/treemap`,
       { params },
+    );
+    return resp.data;
+  },
+
+  async getRepositoryStats(repositoryId: string): Promise<RepositoryIntelligenceStats> {
+    const resp = await api.get<RepositoryIntelligenceStats>(
+      `/code-intelligence/repositories/${repositoryId}/stats`,
     );
     return resp.data;
   },

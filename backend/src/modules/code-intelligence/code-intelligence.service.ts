@@ -447,6 +447,50 @@ export class CodeIntelligenceService {
   }
 
   /**
+   * Retrieve repository code intelligence telemetry summary stats (true database totals).
+   */
+  async getRepositoryStats(repositoryId: string) {
+    const [
+      analyzedFiles,
+      criticalHotspots,
+      highHotspots,
+      moderateOrLowHotspots,
+      jitScreenedCommits,
+      totalCommits,
+    ] = await Promise.all([
+      this.prisma.fileASTMetric.count({ where: { repositoryId } }),
+      this.prisma.fileASTMetric.count({
+        where: { repositoryId, cyclomaticComplexity: { gt: 20 } },
+      }),
+      this.prisma.fileASTMetric.count({
+        where: {
+          repositoryId,
+          cyclomaticComplexity: { gt: 10, lte: 20 },
+        },
+      }),
+      this.prisma.fileASTMetric.count({
+        where: { repositoryId, cyclomaticComplexity: { lte: 10 } },
+      }),
+      this.prisma.defectPrediction.count({
+        where: { repositoryId, benchmark: 'Kamei JIT' },
+      }),
+      this.prisma.commit.count({ where: { repositoryId } }),
+    ]);
+
+    return {
+      analyzedFiles,
+      hotspots: {
+        total: criticalHotspots + highHotspots,
+        critical: criticalHotspots,
+        high: highHotspots,
+        moderateOrLow: moderateOrLowHotspots,
+      },
+      jitScreenedCommits,
+      totalCommits,
+    };
+  }
+
+  /**
    * Retrieve complexity and defect hotspots for a repository.
    */
   async getRepositoryHotspots(repositoryId: string, limit = 20) {

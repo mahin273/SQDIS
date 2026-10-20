@@ -98,6 +98,12 @@ export class CodeIntelligenceController {
     return this.codeIntelligenceService.getBusFactorSnapshots(teamId, limit);
   }
 
+  @Get('repositories/:repositoryId/stats')
+  @ApiOperation({ summary: 'Retrieve repository code intelligence telemetry summary stats' })
+  async getRepositoryStats(@Param('repositoryId') repositoryId: string) {
+    return this.codeIntelligenceService.getRepositoryStats(repositoryId);
+  }
+
   @Get('repositories/:repositoryId/hotspots')
   @ApiOperation({ summary: 'Retrieve top complexity & defect hotspots for a repository' })
   async getRepositoryHotspots(

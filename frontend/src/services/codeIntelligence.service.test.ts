@@ -91,5 +91,28 @@ describe('codeIntelligenceService - Automated Remediation Advice', () => {
     expect(result.totalFiles).toBe(24);
     expect(result.quadrantCounts.dangerZone).toBe(3);
   });
+
+  it('calls GET /code-intelligence/repositories/:id/stats and returns repository telemetry stats', async () => {
+    const mockStats = {
+      analyzedFiles: 865,
+      hotspots: {
+        total: 194,
+        critical: 101,
+        high: 93,
+        moderateOrLow: 671,
+      },
+      jitScreenedCommits: 370,
+      totalCommits: 371,
+    };
+
+    vi.mocked(api.get).mockResolvedValueOnce({ data: mockStats });
+
+    const result = await codeIntelligenceService.getRepositoryStats('repo-123');
+
+    expect(api.get).toHaveBeenCalledWith('/code-intelligence/repositories/repo-123/stats');
+    expect(result.analyzedFiles).toBe(865);
+    expect(result.hotspots.total).toBe(194);
+    expect(result.jitScreenedCommits).toBe(370);
+  });
 });
 

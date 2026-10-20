@@ -78,6 +78,14 @@ export const CodeIntelligencePage: React.FC = () => {
 
   const activeRepoId = activeRepo?.id || '';
 
+  // 0. Live Repository Telemetry Aggregates (True DB Totals)
+  const repoStatsQuery = useQuery({
+    queryKey: ['repository-intelligence-stats', activeRepoId],
+    queryFn: () => codeIntelligenceService.getRepositoryStats(activeRepoId),
+    enabled: !!activeRepoId && studioMode === 'LIVE',
+  });
+  const repoStats = repoStatsQuery.data;
+
   // 1. Live Hotspots Query
   const hotspotsQuery = useQuery({
     queryKey: ['repository-hotspots', activeRepoId],
@@ -358,19 +366,25 @@ export const CodeIntelligencePage: React.FC = () => {
             <div className="flex items-center gap-4 text-xs">
               <div className="text-right">
                 <span className="text-[11px] text-slate-400">Analyzed Files</span>
-                <p className="font-bold text-slate-900 dark:text-slate-100">{hotspots.length}</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100">
+                  {repoStats ? repoStats.analyzedFiles.toLocaleString() : hotspots.length}
+                </p>
               </div>
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
               <div className="text-right">
                 <span className="text-[11px] text-slate-400">High/Critical Hotspots</span>
                 <p className="font-bold text-rose-600 dark:text-rose-500">
-                  {hotspots.filter((h) => h.riskLevel === 'CRITICAL' || h.riskLevel === 'HIGH').length}
+                  {repoStats
+                    ? repoStats.hotspots.total.toLocaleString()
+                    : hotspots.filter((h) => h.riskLevel === 'CRITICAL' || h.riskLevel === 'HIGH').length}
                 </p>
               </div>
               <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
               <div className="text-right">
                 <span className="text-[11px] text-slate-400">JIT Screened Commits</span>
-                <p className="font-bold text-blue-600 dark:text-blue-400">{commitsRisk.length}</p>
+                <p className="font-bold text-blue-600 dark:text-blue-400">
+                  {repoStats ? repoStats.jitScreenedCommits.toLocaleString() : commitsRisk.length}
+                </p>
               </div>
             </div>
           </div>
@@ -389,7 +403,7 @@ export const CodeIntelligencePage: React.FC = () => {
               <Flame className="h-4 w-4" />
               <span>Architecture Hotspots</span>
               <Badge variant="secondary" className="text-[10px] ml-1">
-                {hotspots.length}
+                {repoStats ? repoStats.hotspots.total : hotspots.length}
               </Badge>
             </button>
             <button
@@ -404,7 +418,7 @@ export const CodeIntelligencePage: React.FC = () => {
               <GitCommit className="h-4 w-4" />
               <span>Commit Defect Stream</span>
               <Badge variant="secondary" className="text-[10px] ml-1">
-                {commitsRisk.length}
+                {repoStats ? repoStats.jitScreenedCommits : commitsRisk.length}
               </Badge>
             </button>
             <button

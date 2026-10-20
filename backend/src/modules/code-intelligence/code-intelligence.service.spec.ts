@@ -132,4 +132,27 @@ describe('CodeIntelligenceService', () => {
       expect(result.quadrantFiles.length).toBeGreaterThanOrEqual(10);
     });
   });
+
+  describe('getRepositoryStats', () => {
+    it('should aggregate accurate database counts across files, hotspots, and JIT commits', async () => {
+      (prisma.fileASTMetric.count as jest.Mock)
+        .mockResolvedValueOnce(865) // total files
+        .mockResolvedValueOnce(101) // critical
+        .mockResolvedValueOnce(93)  // high
+        .mockResolvedValueOnce(671); // moderate/low
+
+      (prisma.defectPrediction.count as jest.Mock).mockResolvedValue(370);
+      (prisma.commit.count as jest.Mock).mockResolvedValue(371);
+
+      const stats = await service.getRepositoryStats('repo-1');
+
+      expect(stats.analyzedFiles).toBe(865);
+      expect(stats.hotspots.total).toBe(194);
+      expect(stats.hotspots.critical).toBe(101);
+      expect(stats.hotspots.high).toBe(93);
+      expect(stats.hotspots.moderateOrLow).toBe(671);
+      expect(stats.jitScreenedCommits).toBe(370);
+      expect(stats.totalCommits).toBe(371);
+    });
+  });
 });
