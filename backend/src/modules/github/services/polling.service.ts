@@ -33,9 +33,9 @@ export class PollingService {
   ) {}
 
   /**
-   * Hourly cron job to poll for missed commits
+   * Periodic cron job to poll for missed commits (every 5 minutes for timely sync)
    */
-  @Cron(CronExpression.EVERY_HOUR)
+  @Cron(CronExpression.EVERY_5_MINUTES)
   async handleHourlyPolling(): Promise<void> {
     if (this.isPolling) {
       this.logger.warn('Polling already in progress, skipping this cycle');
