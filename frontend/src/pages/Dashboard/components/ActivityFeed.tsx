@@ -76,7 +76,7 @@ export default function ActivityFeed({ onItemClick }: ActivityFeedProps = {}) {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabType>('all')
   const [page, setPage] = useState<number>(1)
-  const [pageSize, setPageSize] = useState<number>(10)
+  const pageSize = 10
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab)
@@ -257,15 +257,12 @@ export default function ActivityFeed({ onItemClick }: ActivityFeedProps = {}) {
 
       {totalPages > 1 && (
         <Pagination
+          compact
           currentPage={page}
           totalPages={totalPages}
           totalItems={totalItems}
           pageSize={pageSize}
           onPageChange={(newPage) => setPage(newPage)}
-          onPageSizeChange={(newSize) => {
-            setPageSize(newSize)
-            setPage(1)
-          }}
           className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800"
         />
       )}
