@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsOptional, IsUUID } from 'class-validator';
+import { IsOptional, IsString, IsUUID } from 'class-validator';
 
 /**
  * Query parameters for team leaderboard
@@ -13,6 +13,14 @@ export class TeamLeaderboardQueryDto {
   @IsOptional()
   @IsUUID()
   projectId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Time period for leaderboard calculation',
+    example: 'month',
+  })
+  @IsOptional()
+  @IsString()
+  period?: string;
 }
 
 /**

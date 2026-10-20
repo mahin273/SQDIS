@@ -126,10 +126,32 @@ export function LeaderboardPage() {
   // Team entries normalized
   const rawTeams = teamLeaderboardQuery.data
   const teamEntries: TeamLeaderboardEntry[] = useMemo(() => {
-    if (rawTeams && Array.isArray(rawTeams.data)) return rawTeams.data
-    if (Array.isArray(rawTeams)) return rawTeams
-    return []
+    let list: any[] = []
+    if (rawTeams && Array.isArray(rawTeams.data)) {
+      list = rawTeams.data
+    } else if (rawTeams && typeof rawTeams === 'object' && Array.isArray((rawTeams as any).teams)) {
+      list = (rawTeams as any).teams
+    } else if (rawTeams && typeof rawTeams === 'object' && Array.isArray((rawTeams as any).entries)) {
+      list = (rawTeams as any).entries
+    } else if (Array.isArray(rawTeams)) {
+      list = rawTeams
+    }
+
+    return list.map((t: any) => ({
+      teamId: t.teamId || t.id || '',
+      name: t.name || t.teamName || 'Squad',
+      avgDqs: t.aggregatedDQS ?? t.avgDqs ?? 0,
+      memberCount: t.memberCount ?? 0,
+      rank: t.rank ?? 0,
+      ...t,
+    }))
   }, [rawTeams])
+
+  const filteredTeams = useMemo(() => {
+    return teamEntries.filter((team) =>
+      team.name.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  }, [teamEntries, searchTerm])
 
   // Filtered & Sorted Developer entries
   const filteredDevs = useMemo(() => {
@@ -888,7 +910,7 @@ export function LeaderboardPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                  {teamEntries.map((team) => (
+                  {filteredTeams.map((team) => (
                     <tr
                       key={team.teamId}
                       className="hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition-colors"
