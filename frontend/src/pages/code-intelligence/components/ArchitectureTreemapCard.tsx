@@ -100,13 +100,18 @@ function executeWorkflow(payload: any, options?: any) {
               <FolderTree className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100">
                   Repository Architecture Hotspots & Treemap
                 </CardTitle>
                 <Badge variant="outline" className="text-[10px] bg-slate-50 dark:bg-slate-800/80 font-mono">
                   {repositoryName || 'Active Repo'}
                 </Badge>
+                {data && (
+                  <Badge variant="outline" className="text-[11px] font-normal border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300">
+                    Visualizing Top {data.visualizedFiles || data.totalFiles} Architectural Files
+                  </Badge>
+                )}
               </div>
               <CardDescription className="text-xs text-slate-500 mt-0.5">
                 Hierarchical codebase navigation, architectural volume, and churn vs complexity hotspot matrix.
@@ -190,27 +195,36 @@ function executeWorkflow(payload: any, options?: any) {
         {data && (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
             <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50">
-              <span className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">
-                Total Files
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">
+                  Total Files
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">Repository</span>
+              </div>
               <p className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-0.5">
-                {data.totalFiles.toLocaleString()}
+                {(data.repoStats?.totalFiles ?? data.totalFiles).toLocaleString()}
               </p>
             </div>
             <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50">
-              <span className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">
-                Codebase Volume
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">
+                  Codebase Volume
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">Total</span>
+              </div>
               <p className="text-lg font-bold text-slate-900 dark:text-slate-100 mt-0.5">
-                {data.totalLoc.toLocaleString()} LOC
+                {(data.repoStats?.totalLoc ?? data.totalLoc).toLocaleString()} LOC
               </p>
             </div>
             <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/50 border border-slate-200/60 dark:border-slate-700/50">
-              <span className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">
-                Average Complexity
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-slate-500 uppercase font-semibold tracking-wider">
+                  Average Complexity
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium">Repo Mean</span>
+              </div>
               <p className="text-lg font-bold text-amber-600 dark:text-amber-400 mt-0.5">
-                {data.averageComplexity}
+                {data.repoStats?.averageComplexity ?? data.averageComplexity}
               </p>
             </div>
             <div className="p-2.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200/80 dark:border-rose-900/60">
@@ -221,7 +235,7 @@ function executeWorkflow(payload: any, options?: any) {
                 <Flame className="w-3.5 h-3.5 text-rose-500" />
               </div>
               <p className="text-lg font-bold text-rose-600 dark:text-rose-400 mt-0.5">
-                {data.quadrantCounts.dangerZone} Hotspots
+                {(data.repoStats?.totalHotspots ?? data.quadrantCounts.dangerZone).toLocaleString()} Hotspots
               </p>
             </div>
           </div>

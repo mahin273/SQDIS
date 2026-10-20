@@ -74,11 +74,25 @@ export class QuadrantFileInfo {
   quadrant: 'DANGER_ZONE' | 'STABLE_COMPLEX' | 'ACTIVE_SIMPLE' | 'HEALTHY';
 }
 
+export class TreemapRepoStatsDto {
+  @ApiProperty({ example: 865 })
+  totalFiles: number;
+
+  @ApiProperty({ example: 368142 })
+  totalLoc: number;
+
+  @ApiProperty({ example: 8.8 })
+  averageComplexity: number;
+
+  @ApiProperty({ example: 194 })
+  totalHotspots: number;
+}
+
 export class RepositoryTreemapResponseDto {
   @ApiProperty({ example: 'c64a59f6-16e0-410a-b333-e07503da0264' })
   repositoryId: string;
 
-  @ApiProperty({ example: 48 })
+  @ApiProperty({ example: 200 })
   totalFiles: number;
 
   @ApiProperty({ example: 12540 })
@@ -86,6 +100,12 @@ export class RepositoryTreemapResponseDto {
 
   @ApiProperty({ example: 9.4 })
   averageComplexity: number;
+
+  @ApiPropertyOptional({ example: 200 })
+  visualizedFiles?: number;
+
+  @ApiPropertyOptional({ type: () => TreemapRepoStatsDto })
+  repoStats?: TreemapRepoStatsDto;
 
   @ApiProperty({ type: () => TreemapNodeDto })
   root: TreemapNodeDto;

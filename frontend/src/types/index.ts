@@ -834,11 +834,20 @@ export interface QuadrantFileInfo {
   quadrant: 'DANGER_ZONE' | 'STABLE_COMPLEX' | 'ACTIVE_SIMPLE' | 'HEALTHY';
 }
 
+export interface TreemapRepoStats {
+  totalFiles: number;
+  totalLoc: number;
+  averageComplexity: number;
+  totalHotspots: number;
+}
+
 export interface RepositoryTreemapResponse {
   repositoryId: string;
   totalFiles: number;
   totalLoc: number;
   averageComplexity: number;
+  visualizedFiles?: number;
+  repoStats?: TreemapRepoStats;
   root: TreemapNode;
   quadrantCounts: {
     dangerZone: number;

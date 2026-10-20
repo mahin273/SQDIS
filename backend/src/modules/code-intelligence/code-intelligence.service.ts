@@ -594,26 +594,41 @@ export class CodeIntelligenceService {
     sizeBy: 'loc' | 'churn' = 'loc',
     colorBy: 'complexity' | 'defectRisk' | 'debtCount' = 'complexity',
   ): Promise<RepositoryTreemapResponseDto> {
-    const fileMetrics = await this.prisma.fileASTMetric.findMany({
-      where: { repositoryId },
-      orderBy: { cyclomaticComplexity: 'desc' },
-      take: 200,
-    });
+    const [fileMetrics, openDebt, defectPredictions, fileStats, repoHotspotsCount, commitLines] =
+      await Promise.all([
+        this.prisma.fileASTMetric.findMany({
+          where: { repositoryId },
+          orderBy: { cyclomaticComplexity: 'desc' },
+          take: 200,
+        }),
+        this.prisma.debtItem.findMany({
+          where: { repositoryId, isResolved: false },
+          select: { filePath: true },
+        }),
+        this.prisma.defectPrediction.findMany({
+          where: { repositoryId, benchmark: 'NASA MDP' },
+          orderBy: { createdAt: 'desc' },
+          take: 200,
+        }),
+        this.prisma.fileASTMetric.aggregate({
+          where: { repositoryId },
+          _count: { id: true },
+          _avg: { cyclomaticComplexity: true },
+        }),
+        this.prisma.fileASTMetric.count({
+          where: { repositoryId, cyclomaticComplexity: { gt: 10 } },
+        }),
+        this.prisma.commit.aggregate({
+          where: { repositoryId },
+          _sum: { linesAdded: true, linesDeleted: true },
+        }),
+      ]);
 
-    const openDebt = await this.prisma.debtItem.findMany({
-      where: { repositoryId, isResolved: false },
-      select: { filePath: true },
-    });
     const debtMap = new Map<string, number>();
     for (const d of openDebt) {
       debtMap.set(d.filePath, (debtMap.get(d.filePath) || 0) + 1);
     }
 
-    const defectPredictions = await this.prisma.defectPrediction.findMany({
-      where: { repositoryId, benchmark: 'NASA MDP' },
-      orderBy: { createdAt: 'desc' },
-      take: 200,
-    });
     const defectMap = new Map<string, { defectProbability: number; riskLevel: string }>();
     for (const dp of defectPredictions) {
       if (dp.filePath && !defectMap.has(dp.filePath)) {
@@ -624,19 +639,60 @@ export class CodeIntelligenceService {
       }
     }
 
+    const targetFilePaths = fileMetrics.map((fm) => fm.filePath);
+    const fileChanges = await this.prisma.fileChange.findMany({
+      where: {
+        commit: { repositoryId },
+        filePath: { in: targetFilePaths },
+      },
+      select: {
+        filePath: true,
+        additions: true,
+        deletions: true,
+      },
+    });
+
+    const fileChurnMap = new Map<string, { churn: number; netLines: number }>();
+    for (const fc of fileChanges || []) {
+      const existing = fileChurnMap.get(fc.filePath) || { churn: 0, netLines: 0 };
+      existing.churn += 1;
+      existing.netLines += (fc.additions || 0) - (fc.deletions || 0);
+      fileChurnMap.set(fc.filePath, existing);
+    }
+
     let filesToProcess = fileMetrics.map((fm) => {
       const defect = defectMap.get(fm.filePath);
+      const gitData = fileChurnMap.get(fm.filePath);
       const estLoc = Math.max(35, fm.cyclomaticComplexity * 20 + fm.cognitiveComplexity * 10);
-      const churnCount = Math.max(1, (fm.cyclomaticComplexity * 3) % 40 + 5);
+      const realLoc = gitData && gitData.netLines > 20 ? gitData.netLines : estLoc;
+      const realChurn =
+        gitData && gitData.churn > 0
+          ? gitData.churn
+          : Math.max(1, (fm.cyclomaticComplexity % 15) + 1);
+
       return {
         filePath: fm.filePath,
-        loc: estLoc,
+        loc: realLoc,
         cyclomaticComplexity: fm.cyclomaticComplexity,
         cognitiveComplexity: fm.cognitiveComplexity,
-        defectProbability: defect ? defect.defectProbability : (fm.cyclomaticComplexity > 15 ? 0.68 : fm.cyclomaticComplexity > 8 ? 0.35 : 0.12),
-        riskLevel: (defect ? defect.riskLevel : (fm.cyclomaticComplexity > 20 ? 'CRITICAL' : fm.cyclomaticComplexity > 10 ? 'HIGH' : fm.cyclomaticComplexity > 5 ? 'MODERATE' : 'LOW')) as 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW',
+        defectProbability: defect
+          ? defect.defectProbability
+          : fm.cyclomaticComplexity > 15
+          ? 0.68
+          : fm.cyclomaticComplexity > 8
+          ? 0.35
+          : 0.12,
+        riskLevel: (defect
+          ? defect.riskLevel
+          : fm.cyclomaticComplexity > 20
+          ? 'CRITICAL'
+          : fm.cyclomaticComplexity > 10
+          ? 'HIGH'
+          : fm.cyclomaticComplexity > 5
+          ? 'MODERATE'
+          : 'LOW') as 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW',
         debtCount: debtMap.get(fm.filePath) || 0,
-        churnCount,
+        churnCount: realChurn,
       };
     });
 
@@ -810,11 +866,28 @@ export class CodeIntelligenceService {
       (filesToProcess.reduce((acc, f) => acc + f.cyclomaticComplexity, 0) / filesToProcess.length).toFixed(1),
     );
 
+    const repoTotalFiles = fileStats?._count?.id ?? filesToProcess.length;
+    const repoAvgComplexity = fileStats?._avg?.cyclomaticComplexity
+      ? Number(fileStats._avg.cyclomaticComplexity.toFixed(1))
+      : averageComplexity;
+    const netCommitLoc = Math.max(
+      0,
+      (commitLines?._sum?.linesAdded || 0) - (commitLines?._sum?.linesDeleted || 0),
+    );
+    const repoTotalLoc = netCommitLoc > 0 ? netCommitLoc : rootDto.loc;
+
     return {
       repositoryId,
       totalFiles: filesToProcess.length,
       totalLoc,
       averageComplexity,
+      visualizedFiles: filesToProcess.length,
+      repoStats: {
+        totalFiles: repoTotalFiles,
+        totalLoc: repoTotalLoc,
+        averageComplexity: repoAvgComplexity,
+        totalHotspots: repoHotspotsCount,
+      },
       root: rootDto,
       quadrantCounts,
       quadrantFiles,

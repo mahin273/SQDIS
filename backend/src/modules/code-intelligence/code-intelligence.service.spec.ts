@@ -80,6 +80,17 @@ describe('CodeIntelligenceService', () => {
       ];
 
       (prisma.fileASTMetric.findMany as jest.Mock).mockResolvedValue(mockMetrics);
+      (prisma.fileASTMetric.aggregate as jest.Mock).mockResolvedValue({
+        _count: { id: 865 },
+        _avg: { cyclomaticComplexity: 8.76 },
+      });
+      (prisma.fileASTMetric.count as jest.Mock).mockResolvedValue(194);
+      (prisma.commit.aggregate as jest.Mock).mockResolvedValue({
+        _sum: { linesAdded: 415030, linesDeleted: 46888 },
+      });
+      (prisma.fileChange.findMany as jest.Mock).mockResolvedValue([
+        { filePath: 'src/modules/auth/auth.service.ts', additions: 150, deletions: 20 },
+      ]);
       (prisma.debtItem.findMany as jest.Mock).mockResolvedValue([
         { filePath: 'src/modules/auth/auth.service.ts' },
         { filePath: 'src/modules/auth/auth.service.ts' },
@@ -97,6 +108,11 @@ describe('CodeIntelligenceService', () => {
       expect(result).toBeDefined();
       expect(result.repositoryId).toBe('repo-1');
       expect(result.totalFiles).toBe(4);
+      expect(result.visualizedFiles).toBe(4);
+      expect(result.repoStats).toBeDefined();
+      expect(result.repoStats!.totalFiles).toBe(865);
+      expect(result.repoStats!.averageComplexity).toBe(8.8);
+      expect(result.repoStats!.totalHotspots).toBe(194);
       expect(result.totalLoc).toBeGreaterThan(0);
       expect(result.root.type).toBe('directory');
       expect(result.root.children).toBeDefined();
