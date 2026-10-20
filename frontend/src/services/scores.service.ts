@@ -47,11 +47,38 @@ export const scoresService = {
   /**
    * Get SHAP explanations for developer DQS score
    */
-  async getDQSExplanation(developerId: string): Promise<{ shapValues: Record<string, number>; recommendation: string }> {
-    const response = await api.get<{ shapValues: Record<string, number>; recommendation: string }>(
-      `/scores/dqs/${developerId}/explain`
-    );
-    return response.data;
+  async getDQSExplanation(developerId: string): Promise<any> {
+    const response = await api.get<any>(`/scores/dqs/${developerId}/explain`);
+    const raw = response.data;
+    const topFeatures = raw?.explanation?.topFeatures || raw?.topFeatures || [];
+    const shapValues: Record<string, number> = {};
+    for (const f of topFeatures) {
+      if (f.feature) {
+        shapValues[f.feature] = typeof f.impact === 'number' ? f.impact : (typeof f.value === 'number' ? f.value : 0);
+      }
+    }
+
+    let recommendation = raw?.recommendation || '';
+    if (!recommendation && topFeatures.length > 0) {
+      const negativeFeatures = [...topFeatures]
+        .filter((f: any) => (f.impact || 0) < 0)
+        .sort((a: any, b: any) => (a.impact || 0) - (b.impact || 0));
+
+      if (negativeFeatures.length > 0) {
+        const worst = negativeFeatures[0];
+        const readable = worst.feature.replace(/_/g, ' ');
+        recommendation = `Targeted Coaching: Improving ${readable} (current impact: ${worst.impact.toFixed(1)} pts) will provide the fastest path to the next DQS performance tier.`;
+      } else {
+        recommendation = 'Strong engineering cadence and low defect vulnerability across all evaluated features.';
+      }
+    }
+
+    return {
+      ...raw,
+      topFeatures,
+      shapValues: Object.keys(shapValues).length > 0 ? shapValues : (raw?.shapValues || {}),
+      recommendation,
+    };
   },
 
   /**

@@ -42,6 +42,7 @@ export interface DeveloperStatsDto {
     committedAt: Date;
     linesAdded: number;
     linesDeleted: number;
+    classification?: string | null;
     repositoryId?: string;
     repositoryName?: string;
   }>;
@@ -269,7 +270,7 @@ export class DevelopersService {
           repository: { organizationId },
         },
         orderBy: { committedAt: 'desc' },
-        take: 6,
+        take: 12,
         select: {
           id: true,
           sha: true,
@@ -277,6 +278,7 @@ export class DevelopersService {
           committedAt: true,
           linesAdded: true,
           linesDeleted: true,
+          classification: true,
           repositoryId: true,
           repository: { select: { name: true } },
         },

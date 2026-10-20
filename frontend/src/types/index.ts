@@ -2124,6 +2124,9 @@ export interface Developer {
 export interface DeveloperStats {
   userId: string;
   name: string;
+  email?: string;
+  avatarUrl?: string;
+  role?: string;
   dqs: number;
   dqsHistory: ScoreHistoryPoint[];
   commits: number;
