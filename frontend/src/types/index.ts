@@ -1110,15 +1110,19 @@ export interface Review {
   pullRequestId: number;
   pullRequestTitle: string;
   state: ReviewState;
+  prState?: string;
+  headCommitSha?: string;
   author: {
     id?: string;
     name: string;
     email: string;
+    avatarUrl?: string;
   };
   reviewers: Array<{
     id?: string;
     name: string;
     email: string;
+    avatarUrl?: string;
     reviewedAt?: string;
   }>;
   repositoryId: string;
@@ -1131,6 +1135,17 @@ export interface Review {
   commentCount: number;
   linesAdded: number;
   linesRemoved: number;
+  qualityGate?: {
+    id: string;
+    status: 'PASSED' | 'WARNING' | 'BLOCKED';
+    defectProbability: number;
+    riskLevel: string;
+    maxComplexity: number;
+    impactedTestsCount: number;
+    prunedPercentage: number;
+    estimatedTimeSaved: number;
+    summaryMarkdown?: string;
+  };
 }
 
 export interface ReviewFilters {

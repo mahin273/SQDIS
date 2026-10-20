@@ -87,6 +87,7 @@ describe('ReviewsService', () => {
       user: {
         findFirst: jest.fn(),
         findUnique: jest.fn(),
+        findMany: jest.fn().mockResolvedValue([]),
       },
       repository: {
         findUnique: jest.fn(),

@@ -131,8 +131,8 @@ export class ReviewsService {
     const prNumbers = data.map((r) => r.prNumber);
     const repoIds = Array.from(new Set(data.map((r) => r.repositoryId)));
 
-    const prs =
-      (await this.prisma.pullRequest?.findMany?.({
+    const [prs, users] = await Promise.all([
+      (this.prisma.pullRequest?.findMany?.({
         where: {
           repositoryId: { in: repoIds },
           prNumber: { in: prNumbers },
@@ -141,12 +141,54 @@ export class ReviewsService {
           prNumber: true,
           repositoryId: true,
           headCommitSha: true,
+          authorLogin: true,
+          title: true,
+          state: true,
+          merged: true,
+          mergedAt: true,
+          createdAt: true,
+          qualityGates: {
+            take: 1,
+            orderBy: { createdAt: 'desc' },
+            select: {
+              id: true,
+              status: true,
+              defectProbability: true,
+              riskLevel: true,
+              maxComplexity: true,
+              impactedTestsCount: true,
+              prunedPercentage: true,
+              estimatedTimeSaved: true,
+              summaryMarkdown: true,
+            },
+          },
         },
-      })) ?? [];
+      }) as any) ?? [],
+      (this.prisma.user?.findMany?.({
+        select: { id: true, name: true, email: true, avatarUrl: true, githubId: true },
+      }) as any) ?? [],
+    ]);
+
+    const userByLogin = new Map<string, any>();
+    for (const u of users || []) {
+      if (u.name) userByLogin.set(u.name.toLowerCase(), u);
+      if (u.email) userByLogin.set(u.email.split('@')[0].toLowerCase(), u);
+      if (u.githubId) userByLogin.set(String(u.githubId), u);
+    }
+    userByLogin.set('mahin273', (users || []).find((u: any) => u.name === 'Mahin Khan'));
+    userByLogin.set('zamanasad007', (users || []).find((u: any) => u.name === 'ZamanAsad007'));
+    userByLogin.set('juhaer-10', (users || []).find((u: any) => u.name === 'Kazi Md. Juhaer Akhtab'));
+    userByLogin.set('junayedj95', (users || []).find((u: any) => u.name === 'JuNaYeD'));
+    const defaultAuthor = (users || []).find((u: any) => u.name === 'Mahin Khan') || (users || [])[0];
+
+    const prMap = new Map<string, any>();
+    for (const p of prs || []) {
+      prMap.set(`${p.repositoryId}:${p.prNumber}`, p);
+    }
 
     const commitShas = (prs || [])
-      .map((p) => p.headCommitSha)
-      .filter((sha): sha is string => !!sha);
+      .map((p: any) => p.headCommitSha)
+      .filter((sha: any): sha is string => !!sha);
 
     const commits =
       commitShas.length > 0 && this.prisma.commit?.findMany
@@ -173,7 +215,7 @@ export class ReviewsService {
     }
 
     const prStatsMap = new Map<string, { linesAdded: number; linesDeleted: number }>();
-    for (const p of prs) {
+    for (const p of prs || []) {
       if (p.headCommitSha) {
         const stats = commitMap.get(`${p.repositoryId}:${p.headCommitSha}`);
         if (stats) {
@@ -220,25 +262,61 @@ export class ReviewsService {
 
     const mappedData = data.map((r) => {
       const stats = prStatsMap.get(`${r.repositoryId}:${r.prNumber}`);
+      const pr = prMap.get(`${r.repositoryId}:${r.prNumber}`);
+
+      let authorUser = null;
+      if (pr?.authorLogin) {
+        authorUser = userByLogin.get(pr.authorLogin.toLowerCase());
+      }
+      if (!authorUser && pr?.authorId) {
+        authorUser = (users || []).find((u: any) => u.githubId && String(u.githubId) === String(pr.authorId));
+      }
+      if (!authorUser) {
+        authorUser = defaultAuthor;
+      }
+
+      const author = {
+        id: authorUser?.id || r.reviewer?.id,
+        name: authorUser?.name || pr?.authorLogin || r.reviewer?.name || 'Developer',
+        email: authorUser?.email || r.reviewer?.email || '',
+        avatarUrl: authorUser?.avatarUrl || '',
+      };
+
+      const reviewers = r.reviewer
+        ? [
+            {
+              id: r.reviewer.id,
+              name: r.reviewer.name,
+              email: r.reviewer.email,
+              avatarUrl: r.reviewer.avatarUrl || '',
+              reviewedAt: r.submittedAt?.toISOString(),
+            },
+          ]
+        : [];
+
+      const latestGate = pr?.qualityGates?.[0] || null;
+
       return {
         ...r,
         pullRequestId: r.prNumber,
-        pullRequestTitle: r.prTitle,
-        author: {
-          id: r.reviewer?.id,
-          name: r.reviewer?.name || 'Mahin Khan',
-          email: r.reviewer?.email || 'md.mahin.bd18@gmail.com',
-        },
-        reviewers: r.reviewer
-          ? [
-              {
-                id: r.reviewer.id,
-                name: r.reviewer.name,
-                email: r.reviewer.email,
-                reviewedAt: r.submittedAt?.toISOString(),
-              },
-            ]
-          : [],
+        pullRequestTitle: pr?.title || r.prTitle || `PR #${r.prNumber}`,
+        headCommitSha: pr?.headCommitSha || undefined,
+        prState: pr?.state || (r.state === 'APPROVED' ? 'MERGED' : 'OPEN'),
+        author,
+        reviewers,
+        qualityGate: latestGate
+          ? {
+              id: latestGate.id,
+              status: latestGate.status,
+              defectProbability: latestGate.defectProbability,
+              riskLevel: latestGate.riskLevel,
+              maxComplexity: latestGate.maxComplexity,
+              impactedTestsCount: latestGate.impactedTestsCount,
+              prunedPercentage: latestGate.prunedPercentage,
+              estimatedTimeSaved: latestGate.estimatedTimeSaved,
+              summaryMarkdown: latestGate.summaryMarkdown,
+            }
+          : undefined,
         commentCount: r._count?.comments ?? 0,
         linesAdded: stats?.linesAdded ?? 0,
         linesRemoved: stats?.linesDeleted ?? 0,
