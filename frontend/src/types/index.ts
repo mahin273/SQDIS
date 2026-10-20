@@ -1531,6 +1531,23 @@ export interface Alert {
   message: string;
   severity: AlertSeverity;
   status: AlertStatus;
+  commitId?: string;
+  commit?: {
+    id: string;
+    sha: string;
+    message: string;
+    authorName: string;
+    authorEmail: string;
+    linesAdded?: number;
+    linesDeleted?: number;
+    repository?: {
+      id: string;
+      name: string;
+      fullName: string;
+    };
+  };
+  anomalyScore?: number;
+  modelVersion?: string;
   repositoryId?: string;
   repository?: Repository;
   metricType?: string;
@@ -1539,11 +1556,13 @@ export interface Alert {
   acknowledgedBy?: {
     id: string;
     name: string;
+    email?: string;
   };
   acknowledgedAt?: string;
   resolvedBy?: {
     id: string;
     name: string;
+    email?: string;
   };
   resolvedAt?: string;
   resolutionNotes?: string;

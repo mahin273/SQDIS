@@ -103,8 +103,47 @@ export class AlertsService {
       severityBreakdown[item.severity] = item._count.severity;
     });
 
+    // Enrich alerts with commit details if commitId exists
+    const commitIds = alerts
+      .map((a) => a.commitId)
+      .filter((id): id is string => !!id);
+
+    const commits =
+      commitIds.length > 0 && this.prisma.commit?.findMany
+        ? await this.prisma.commit.findMany({
+            where: { id: { in: commitIds } },
+            select: {
+              id: true,
+              sha: true,
+              message: true,
+              authorName: true,
+              authorEmail: true,
+              linesAdded: true,
+              linesDeleted: true,
+              repository: {
+                select: { id: true, name: true, fullName: true },
+              },
+            },
+          })
+        : [];
+
+    const commitMap = new Map<string, any>();
+    for (const c of commits) {
+      commitMap.set(c.id, c);
+    }
+
+    const enrichedAlerts = alerts.map((a) => {
+      const c = a.commitId ? commitMap.get(a.commitId) : null;
+      if (!c) return a;
+      return {
+        ...a,
+        commit: c,
+        repository: c.repository,
+      };
+    });
+
     return {
-      data: alerts,
+      data: enrichedAlerts,
       pagination: {
         page,
         limit,
@@ -119,7 +158,7 @@ export class AlertsService {
    * Find a specific alert by ID
    */
   async findById(id: string, organizationId: string) {
-    return this.prisma.alert.findFirst({
+    const alert = await this.prisma.alert.findFirst({
       where: { id, organizationId },
       include: {
         acknowledger: {
@@ -130,6 +169,35 @@ export class AlertsService {
         },
       },
     });
+
+    if (!alert) return null;
+
+    let commit = null;
+    if (alert.commitId && this.prisma.commit?.findUnique) {
+      commit = await this.prisma.commit.findUnique({
+        where: { id: alert.commitId },
+        select: {
+          id: true,
+          sha: true,
+          message: true,
+          authorName: true,
+          authorEmail: true,
+          linesAdded: true,
+          linesDeleted: true,
+          repository: {
+            select: { id: true, name: true, fullName: true },
+          },
+        },
+      });
+    }
+
+    if (!commit) return alert;
+
+    return {
+      ...alert,
+      commit,
+      repository: commit.repository,
+    };
   }
 
   /**
