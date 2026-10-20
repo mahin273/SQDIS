@@ -41,6 +41,13 @@ export class GitHubApiService {
 
       const commitDetail: GitHubCommitDetail = {
         sha: data.sha,
+        author: data.author
+          ? {
+              login: data.author.login,
+              id: data.author.id,
+              avatar_url: data.author.avatar_url,
+            }
+          : null,
         commit: {
           message: data.commit.message,
           author: {
@@ -297,12 +304,12 @@ export class GitHubApiService {
 
     const statusBadge =
       summary.status === 'PASSED'
-        ? '✅ **PASSED**'
+        ? '[PASSED]'
         : summary.status === 'WARNING'
-          ? '⚠️ **WARNING**'
-          : '❌ **FAILED**';
+          ? '[WARNING]'
+          : '[FAILED]';
 
-    let commentBody = `### 🛡️ SQDIS Quality Gate: ${statusBadge}\n\n`;
+    let commentBody = `### SQDIS Quality Gate: ${statusBadge}\n\n`;
     commentBody += `| Metric | Value |\n| :--- | :--- |\n`;
     commentBody += `| **Technical Debt** | \`${summary.totalDebtHours} hrs\` |\n`;
     if (summary.cognitiveComplexity !== undefined) {
@@ -311,7 +318,7 @@ export class GitHubApiService {
     commentBody += `| **Security Vulnerabilities** | \`${summary.securityIssuesCount}\` |\n\n`;
 
     if (summary.violations && summary.violations.length > 0) {
-      commentBody += `#### ⚠️ Quality Gate Violations:\n`;
+      commentBody += `#### Quality Gate Violations:\n`;
       for (const v of summary.violations) {
         commentBody += `* **[${v.severity}]** \`${v.rule}\`: ${v.message}\n`;
       }
@@ -319,7 +326,7 @@ export class GitHubApiService {
     }
 
     if (summary.quickWins && summary.quickWins.length > 0) {
-      commentBody += `#### 💡 Top Quick Wins:\n`;
+      commentBody += `#### Top Quick Wins:\n`;
       for (const win of summary.quickWins) {
         commentBody += `* ${win}\n`;
       }

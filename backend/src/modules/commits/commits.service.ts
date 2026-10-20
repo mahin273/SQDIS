@@ -93,6 +93,7 @@ export class CommitsService {
       commit.authorEmail,
       commit.authorName,
       organizationId,
+      commitDetail.author,
     );
 
     // Classify the commit using ML service
@@ -487,12 +488,14 @@ export class CommitsService {
    * @param authorEmail - Commit author email
    * @param authorName - Commit author name
    * @param organizationId - Organization ID
+   * @param gitHubAuthor - Optional GitHub author payload with avatar and id
    * @returns Developer user ID if found, null otherwise
    */
   private async attributeDeveloper(
     authorEmail: string,
     authorName: string,
     organizationId: string,
+    gitHubAuthor?: { login?: string; id?: number; avatar_url?: string } | null,
   ): Promise<string | null> {
     if (!authorEmail) {
       return null;
@@ -513,6 +516,18 @@ export class CommitsService {
       if (userByEmail.memberships.length === 0) {
         // User exists in system, enroll them in this organization
         await this.createOrganizationMembership(this.prisma, userByEmail.id, organizationId);
+      }
+      // If user lacks avatar or githubId, enrich from GitHub commit author payload
+      if ((!userByEmail.avatarUrl || !userByEmail.githubId) && gitHubAuthor) {
+        await this.prisma.user
+          .update({
+            where: { id: userByEmail.id },
+            data: {
+              avatarUrl: userByEmail.avatarUrl || gitHubAuthor.avatar_url || null,
+              githubId: userByEmail.githubId || (gitHubAuthor.id ? String(gitHubAuthor.id) : null),
+            },
+          })
+          .catch((err) => this.logger.warn(`Failed to enrich user ${userByEmail.id} avatar: ${err}`));
       }
       await this.removeFromUnmappedEmails(this.prisma, normalizedEmail, organizationId);
       return userByEmail.id;
@@ -536,6 +551,17 @@ export class CommitsService {
       if (alias.user.memberships.length === 0) {
         await this.createOrganizationMembership(this.prisma, alias.user.id, organizationId);
       }
+      if ((!alias.user.avatarUrl || !alias.user.githubId) && gitHubAuthor) {
+        await this.prisma.user
+          .update({
+            where: { id: alias.user.id },
+            data: {
+              avatarUrl: alias.user.avatarUrl || gitHubAuthor.avatar_url || null,
+              githubId: alias.user.githubId || (gitHubAuthor.id ? String(gitHubAuthor.id) : null),
+            },
+          })
+          .catch((err) => this.logger.warn(`Failed to enrich alias user ${alias.user.id} avatar: ${err}`));
+      }
       await this.removeFromUnmappedEmails(this.prisma, normalizedEmail, organizationId);
       return alias.user.id;
     }
@@ -550,6 +576,17 @@ export class CommitsService {
         organizationId,
       );
       if (linkedUser) {
+        if ((!linkedUser.avatarUrl || !linkedUser.githubId) && gitHubAuthor) {
+          await this.prisma.user
+            .update({
+              where: { id: linkedUser.id },
+              data: {
+                avatarUrl: linkedUser.avatarUrl || gitHubAuthor.avatar_url || null,
+                githubId: linkedUser.githubId || (gitHubAuthor.id ? String(gitHubAuthor.id) : null),
+              },
+            })
+            .catch((err) => this.logger.warn(`Failed to enrich noreply user ${linkedUser.id} avatar: ${err}`));
+        }
         await this.removeFromUnmappedEmails(this.prisma, normalizedEmail, organizationId);
         return linkedUser.id;
       }
@@ -560,6 +597,7 @@ export class CommitsService {
       normalizedEmail,
       authorName,
       organizationId,
+      gitHubAuthor,
     );
 
     if (discoveredUser) {
@@ -1275,18 +1313,24 @@ export class CommitsService {
    * @param tx - Prisma transaction client or PrismaService
    * @param email - User email address
    * @param name - User name (falls back to email prefix if not provided)
+   * @param avatarUrl - Optional avatar URL from GitHub
+   * @param githubId - Optional GitHub numerical ID string
    * @returns Created user
    */
   private async createUser(
     tx: Prisma.TransactionClient | PrismaService,
     email: string,
     name: string,
+    avatarUrl?: string | null,
+    githubId?: string | null,
   ): Promise<{ id: string; email: string; name: string }> {
     return await tx.user.create({
       data: {
         email,
         name: name || email.split('@')[0], // Fallback to email prefix
         passwordHash: null, // Auto-created users have no password
+        avatarUrl: avatarUrl || null,
+        githubId: githubId || null,
       },
       select: {
         id: true,
@@ -1443,12 +1487,14 @@ export class CommitsService {
    * @param email - Contributor email
    * @param authorName - Contributor name from git
    * @param organizationId - Organization ID
+   * @param gitHubAuthor - Optional GitHub author payload with avatar and id
    * @returns Created or existing user record
    */
   private async autoDiscoverContributor(
     email: string,
     authorName: string,
     organizationId: string,
+    gitHubAuthor?: { login?: string; id?: number; avatar_url?: string } | null,
   ): Promise<{ id: string; email: string; name: string } | null> {
     if (!this.isValidEmail(email)) {
       return null;
@@ -1457,22 +1503,38 @@ export class CommitsService {
     try {
       let user = await this.prisma.user.findUnique({
         where: { email },
-        select: { id: true, email: true, name: true },
+        select: { id: true, email: true, name: true, avatarUrl: true, githubId: true },
       });
 
       if (!user) {
         try {
-          user = await this.createUser(this.prisma, email, authorName);
+          user = (await this.createUser(
+            this.prisma,
+            email,
+            authorName,
+            gitHubAuthor?.avatar_url,
+            gitHubAuthor?.id ? String(gitHubAuthor.id) : undefined,
+          )) as any;
         } catch (error: any) {
           if (this.isUniqueConstraintViolation(error)) {
             user = await this.prisma.user.findUnique({
               where: { email },
-              select: { id: true, email: true, name: true },
+              select: { id: true, email: true, name: true, avatarUrl: true, githubId: true },
             });
           } else {
             throw error;
           }
         }
+      } else if ((!user.avatarUrl || !user.githubId) && gitHubAuthor) {
+        await this.prisma.user
+          .update({
+            where: { id: user.id },
+            data: {
+              avatarUrl: user.avatarUrl || gitHubAuthor.avatar_url || null,
+              githubId: user.githubId || (gitHubAuthor.id ? String(gitHubAuthor.id) : null),
+            },
+          })
+          .catch((err) => this.logger.warn(`Failed to enrich discovered contributor ${user?.id} avatar: ${err}`));
       }
 
       if (user) {

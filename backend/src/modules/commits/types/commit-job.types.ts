@@ -40,6 +40,11 @@ export interface ProcessedCommitResult {
  */
 export interface GitHubCommitDetail {
   sha: string;
+  author?: {
+    login?: string;
+    id?: number;
+    avatar_url?: string;
+  } | null;
   commit: {
     message: string;
     author: {
