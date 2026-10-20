@@ -360,14 +360,14 @@ export function CommitsPage() {
     : null
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-12">
+    <div className="w-full space-y-6 pb-12">
       {/* Executive Hero Banner */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-slate-800">
         <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
         <div className="absolute right-32 -bottom-20 h-56 w-56 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
 
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-2xl">
+          <div className="space-y-2 max-w-3xl">
             <div className="flex items-center gap-2.5 flex-wrap">
               <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300 backdrop-blur-md">
                 <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
@@ -656,7 +656,7 @@ export function CommitsPage() {
         <div className="flex flex-col gap-4">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             {/* Search Input */}
-            <div className="relative flex-1 max-w-md">
+            <div className="relative flex-1 max-w-md lg:max-w-xl">
               <Input
                 placeholder="Search by commit message, SHA, or author..."
                 value={search}
