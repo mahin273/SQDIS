@@ -46,14 +46,54 @@ import { Pagination } from '@/components/ui/pagination'
 import { QueryState } from '../pageUtils'
 import type { Commit, CommitClassification } from '@/types'
 
-const CLASSIFICATION_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: 'ALL', label: 'All Types' },
-  { value: 'FEATURE', label: 'Features' },
-  { value: 'BUGFIX', label: 'Bug Fixes' },
-  { value: 'REFACTOR', label: 'Refactor' },
-  { value: 'TEST', label: 'Tests' },
-  { value: 'DOCS', label: 'Docs' },
-  { value: 'CHORE', label: 'Chores' },
+const CLASSIFICATION_OPTIONS: Array<{
+  value: string
+  label: string
+  dotColor: string
+  activeClass: string
+}> = [
+  {
+    value: 'ALL',
+    label: 'All Types',
+    dotColor: 'bg-indigo-400',
+    activeClass: 'border-indigo-500 bg-indigo-600 text-white shadow-xs font-semibold',
+  },
+  {
+    value: 'FEATURE',
+    label: 'Features',
+    dotColor: 'bg-emerald-400',
+    activeClass: 'border-emerald-500 bg-emerald-600 text-white shadow-xs font-semibold',
+  },
+  {
+    value: 'BUGFIX',
+    label: 'Bug Fixes',
+    dotColor: 'bg-amber-400',
+    activeClass: 'border-amber-500 bg-amber-600 text-white shadow-xs font-semibold',
+  },
+  {
+    value: 'REFACTOR',
+    label: 'Refactor',
+    dotColor: 'bg-sky-400',
+    activeClass: 'border-sky-500 bg-sky-600 text-white shadow-xs font-semibold',
+  },
+  {
+    value: 'TEST',
+    label: 'Tests',
+    dotColor: 'bg-purple-400',
+    activeClass: 'border-purple-500 bg-purple-600 text-white shadow-xs font-semibold',
+  },
+  {
+    value: 'DOCS',
+    label: 'Docs',
+    dotColor: 'bg-teal-400',
+    activeClass: 'border-teal-500 bg-teal-600 text-white shadow-xs font-semibold',
+  },
+  {
+    value: 'CHORE',
+    label: 'Chores',
+    dotColor: 'bg-slate-400',
+    activeClass: 'border-slate-500 bg-slate-600 text-white shadow-xs font-semibold',
+  },
 ]
 
 const RISK_LEVEL_OPTIONS: Array<{ value: string; label: string }> = [
@@ -87,37 +127,51 @@ function getClassificationBadge(classification?: string) {
     case 'FEATURE':
       return {
         label: 'Feature',
-        className: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20 font-medium',
+        dotColor: 'bg-emerald-400',
+        className:
+          'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 dark:border-emerald-500/40 font-semibold',
       }
     case 'BUGFIX':
       return {
         label: 'Bug Fix',
-        className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/20 font-medium',
+        dotColor: 'bg-amber-400',
+        className:
+          'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30 dark:border-amber-500/40 font-semibold',
       }
     case 'REFACTOR':
       return {
         label: 'Refactor',
-        className: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/20 font-medium',
+        dotColor: 'bg-sky-400',
+        className:
+          'bg-sky-500/15 text-sky-700 dark:text-sky-300 border-sky-500/30 dark:border-sky-500/40 font-semibold',
       }
     case 'TEST':
       return {
         label: 'Test',
-        className: 'bg-purple-500/10 text-purple-700 dark:text-purple-400 border-purple-500/20 font-medium',
+        dotColor: 'bg-purple-400',
+        className:
+          'bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 dark:border-purple-500/40 font-semibold',
       }
     case 'DOCS':
       return {
         label: 'Docs',
-        className: 'bg-teal-500/10 text-teal-700 dark:text-teal-400 border-teal-500/20 font-medium',
+        dotColor: 'bg-teal-400',
+        className:
+          'bg-teal-500/15 text-teal-700 dark:text-teal-300 border-teal-500/30 dark:border-teal-500/40 font-semibold',
       }
     case 'CHORE':
       return {
         label: 'Chore',
-        className: 'bg-slate-500/10 text-slate-700 dark:text-slate-400 border-slate-500/20 font-medium',
+        dotColor: 'bg-slate-400',
+        className:
+          'bg-slate-500/15 text-slate-700 dark:text-slate-300 border-slate-500/30 dark:border-slate-500/40 font-semibold',
       }
     default:
       return {
         label: classification || 'Commit',
-        className: 'bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-500/20',
+        dotColor: 'bg-slate-400',
+        className:
+          'bg-slate-500/15 text-slate-600 dark:text-slate-400 border-slate-500/30 dark:border-slate-500/40 font-medium',
       }
   }
 }
@@ -733,7 +787,7 @@ export function CommitsPage() {
           </div>
 
           {/* Classification Filter Pills */}
-          <div className="flex items-center gap-1.5 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800/80">
+          <div className="flex items-center gap-2 flex-wrap pt-2 border-t border-slate-100 dark:border-slate-800/80">
             <span className="text-[11px] font-medium text-slate-400 mr-1 flex items-center gap-1">
               <Filter className="h-3 w-3" />
               Category:
@@ -749,13 +803,16 @@ export function CommitsPage() {
                     setCurrentPage(1)
                   }}
                   className={cn(
-                    'rounded-full px-3 py-1 text-xs font-medium transition-colors cursor-pointer border',
+                    'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer border',
                     isActive
-                      ? 'border-indigo-500 bg-indigo-600 text-white shadow-xs'
-                      : 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-400 hover:border-slate-300 dark:hover:border-slate-700'
+                      ? opt.activeClass
+                      : 'border-slate-200 dark:border-slate-800 bg-slate-100 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 hover:text-slate-900 dark:hover:text-white'
                   )}
                 >
-                  {opt.label}
+                  <span
+                    className={cn('h-1.5 w-1.5 rounded-full', isActive ? 'bg-white' : opt.dotColor)}
+                  />
+                  <span>{opt.label}</span>
                 </button>
               )
             })}
@@ -881,7 +938,7 @@ export function CommitsPage() {
                     <div
                       key={commit.id}
                       onClick={() => handleOpenDrawer(commit)}
-                      className="p-4 sm:p-5 transition-all hover:bg-slate-50/70 dark:hover:bg-slate-850/60 cursor-pointer group"
+                      className="p-4 sm:p-5 transition-colors hover:bg-slate-100/70 dark:hover:bg-slate-800/60 cursor-pointer group"
                     >
                       <div className="grid gap-3.5 lg:grid-cols-[1fr_auto] lg:items-center">
                         {/* Commit Message & Metadata */}
@@ -903,8 +960,14 @@ export function CommitsPage() {
                             {/* Classification Badge */}
                             <Badge
                               variant="outline"
-                              className={cn('text-[11px] px-2 py-0.5', classificationBadge.className)}
+                              className={cn(
+                                'text-[11px] px-2.5 py-0.5 inline-flex items-center gap-1.5',
+                                classificationBadge.className
+                              )}
                             >
+                              <span
+                                className={cn('h-1.5 w-1.5 rounded-full', classificationBadge.dotColor)}
+                              />
                               {classificationBadge.label}
                             </Badge>
 
@@ -917,15 +980,15 @@ export function CommitsPage() {
                                   handleOpenDrawer(commit)
                                 }}
                                 className={cn(
-                                  'inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-semibold border transition-colors cursor-pointer',
+                                  'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold border transition-colors cursor-pointer',
                                   risk.riskLevel === 'CRITICAL' &&
-                                    'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/25',
+                                    'bg-rose-500/15 text-rose-700 dark:text-rose-300 border-rose-500/35',
                                   risk.riskLevel === 'HIGH' &&
-                                    'bg-orange-500/10 text-orange-600 dark:text-orange-400 border-orange-500/25',
+                                    'bg-orange-500/15 text-orange-700 dark:text-orange-300 border-orange-500/35',
                                   risk.riskLevel === 'MODERATE' &&
-                                    'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/25',
+                                    'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/35',
                                   risk.riskLevel === 'LOW' &&
-                                    'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/25'
+                                    'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/35'
                                 )}
                                 title="Click to view full defect risk breakdown"
                               >
@@ -1310,7 +1373,7 @@ export function CommitsPage() {
                       {activeCommitDetails.fileChanges.map((fc: any) => (
                         <div
                           key={fc.id || fc.filePath}
-                          className="p-3 text-xs flex items-center justify-between gap-3 hover:bg-slate-50 dark:hover:bg-slate-850/50"
+                          className="p-3 text-xs flex items-center justify-between gap-3 hover:bg-slate-100/70 dark:hover:bg-slate-800/60"
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <FileText className="h-3.5 w-3.5 text-slate-400 shrink-0" />
