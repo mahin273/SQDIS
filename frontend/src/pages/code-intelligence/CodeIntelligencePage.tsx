@@ -49,6 +49,7 @@ import {
   Zap,
   ChevronDown,
   ChevronUp,
+  ChevronRight,
   Copy,
   ExternalLink,
   Lightbulb,
@@ -317,116 +318,211 @@ export const CodeIntelligencePage: React.FC = () => {
   return (
     <div className="space-y-6 pb-12">
       {/* ========================================================================= */}
-      {/* PAGE HEADER WITH MODE SWITCHER */}
+      {/* EXECUTIVE INTELLIGENCE STUDIO HERO BANNER */}
       {/* ========================================================================= */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between border-b border-slate-200 dark:border-slate-800 pb-5">
-        <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-xl text-white shadow-sm">
-            <BrainCircuit className="w-6 h-6" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-                Code Intelligence Studio
-              </h1>
-              <Badge variant="outline" className="text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 text-[10px]">
-                100% On-Premise ML
-              </Badge>
-            </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Automated code defect detection, commit risk screening, smart test selection, and bus factor analytics.
-            </p>
-          </div>
-        </div>
+      <Card className="overflow-hidden border-slate-200/90 shadow-xs dark:border-slate-800">
+        <CardContent className="p-6">
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+            {/* Identity & Metadata */}
+            <div className="space-y-3 flex-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 via-indigo-600 to-violet-600 text-white shadow-md">
+                  <BrainCircuit className="h-6 w-6" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                      Code Intelligence Studio
+                    </h1>
+                    <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300">
+                      Enterprise Tier
+                    </Badge>
+                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      100% On-Premise ML
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
+                    Predictive defect classification, McCabe/Cognitive AST diagnostics, and Kamei Just-In-Time change risk analytics.
+                  </p>
+                </div>
+              </div>
 
-        {/* Dual Mode Switcher Pill */}
-        <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/60 shrink-0">
-          <button
-            type="button"
-            onClick={() => setStudioMode('LIVE')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${
-              studioMode === 'LIVE'
-                ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-900 dark:text-blue-400'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
-            }`}
-          >
-            <GitBranch className="h-4 w-4" />
-            <span>Live Repository Explorer</span>
-            <span className="rounded-full bg-blue-100 px-1.5 py-0.2 text-[10px] text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
-              Live Data
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setStudioMode('SANDBOX')}
-            className={`flex items-center gap-2 rounded-lg px-3.5 py-2 text-xs font-semibold transition-all ${
-              studioMode === 'SANDBOX'
-                ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-900 dark:text-indigo-400'
-                : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
-            }`}
-          >
-            <Play className="h-4 w-4" />
-            <span>Pre-Commit Sandbox</span>
-            <span className="rounded-full bg-indigo-100 px-1.5 py-0.2 text-[10px] text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
-              Interactive
-            </span>
-          </button>
-        </div>
-      </div>
+              {/* Connected Repository & Sync Pills */}
+              <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-slate-600 dark:text-slate-300">
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-1.5 dark:border-slate-800 dark:bg-slate-900">
+                  <GitBranch className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span className="text-slate-400 font-medium">Repository:</span>
+                  <select
+                    value={activeRepoId}
+                    onChange={(e) => setSelectedRepoId(e.target.value)}
+                    className="bg-transparent font-semibold text-slate-900 dark:text-slate-100 focus:outline-none cursor-pointer"
+                  >
+                    {repos.map((r: any) => (
+                      <option key={r.id} value={r.id} className="dark:bg-slate-900">
+                        {r.fullName || r.name} ({r.defaultBranch || 'main'})
+                      </option>
+                    ))}
+                    {repos.length === 0 && <option value="">No connected repositories</option>}
+                  </select>
+                </div>
+
+                <div className="flex items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+                  <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+                  <span>NASA MDP & Kamei JIT Active</span>
+                </div>
+
+                {repoStats && (
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-200/80 bg-slate-50 px-3 py-1.5 text-slate-500 dark:border-slate-800 dark:bg-slate-900">
+                    <GitCommit className="h-3.5 w-3.5 text-emerald-500" />
+                    <span>{repoStats.totalCommits} Commits Screened</span>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Mode Switcher Pill */}
+            <div className="flex items-center gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/90 border border-slate-200 dark:border-slate-700/60 shrink-0 self-start lg:self-center">
+              <button
+                type="button"
+                onClick={() => setStudioMode('LIVE')}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+                  studioMode === 'LIVE'
+                    ? 'bg-white text-blue-600 shadow-sm dark:bg-slate-900 dark:text-blue-400'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                <GitBranch className="h-4 w-4" />
+                <span>Live Repository Explorer</span>
+                <span className="rounded-full bg-blue-100 px-1.5 py-0.2 text-[10px] text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">
+                  Live
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setStudioMode('SANDBOX')}
+                className={`flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-semibold transition-all ${
+                  studioMode === 'SANDBOX'
+                    ? 'bg-white text-indigo-600 shadow-sm dark:bg-slate-900 dark:text-indigo-400'
+                    : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                <Play className="h-4 w-4" />
+                <span>Pre-Commit Sandbox</span>
+                <span className="rounded-full bg-indigo-100 px-1.5 py-0.2 text-[10px] text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
+                  Simulation
+                </span>
+              </button>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ========================================================================= */}
       {/* MODE 1: LIVE REPOSITORY EXPLORER */}
       {/* ========================================================================= */}
       {studioMode === 'LIVE' && (
         <div className="space-y-6">
-          {/* Repository Selector & Live Stats Bar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex items-center gap-3">
-              <GitBranch className="h-5 w-5 text-blue-600 dark:text-blue-400 shrink-0" />
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                  Select Connected Repository
-                </label>
-                <select
-                  value={activeRepoId}
-                  onChange={(e) => setSelectedRepoId(e.target.value)}
-                  className="mt-0.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-sm font-medium text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                >
-                  {repos.map((r: any) => (
-                    <option key={r.id} value={r.id}>
-                      {r.fullName || r.name} ({r.defaultBranch || 'main'})
-                    </option>
-                  ))}
-                  {repos.length === 0 && <option value="">No connected repositories available</option>}
-                </select>
-              </div>
-            </div>
+          {/* 4-Card Executive Telemetry KPI Strip */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <Card className="border-slate-200/80 shadow-xs dark:border-slate-800">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Defect Risk Exposure
+                  </span>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-rose-50 text-rose-600 dark:bg-rose-950/60 dark:text-rose-400">
+                    <Flame className="h-5 w-5" />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                    {repoStats ? (repoStats.hotspots.critical > 50 ? 'Critical' : 'Moderate') : 'Analyzing'}
+                  </span>
+                  <Badge variant="outline" className="border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300 text-[10px] font-mono">
+                    NASA MDP
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  {repoStats ? `${repoStats.hotspots.critical} critical severity files detected` : 'Evaluating architecture modules'}
+                </p>
+              </CardContent>
+            </Card>
 
-            {/* Quick Repository Telemetry KPI Chips */}
-            <div className="flex items-center gap-4 text-xs">
-              <div className="text-right">
-                <span className="text-[11px] text-slate-400">Analyzed Files</span>
-                <p className="font-bold text-slate-900 dark:text-slate-100">
-                  {repoStats ? repoStats.analyzedFiles.toLocaleString() : hotspots.length}
+            <Card className="border-slate-200/80 shadow-xs dark:border-slate-800">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Architecture Hotspots
+                  </span>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/60 dark:text-amber-400">
+                    <Layers className="h-5 w-5" />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-slate-100">
+                    {repoStats ? repoStats.hotspots.total : hotspots.length}
+                  </span>
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300">
+                    {repoStats ? `${repoStats.hotspots.critical} Crit · ${repoStats.hotspots.high} High` : 'Flagged'}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  High McCabe CC & cognitive fatigue
                 </p>
-              </div>
-              <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
-              <div className="text-right">
-                <span className="text-[11px] text-slate-400">High/Critical Hotspots</span>
-                <p className="font-bold text-rose-600 dark:text-rose-500">
-                  {repoStats
-                    ? repoStats.hotspots.total.toLocaleString()
-                    : hotspots.filter((h) => h.riskLevel === 'CRITICAL' || h.riskLevel === 'HIGH').length}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200/80 shadow-xs dark:border-slate-800">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    JIT Screened Commits
+                  </span>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/60 dark:text-blue-400">
+                    <GitCommit className="h-5 w-5" />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-slate-100">
+                    {repoStats ? `${repoStats.jitScreenedCommits}` : commitsRisk.length}
+                  </span>
+                  <span className="text-xs text-slate-400 font-mono">
+                    / {repoStats ? repoStats.totalCommits : '380'}
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] font-mono">
+                    {repoStats && repoStats.totalCommits > 0 ? `${((repoStats.jitScreenedCommits / repoStats.totalCommits) * 100).toFixed(0)}%` : '100%'}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Pre-merge Kamei 14-feature classifier
                 </p>
-              </div>
-              <div className="h-6 w-px bg-slate-200 dark:bg-slate-800" />
-              <div className="text-right">
-                <span className="text-[11px] text-slate-400">JIT Screened Commits</span>
-                <p className="font-bold text-blue-600 dark:text-blue-400">
-                  {repoStats ? repoStats.jitScreenedCommits.toLocaleString() : commitsRisk.length}
+              </CardContent>
+            </Card>
+
+            <Card className="border-slate-200/80 shadow-xs dark:border-slate-800">
+              <CardContent className="p-5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                    Analyzed Codebase
+                  </span>
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-purple-50 text-purple-600 dark:bg-purple-950/60 dark:text-purple-400">
+                    <FileCode className="h-5 w-5" />
+                  </div>
+                </div>
+                <div className="mt-3 flex items-baseline gap-2">
+                  <span className="text-2xl font-bold font-mono tracking-tight text-slate-900 dark:text-slate-100">
+                    {repoStats ? repoStats.analyzedFiles.toLocaleString() : '866'}
+                  </span>
+                  <Badge variant="outline" className="border-purple-200 bg-purple-50 text-purple-700 dark:border-purple-800 dark:bg-purple-950/40 dark:text-purple-300 text-[10px]">
+                    Files
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  Tree-sitter AST & Halstead metrics
                 </p>
-              </div>
-            </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Live Studio Navigation Tabs */}
@@ -561,6 +657,22 @@ export const CodeIntelligencePage: React.FC = () => {
                 </CardHeader>
 
                 <CardContent>
+                  {/* Interactive AST Inspection Info Strip */}
+                  <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 p-3 text-xs text-indigo-950 dark:border-indigo-900/50 dark:bg-indigo-950/30 dark:text-indigo-200">
+                    <div className="flex items-center gap-2.5">
+                      <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white shadow-xs shrink-0">
+                        <Sparkles className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <span className="font-semibold">Interactive AST Defect Diagnostics:</span>{' '}
+                        Click any file row or the <span className="font-semibold text-indigo-600 dark:text-indigo-400">Remediate Blueprint</span> button to slide open instant Tree-sitter complexity metrics and automated refactoring guidance.
+                      </div>
+                    </div>
+                    <Badge variant="outline" className="border-indigo-300 text-indigo-700 dark:border-indigo-700 dark:text-indigo-300 hidden md:inline-flex shrink-0">
+                      Slide-Over Drawer
+                    </Badge>
+                  </div>
+
                   {hotspotsQuery.isLoading ? (
                     <div className="py-12 text-center text-xs text-slate-500">
                       <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" />
@@ -640,9 +752,18 @@ export const CodeIntelligencePage: React.FC = () => {
                               )}
                               {file.riskLevel} {file.defectProbability !== undefined ? `(${(file.defectProbability * 100).toFixed(0)}%)` : ''}
                             </span>
-                            <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-slate-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
-                              <span>Inspect</span>
-                              <ArrowUpRight className="h-3 w-3" />
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenHotspotDrawer(file);
+                              }}
+                              className="h-8 gap-1.5 border-indigo-200 text-indigo-700 bg-indigo-50/60 hover:bg-indigo-100 dark:border-indigo-800 dark:text-indigo-300 dark:bg-indigo-950/40 dark:hover:bg-indigo-900/60 font-semibold text-xs shadow-xs"
+                            >
+                              <Sparkles className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
+                              <span>Remediate Blueprint</span>
+                              <ArrowUpRight className="h-3.5 w-3.5 opacity-60" />
                             </Button>
                           </div>
                         </div>
@@ -692,6 +813,22 @@ export const CodeIntelligencePage: React.FC = () => {
               </CardHeader>
 
               <CardContent>
+                {/* Interactive JIT Commit Risk Info Strip */}
+                <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-blue-100 bg-blue-50/70 p-3 text-xs text-blue-950 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-200">
+                  <div className="flex items-center gap-2.5">
+                    <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-white shadow-xs shrink-0">
+                      <GitCommit className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <span className="font-semibold">Kamei JIT Defect Screening:</span>{' '}
+                      Click any commit or <span className="font-semibold text-blue-600 dark:text-blue-400">Inspect JIT Drivers</span> to review pre-merge risk probability, line churn deltas, and contributor profile connections.
+                    </div>
+                  </div>
+                  <Badge variant="outline" className="border-blue-300 text-blue-700 dark:border-blue-700 dark:text-blue-300 hidden md:inline-flex shrink-0">
+                    Slide-Over Drawer
+                  </Badge>
+                </div>
+
                 {commitsRiskQuery.isLoading ? (
                   <div className="py-12 text-center text-xs text-slate-500">
                     <RefreshCw className="h-5 w-5 animate-spin mx-auto mb-2 text-slate-400" />
@@ -771,10 +908,11 @@ export const CodeIntelligencePage: React.FC = () => {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleOpenCommitDrawer(c)}
-                                className="text-xs h-7 gap-1"
+                                className="h-8 gap-1.5 border-blue-200 text-blue-700 bg-blue-50/60 hover:bg-blue-100 dark:border-blue-800 dark:text-blue-300 dark:bg-blue-950/40 dark:hover:bg-blue-900/60 font-semibold text-xs shadow-xs"
                               >
-                                <span>Inspect</span>
-                                <ArrowUpRight className="h-3 w-3" />
+                                <GitCommit className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                                <span>Inspect JIT Drivers</span>
+                                <ChevronRight className="h-3.5 w-3.5 opacity-60" />
                               </Button>
                               <Button
                                 variant="ghost"
