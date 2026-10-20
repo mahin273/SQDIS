@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import type { TreemapNode } from '@/types';
 import { Folder, FileCode, ChevronRight } from 'lucide-react';
 
@@ -14,10 +14,15 @@ interface TreemapVisualizerProps {
 
 interface RectLayout {
   node: TreemapNode;
-  x: number;
-  y: number;
-  w: number;
-  h: number;
+  x: number; // percentage 0..100
+  y: number; // percentage 0..100
+  w: number; // percentage 0..100
+  h: number; // percentage 0..100
+}
+
+interface ScaledNode {
+  node: TreemapNode;
+  area: number;
 }
 
 export const TreemapVisualizer: React.FC<TreemapVisualizerProps> = ({
@@ -29,6 +34,26 @@ export const TreemapVisualizer: React.FC<TreemapVisualizerProps> = ({
   sizeBy,
   colorBy,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState<number>(1000);
+  const containerHeight = 460; // Matches h-[460px] canvas
+
+  // Observe container width to calculate real-world aspect ratios
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateWidth = () => {
+      if (containerRef.current) {
+        const clientW = containerRef.current.clientWidth;
+        if (clientW > 0) setContainerWidth(clientW);
+      }
+    };
+
+    updateWidth();
+    const observer = new ResizeObserver(updateWidth);
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
   // Find current directory node matching currentPath
   const currentNode = useMemo(() => {
     if (!currentPath || currentPath === '' || currentPath === 'root') {
@@ -45,69 +70,147 @@ export const TreemapVisualizer: React.FC<TreemapVisualizerProps> = ({
     return curr;
   }, [rootNode, currentPath]);
 
-  // Compute layout for immediate children using 2D slice-and-dice partitioning
   const children = currentNode.children || [];
 
+  // =========================================================================
+  // BRULS-HUIZING-VAN WIJK SQUARIFIED TREEMAP ALGORITHM
+  // =========================================================================
   const rects: RectLayout[] = useMemo(() => {
     if (!children.length) return [];
-
-    const width = 100; // Percentage basis
-    const height = 100;
 
     const getNodeWeight = (node: TreemapNode) => {
       const val = sizeBy === 'churn' ? node.churnCount : node.loc;
       return Math.max(1, val);
     };
 
-    const totalWeight = children.reduce((acc, c) => acc + getNodeWeight(c), 0);
+    // Sort descending by weight for optimal packing
+    const sorted = [...children].sort((a, b) => getNodeWeight(b) - getNodeWeight(a));
+    const totalWeight = sorted.reduce((acc, c) => acc + getNodeWeight(c), 0);
     if (totalWeight <= 0) return [];
 
-    // Aspect-ratio partitioning algorithm (alternating vertical/horizontal slices)
+    const totalArea = containerWidth * containerHeight;
+    const scaledItems: ScaledNode[] = sorted.map((node) => ({
+      node,
+      area: (getNodeWeight(node) / totalWeight) * totalArea,
+    }));
+
     const layouts: RectLayout[] = [];
 
-    let currentX = 0;
-    let currentY = 0;
-    let remainingWidth = width;
-    let remainingHeight = height;
-
-    // Sort descending by weight
-    const sorted = [...children].sort((a, b) => getNodeWeight(b) - getNodeWeight(a));
-
-    for (let i = 0; i < sorted.length; i++) {
-      const item = sorted[i];
-      const remainingItems = sorted.slice(i);
-      const subTotal = remainingItems.reduce((acc, c) => acc + getNodeWeight(c), 0);
-      const fraction = getNodeWeight(item) / (subTotal || 1);
-
-      if (remainingWidth >= remainingHeight) {
-        // Slice along width
-        const w = i === sorted.length - 1 ? remainingWidth : remainingWidth * fraction;
-        layouts.push({
-          node: item,
-          x: currentX,
-          y: currentY,
-          w: Math.max(1, Math.min(remainingWidth, w)),
-          h: remainingHeight,
-        });
-        currentX += w;
-        remainingWidth -= w;
-      } else {
-        // Slice along height
-        const h = i === sorted.length - 1 ? remainingHeight : remainingHeight * fraction;
-        layouts.push({
-          node: item,
-          x: currentX,
-          y: currentY,
-          w: remainingWidth,
-          h: Math.max(1, Math.min(remainingHeight, h)),
-        });
-        currentY += h;
-        remainingHeight -= h;
+    // Helper: Worst aspect ratio in row along target dimension w
+    const worst = (row: ScaledNode[], w: number): number => {
+      if (row.length === 0 || w <= 0) return Infinity;
+      const s = row.reduce((acc, c) => acc + c.area, 0);
+      if (s <= 0) return Infinity;
+      const w2 = w * w;
+      const s2 = s * s;
+      let maxRatio = 0;
+      for (const item of row) {
+        const r1 = (w2 * item.area) / s2;
+        const r2 = s2 / (w2 * item.area);
+        const ratio = Math.max(r1, r2);
+        if (ratio > maxRatio) maxRatio = ratio;
       }
-    }
+      return maxRatio;
+    };
+
+    // Helper: Lay out a finalized row into rectangular partitions
+    const layoutRow = (
+      row: ScaledNode[],
+      w: number,
+      x: number,
+      y: number,
+      wRem: number,
+      hRem: number
+    ) => {
+      const s = row.reduce((acc, c) => acc + c.area, 0);
+      const rowThickness = w > 0 ? s / w : 0;
+      const isHorizontal = wRem <= hRem;
+      let offset = 0;
+
+      for (const item of row) {
+        const itemLength = rowThickness > 0 ? item.area / rowThickness : 0;
+        let rx: number;
+        let ry: number;
+        let rw: number;
+        let rh: number;
+
+        if (isHorizontal) {
+          rx = x + offset;
+          ry = y;
+          rw = itemLength;
+          rh = rowThickness;
+          offset += itemLength;
+        } else {
+          rx = x;
+          ry = y + offset;
+          rw = rowThickness;
+          rh = itemLength;
+          offset += itemLength;
+        }
+
+        // Convert to percentage coordinates clamped strictly to [0..100]
+        const px = Math.max(0, Math.min(100, (rx / containerWidth) * 100));
+        const py = Math.max(0, Math.min(100, (ry / containerHeight) * 100));
+        const pw = Math.max(0, Math.min(100 - px, (rw / containerWidth) * 100));
+        const ph = Math.max(0, Math.min(100 - py, (rh / containerHeight) * 100));
+
+        layouts.push({
+          node: item.node,
+          x: px,
+          y: py,
+          w: pw,
+          h: ph,
+        });
+      }
+
+      if (isHorizontal) {
+        const newY = y + rowThickness;
+        const newHRem = Math.max(0, hRem - rowThickness);
+        const newWRem = wRem;
+        const nextW = Math.min(newWRem, newHRem);
+        return { newX: x, newY, newWRem, newHRem, nextW };
+      } else {
+        const newX = x + rowThickness;
+        const newWRem = Math.max(0, wRem - rowThickness);
+        const newHRem = hRem;
+        const nextW = Math.min(newWRem, newHRem);
+        return { newX, newY: y, newWRem, newHRem, nextW };
+      }
+    };
+
+    // Recursive squarification loop
+    const squarifyRec = (
+      items: ScaledNode[],
+      currentRow: ScaledNode[],
+      w: number,
+      x: number,
+      y: number,
+      wRem: number,
+      hRem: number
+    ) => {
+      if (items.length === 0) {
+        if (currentRow.length > 0) {
+          layoutRow(currentRow, w, x, y, wRem, hRem);
+        }
+        return;
+      }
+
+      const nextItem = items[0];
+      const testRow = [...currentRow, nextItem];
+
+      if (currentRow.length === 0 || worst(currentRow, w) >= worst(testRow, w)) {
+        squarifyRec(items.slice(1), testRow, w, x, y, wRem, hRem);
+      } else {
+        const updated = layoutRow(currentRow, w, x, y, wRem, hRem);
+        squarifyRec(items, [], updated.nextW, updated.newX, updated.newY, updated.newWRem, updated.newHRem);
+      }
+    };
+
+    const initialW = Math.min(containerWidth, containerHeight);
+    squarifyRec(scaledItems, [], initialW, 0, 0, containerWidth, containerHeight);
 
     return layouts;
-  }, [children, sizeBy]);
+  }, [children, sizeBy, containerWidth, containerHeight]);
 
   // Color generator based on selected metric
   const getNodeColor = (node: TreemapNode) => {
@@ -235,7 +338,10 @@ export const TreemapVisualizer: React.FC<TreemapVisualizerProps> = ({
       </div>
 
       {/* Main Treemap Canvas Container */}
-      <div className="relative w-full h-[460px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner p-1.5">
+      <div
+        ref={containerRef}
+        className="relative w-full h-[460px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner p-1"
+      >
         {rects.length === 0 ? (
           <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 text-xs">
             <FileCode className="w-8 h-8 text-slate-600 mb-2" />
@@ -246,6 +352,12 @@ export const TreemapVisualizer: React.FC<TreemapVisualizerProps> = ({
             const colors = getNodeColor(node);
             const isSelected = selectedFile?.path === node.path;
             const isDir = node.type === 'directory';
+
+            // Adaptive sizing tiers in percentage terms
+            // w% on 1000px: 10% = 100px. h% on 460px: 10% = 46px
+            const isComfortable = w >= 8 && h >= 14; // Large enough for icon, name, badge, and bottom stats
+            const isCompact = w >= 5 && h >= 6; // Fits single row of icon + truncated name
+            const showCountBadge = w >= 8 && isDir && node.children && node.children.length > 0;
 
             return (
               <div
@@ -264,48 +376,54 @@ export const TreemapVisualizer: React.FC<TreemapVisualizerProps> = ({
                   height: `${h}%`,
                 }}
                 title={`${node.name} (${isDir ? 'Directory' : 'File'})\nLOC: ${node.loc}\nCyclomatic: ${node.cyclomaticComplexity}\nDefect Prob: ${(node.defectProbability * 100).toFixed(0)}%\nDebt Items: ${node.debtCount}\nTouches: ${node.churnCount}`}
-                className={`absolute p-1.5 transition-all duration-200 cursor-pointer overflow-hidden group ${
+                className={`absolute p-1 transition-all duration-200 cursor-pointer overflow-hidden group ${
                   isSelected ? 'z-20' : 'z-10'
                 }`}
               >
                 <div
-                  className={`w-full h-full rounded-lg border flex flex-col justify-between p-2 text-left transition-all ${
-                    colors.bg
-                  } ${colors.border} ${
+                  className={`w-full h-full rounded-lg border text-left transition-all overflow-hidden flex ${
+                    isComfortable
+                      ? 'flex-col justify-between p-2'
+                      : isCompact
+                      ? 'flex-row items-center justify-between px-2 py-1'
+                      : 'items-center justify-center p-0.5'
+                  } ${colors.bg} ${colors.border} ${
                     isSelected
                       ? 'ring-2 ring-blue-500 shadow-lg scale-[0.98]'
                       : 'hover:border-slate-300 dark:hover:border-slate-500 hover:shadow-md'
                   }`}
                 >
-                  {/* Top Bar: Icon + Name */}
-                  <div className="flex items-start justify-between gap-1 min-w-0">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      {isDir ? (
-                        <Folder className="w-3.5 h-3.5 text-slate-400 shrink-0 group-hover:text-blue-400 transition-colors" />
-                      ) : (
-                        <FileCode className="w-3.5 h-3.5 text-slate-400 shrink-0 group-hover:text-indigo-400 transition-colors" />
-                      )}
-                      <span className="text-xs font-semibold text-slate-100 truncate tracking-tight">
-                        {node.name}
-                      </span>
-                    </div>
+                  {/* Primary Row: Icon + Name */}
+                  <div className="flex items-center gap-1.5 min-w-0 flex-1 overflow-hidden">
+                    {isDir ? (
+                      <Folder className="w-3.5 h-3.5 text-slate-400 shrink-0 group-hover:text-blue-400 transition-colors" />
+                    ) : (
+                      <FileCode className="w-3.5 h-3.5 text-slate-400 shrink-0 group-hover:text-indigo-400 transition-colors" />
+                    )}
 
-                    {isDir && (
-                      <span className="text-[10px] font-mono text-slate-400 bg-slate-900/60 px-1 py-0.2 rounded border border-slate-700/50 shrink-0">
-                        {node.children?.length ?? 0}
+                    {isCompact && (
+                      <span className="text-xs font-semibold text-slate-100 truncate tracking-tight min-w-0 flex-1">
+                        {node.name}
                       </span>
                     )}
                   </div>
 
-                  {/* Middle / Bottom Stats: Only show if rectangle is large enough */}
-                  {w > 12 && h > 14 && (
-                    <div className="flex items-end justify-between text-[11px] mt-1 pt-1 border-t border-slate-800/40">
-                      <span className="text-slate-400 font-mono text-[10px]">
+                  {/* Child Count Badge (Only rendered when width allows) */}
+                  {showCountBadge && (
+                    <span className="text-[10px] font-mono text-slate-400 bg-slate-900/70 px-1 py-0.2 rounded border border-slate-700/60 shrink-0 ml-1">
+                      {node.children?.length ?? 0}
+                    </span>
+                  )}
+
+                  {/* Secondary Metric Strip (Only rendered on comfortable tiles) */}
+                  {isComfortable && (
+                    <div className="flex items-end justify-between text-[11px] mt-1 pt-1 border-t border-slate-800/40 w-full overflow-hidden">
+                      <span className="text-slate-400 font-mono text-[10px] truncate max-w-[50%]">
                         {sizeBy === 'churn' ? `${node.churnCount} touches` : `${node.loc} LOC`}
                       </span>
 
                       <span
-                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded ${colors.badge}`}
+                        className={`text-[10px] font-bold px-1.5 py-0.2 rounded shrink-0 ${colors.badge}`}
                       >
                         {colorBy === 'complexity'
                           ? `CC ${node.cyclomaticComplexity}`
