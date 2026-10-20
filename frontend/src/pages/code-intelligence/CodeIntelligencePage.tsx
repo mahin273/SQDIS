@@ -334,13 +334,6 @@ export const CodeIntelligencePage: React.FC = () => {
                     <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
                       Code Intelligence Studio
                     </h1>
-                    <Badge variant="outline" className="border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300">
-                      Enterprise Tier
-                    </Badge>
-                    <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      100% On-Premise ML
-                    </span>
                   </div>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">
                     Predictive defect classification, McCabe/Cognitive AST diagnostics, and Kamei Just-In-Time change risk analytics.
