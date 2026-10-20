@@ -576,13 +576,13 @@ export class CommitsService {
         organizationId,
       );
       if (linkedUser) {
-        if ((!linkedUser.avatarUrl || !linkedUser.githubId) && gitHubAuthor) {
+        if (gitHubAuthor) {
           await this.prisma.user
             .update({
               where: { id: linkedUser.id },
               data: {
-                avatarUrl: linkedUser.avatarUrl || gitHubAuthor.avatar_url || null,
-                githubId: linkedUser.githubId || (gitHubAuthor.id ? String(gitHubAuthor.id) : null),
+                avatarUrl: gitHubAuthor.avatar_url || null,
+                githubId: gitHubAuthor.id ? String(gitHubAuthor.id) : null,
               },
             })
             .catch((err) => this.logger.warn(`Failed to enrich noreply user ${linkedUser.id} avatar: ${err}`));
