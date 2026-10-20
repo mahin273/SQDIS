@@ -34,17 +34,20 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
     return sorted[Math.floor(sorted.length / 2)] || 15;
   }, [files]);
 
-  // Convert percentages for grid positioning
-  // Y-axis: Cyclomatic Complexity (0 at bottom, max at top)
-  // X-axis: Churn (0 at left, max at right)
-  const thresholdYPercent = (1 - complexityThreshold / maxComplexity) * 100;
-  const medianXPercent = (medianChurn / maxChurn) * 100;
+  // Balanced quadrant dividing percentages (ensures all 4 quadrants have ample breathing room)
+  const medianXPercent = 45;
+  const thresholdYPercent = 52;
+
+  const safeMedianChurn = Math.max(1, medianChurn);
+  const safeMaxChurn = Math.max(safeMedianChurn + 1, maxChurn);
+  const safeComplexityThreshold = complexityThreshold;
+  const safeMaxComplexity = Math.max(safeComplexityThreshold + 1, maxComplexity);
 
   return (
     <div className="flex flex-col h-full space-y-4">
       {/* Matrix Canvas Container */}
-      <div className="relative w-full h-[460px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner p-6 select-none">
-        {/* Background Quadrant Shading & Corner Header Badges */}
+      <div className="relative w-full h-[460px] bg-slate-950 rounded-xl overflow-hidden border border-slate-800 shadow-inner select-none">
+        {/* Background Quadrant Shading & Zone Outlines (Zero In-Canvas Text Clutter) */}
         {/* Quadrant 1 (Top-Right): DANGER ZONE */}
         <div
           style={{
@@ -53,13 +56,8 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
             width: `${100 - medianXPercent}%`,
             height: `${thresholdYPercent}%`,
           }}
-          className="absolute bg-rose-500/10 border-l border-b border-rose-500/20 p-3 pointer-events-none"
-        >
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-rose-500/10 border border-rose-500/20 text-rose-400 font-bold text-xs uppercase tracking-wider w-fit backdrop-blur-xs">
-            <Flame className="w-3.5 h-3.5 text-rose-500" />
-            <span>Danger Zone</span>
-          </div>
-        </div>
+          className="absolute bg-rose-500/10 border-l border-b border-rose-500/20 pointer-events-none"
+        />
 
         {/* Quadrant 2 (Top-Left): STABLE COMPLEX */}
         <div
@@ -69,13 +67,8 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
             width: `${medianXPercent}%`,
             height: `${thresholdYPercent}%`,
           }}
-          className="absolute bg-amber-500/5 border-b border-amber-500/20 p-3 pointer-events-none"
-        >
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 font-bold text-xs uppercase tracking-wider w-fit backdrop-blur-xs">
-            <AlertOctagon className="w-3.5 h-3.5 text-amber-500" />
-            <span>Stable Complex</span>
-          </div>
-        </div>
+          className="absolute bg-amber-500/5 border-b border-amber-500/20 pointer-events-none"
+        />
 
         {/* Quadrant 3 (Bottom-Right): ACTIVE SIMPLE */}
         <div
@@ -85,13 +78,8 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
             width: `${100 - medianXPercent}%`,
             height: `${100 - thresholdYPercent}%`,
           }}
-          className="absolute bg-blue-500/5 border-l border-blue-500/20 p-3 pointer-events-none flex flex-col justify-end"
-        >
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-500/10 border border-blue-500/20 text-blue-400 font-bold text-xs uppercase tracking-wider w-fit backdrop-blur-xs">
-            <RefreshCw className="w-3.5 h-3.5 text-blue-500" />
-            <span>Active Simple</span>
-          </div>
-        </div>
+          className="absolute bg-blue-500/5 border-l border-blue-500/20 pointer-events-none"
+        />
 
         {/* Quadrant 4 (Bottom-Left): HEALTHY BASELINE */}
         <div
@@ -101,20 +89,15 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
             width: `${medianXPercent}%`,
             height: `${100 - thresholdYPercent}%`,
           }}
-          className="absolute bg-emerald-500/5 p-3 pointer-events-none flex flex-col justify-end"
-        >
-          <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold text-xs uppercase tracking-wider w-fit backdrop-blur-xs">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-            <span>Healthy Baseline</span>
-          </div>
-        </div>
+          className="absolute bg-emerald-500/5 pointer-events-none"
+        />
 
-        {/* Threshold Reference Lines with Solid Dark Margin Badges */}
+        {/* Threshold Reference Lines with Non-Colliding Outer Badges */}
         <div
           style={{ top: `${thresholdYPercent}%` }}
           className="absolute left-0 right-0 border-t border-dashed border-slate-600/80 pointer-events-none z-10"
         >
-          <span className="absolute right-3 -top-3 text-[10px] font-mono text-slate-300 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-700/80 shadow-xs z-30">
+          <span className="absolute right-3 -translate-y-1/2 text-[10px] font-mono text-slate-300 bg-slate-900/95 px-2.5 py-1 rounded-md border border-slate-700 shadow-md z-30 whitespace-nowrap">
             Complexity Threshold (CC = {complexityThreshold})
           </span>
         </div>
@@ -122,15 +105,36 @@ export const HotspotMatrixQuadrant: React.FC<HotspotMatrixQuadrantProps> = ({
           style={{ left: `${medianXPercent}%` }}
           className="absolute top-0 bottom-0 border-l border-dashed border-slate-600/80 pointer-events-none z-10"
         >
-          <span className="absolute -left-12 bottom-3 text-[10px] font-mono text-slate-300 bg-slate-900/90 px-2 py-0.5 rounded border border-slate-700/80 shadow-xs z-30">
+          <span className="absolute -translate-x-1/2 top-3 text-[10px] font-mono text-slate-300 bg-slate-900/95 px-2.5 py-1 rounded-md border border-slate-700 shadow-md z-30 whitespace-nowrap">
             Median Churn ({medianChurn})
           </span>
         </div>
 
-        {/* Interactive Scatter Points */}
+        {/* Interactive Scatter Points with Piecewise Quadrant Scaling */}
         {files.map((file) => {
-          const xPct = Math.max(3, Math.min(96, (file.churnCount / maxChurn) * 100));
-          const yPct = Math.max(5, Math.min(94, (1 - file.cyclomaticComplexity / maxComplexity) * 100));
+          // Piecewise X-axis scaling: Churn <= median maps to [6%, medianXPercent], Churn > median maps to [medianXPercent, 94%]
+          let xPct: number;
+          if (file.churnCount <= safeMedianChurn) {
+            const ratio = file.churnCount / safeMedianChurn;
+            xPct = 6 + ratio * (medianXPercent - 6);
+          } else {
+            const ratio = (file.churnCount - safeMedianChurn) / (safeMaxChurn - safeMedianChurn);
+            xPct = medianXPercent + ratio * (94 - medianXPercent);
+          }
+
+          // Piecewise Y-axis scaling: CC <= threshold maps to [thresholdYPercent, 94%], CC > threshold maps to [6%, thresholdYPercent]
+          let yPct: number;
+          if (file.cyclomaticComplexity <= safeComplexityThreshold) {
+            const ratio = file.cyclomaticComplexity / safeComplexityThreshold;
+            yPct = 94 - ratio * (94 - thresholdYPercent);
+          } else {
+            const ratio = (file.cyclomaticComplexity - safeComplexityThreshold) / (safeMaxComplexity - safeComplexityThreshold);
+            yPct = thresholdYPercent - ratio * (thresholdYPercent - 6);
+          }
+
+          xPct = Math.max(5, Math.min(95, xPct));
+          yPct = Math.max(6, Math.min(94, yPct));
+
           const isSelected = selectedFilePath === file.filePath;
           const isDanger = file.quadrant === 'DANGER_ZONE';
 
