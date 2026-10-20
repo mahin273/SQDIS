@@ -67,7 +67,11 @@ function getSeverityColor(sev?: string) {
 
 type TabType = 'all' | 'commit' | 'alert' | 'debt' | 'release'
 
-export default function ActivityFeed() {
+export interface ActivityFeedProps {
+  onItemClick?: (item: RecentActivity) => void
+}
+
+export default function ActivityFeed({ onItemClick }: ActivityFeedProps = {}) {
   const navigate = useNavigate()
   const [activeTab, setActiveTab] = useState<TabType>('all')
 
@@ -91,6 +95,10 @@ export default function ActivityFeed() {
   }
 
   const handleRowClick = (item: RecentActivity) => {
+    if (onItemClick) {
+      onItemClick(item)
+      return
+    }
     const t = item.type?.toLowerCase()
     if (t === 'commit') navigate('/commits')
     else if (t === 'alert') navigate('/alerts')
