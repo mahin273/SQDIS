@@ -417,16 +417,24 @@ export interface AssignTeamRequest {
 }
 
 export interface ProjectMetrics {
-  projectId: string;
-  projectName: string;
+  projectId?: string;
+  projectName?: string;
   totalCommits: number;
-  totalSprints: number;
-  activeSprints: number;
-  avgSqs: number;
-  avgVelocity: number;
-  totalDebt: number;
-  recentActivity: RecentActivity[];
-  commitBreakdown: Record<string, number>;
+  bugfixCommits?: number;
+  featureCommits?: number;
+  refactorCommits?: number;
+  testCommits?: number;
+  docsCommits?: number;
+  coverage?: number;
+  technicalDebt?: { total: number; todo: number; fixme: number; hack: number; xxx: number };
+  recentActivity: any[];
+  commitTrend?: Array<{ date: string; commits: number }>;
+  totalSprints?: number;
+  activeSprints?: number;
+  avgSqs?: number;
+  avgVelocity?: number;
+  totalDebt?: number;
+  commitBreakdown?: Record<string, number>;
 }
 
 export interface ProjectDebtItem {
