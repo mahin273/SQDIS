@@ -63,17 +63,20 @@ export class ReviewsController {
   @Get('leaderboard')
   @ApiOperation({ summary: 'Get top reviewers leaderboard' })
   @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'repositoryId', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Reviewers leaderboard retrieved.' })
   async getLeaderboard(
     @GetOrganization() orgId: string | undefined,
     @GetUser() user: User & { organizationId?: string },
     @Query('limit') limit?: string,
+    @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return [];
     return this.reviewsService.getEnhancedLeaderboard(
       organizationId,
       limit ? parseInt(limit, 10) : 10,
+      repositoryId,
     );
   }
 
@@ -84,12 +87,14 @@ export class ReviewsController {
   @ApiOperation({ summary: 'Get PR review analytics' })
   @ApiQuery({ name: 'startDate', required: false })
   @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'repositoryId', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Review analytics retrieved.' })
   async getAnalytics(
     @GetOrganization() orgId: string | undefined,
     @GetUser() user: User & { organizationId?: string },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) {
@@ -107,7 +112,7 @@ export class ReviewsController {
         fastReviewCount: 0,
       };
     }
-    return this.reviewsService.getAnalytics(organizationId, startDate, endDate);
+    return this.reviewsService.getAnalytics(organizationId, startDate, endDate, repositoryId);
   }
 
   /**
@@ -117,12 +122,14 @@ export class ReviewsController {
   @ApiOperation({ summary: 'Get review quality metrics' })
   @ApiQuery({ name: 'startDate', required: false })
   @ApiQuery({ name: 'endDate', required: false })
+  @ApiQuery({ name: 'repositoryId', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Quality metrics retrieved.' })
   async getQualityMetrics(
     @GetOrganization() orgId: string | undefined,
     @GetUser() user: User & { organizationId?: string },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
+    @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) {
@@ -134,7 +141,7 @@ export class ReviewsController {
         distribution: { detailed: 0, moderate: 0, brief: 0, rubberStamp: 0 },
       };
     }
-    return this.reviewsService.getQualityMetrics(organizationId, startDate, endDate);
+    return this.reviewsService.getQualityMetrics(organizationId, startDate, endDate, repositoryId);
   }
 
   /**
@@ -143,17 +150,20 @@ export class ReviewsController {
   @Get('activity-trend')
   @ApiOperation({ summary: 'Get review activity trend over time' })
   @ApiQuery({ name: 'days', required: false, type: Number })
+  @ApiQuery({ name: 'repositoryId', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Review activity trend retrieved.' })
   async getActivityTrend(
     @GetOrganization() orgId: string | undefined,
     @GetUser() user: User & { organizationId?: string },
     @Query('days') days?: string,
+    @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return [];
     return this.reviewsService.getActivityTrend(
       organizationId,
       days ? parseInt(days, 10) : 30,
+      repositoryId,
     );
   }
 
@@ -162,14 +172,16 @@ export class ReviewsController {
    */
   @Get('peak-times')
   @ApiOperation({ summary: 'Get peak review activity days and hours' })
+  @ApiQuery({ name: 'repositoryId', required: false, type: String })
   @ApiResponse({ status: 200, description: 'Peak time metrics retrieved.' })
   async getPeakTimes(
     @GetOrganization() orgId: string | undefined,
     @GetUser() user: User & { organizationId?: string },
+    @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return { peakDay: 'Monday', peakHour: 14, heatmap: [] };
-    return this.reviewsService.getPeakTimes(organizationId);
+    return this.reviewsService.getPeakTimes(organizationId, repositoryId);
   }
 
   /**
