@@ -8,6 +8,7 @@ import type {
   OnboardingVelocity,
   OnboardingDashboardStats,
   MentorCapacity,
+  AtRiskDeveloper,
 } from '@/types';
 
 export const onboardingService = {
@@ -85,8 +86,8 @@ export const onboardingService = {
   /**
    * Get list of developers at risk during onboarding
    */
-  async getAtRiskDevelopers(): Promise<Onboarding[]> {
-    const response = await api.get<Onboarding[]>('/onboarding/dashboard/at-risk');
+  async getAtRiskDevelopers(): Promise<AtRiskDeveloper[]> {
+    const response = await api.get<AtRiskDeveloper[]>('/onboarding/dashboard/at-risk');
     return response.data;
   },
 

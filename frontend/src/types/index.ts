@@ -2030,12 +2030,39 @@ export interface WebhookHealthMetric {
 
 // ============== ONBOARDING ==============
 
-export type OnboardingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'AT_RISK' | 'EXTENDED';
+export type OnboardingStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'COMPLETED' | 'AT_RISK' | 'EXTENDED' | 'ACTIVE';
+
+export type MilestoneType =
+  | 'FIRST_COMMIT'
+  | 'FIRST_BUGFIX'
+  | 'FIRST_FEATURE'
+  | 'FIRST_REVIEW'
+  | 'FIRST_PR_MERGED'
+  | 'FIRST_TEST';
+
+export interface OnboardingMilestone {
+  id: string;
+  onboardingId: string;
+  type: MilestoneType;
+  achievedAt: string;
+}
+
+export interface AtRiskDeveloper {
+  userId: string;
+  userName: string;
+  onboardingStartDate: string;
+  daysElapsed: number;
+  achievedMilestones: MilestoneType[];
+  missingMilestones: MilestoneType[];
+  riskFactors: string[];
+}
 
 export interface Onboarding {
   id: string;
   developerId: string;
   developer?: User;
+  userId?: string;
+  user?: User;
   mentorId?: string;
   mentor?: User;
   teamId?: string;
@@ -2043,6 +2070,13 @@ export interface Onboarding {
   endDate: string;
   status: OnboardingStatus;
   progress: number;
+  checklistProgress?: number;
+  milestoneProgress?: number;
+  daysRemaining?: number;
+  daysElapsed?: number;
+  totalDays?: number;
+  isAtRisk?: boolean;
+  milestones?: OnboardingMilestone[];
   checklistItems: OnboardingChecklistItem[];
   templateId?: string;
   createdAt: string;
