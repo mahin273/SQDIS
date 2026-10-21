@@ -26,8 +26,9 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Avatar } from '@/components/ui/avatar'
 import { Pagination } from '@/components/ui/pagination'
-import { reviewsService, repositoriesService, codeIntelligenceService } from '@/services'
+import { reviewsService, codeIntelligenceService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
+import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { QueryState } from '../pageUtils'
 import { PrQualityGateBadge, PrQualityGateDrawer } from './components'
 import type { Review, ReviewState, ReviewStateFilter, ReviewActivityTrendPoint, ReviewLeaderboardEntry } from '@/types'
@@ -61,7 +62,6 @@ export function ReviewsPage() {
   const { isDarkMode } = useTheme()
   const [filterState, setFilterState] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
-  const [selectedRepoId, setSelectedRepoId] = useState<string>('')
   const [page, setPage] = useState(1)
   const [selectedPrGate, setSelectedPrGate] = useState<{
     repositoryId: string;
@@ -71,6 +71,13 @@ export function ReviewsPage() {
     headCommitSha?: string;
   } | null>(null)
   const pageSize = 15
+
+  // Centralized active repository hook
+  const {
+    activeRepoId: selectedRepoId,
+    repositories: connectedRepos,
+    setActiveRepoId,
+  } = useActiveRepository()
 
   const queryClient = useQueryClient()
 
@@ -88,19 +95,6 @@ export function ReviewsPage() {
       }
     },
   })
-
-  // Connected Repositories Query
-  const reposQuery = useQuery({
-    queryKey: ['repositories', 'connected'],
-    queryFn: () => repositoriesService.getConnected(),
-  })
-
-  const connectedRepos = useMemo(() => {
-    const list = Array.isArray(reposQuery.data)
-      ? reposQuery.data
-      : (reposQuery.data as any)?.data ?? []
-    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
-  }, [reposQuery.data])
 
   const stateParam = mapToReviewStateFilter(filterState)
 
@@ -316,7 +310,7 @@ export function ReviewsPage() {
               <select
                 value={selectedRepoId}
                 onChange={(e) => {
-                  setSelectedRepoId(e.target.value)
+                  setActiveRepoId(e.target.value)
                   setPage(1)
                 }}
                 className="bg-transparent border-none text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"

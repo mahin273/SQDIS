@@ -638,10 +638,65 @@ export class GitHubService {
     // Clear cached webhook secret
     await this.clearRepositorySecretCache(repository.githubId);
 
+    // Ensure repository is bridged to a Project for project-level features
+    await this.ensureProjectForRepository(repository.id, repository.name, organizationId);
+
     // Trigger backfill for last 90 days of commits asynchronously
     this.triggerBackfill(repository.id);
 
     return this.mapRepositoryToResponse(repository);
+  }
+
+  /**
+   * Ensure repository is linked to a Project, creating the Project and ProjectRepository if absent
+   */
+  private async ensureProjectForRepository(
+    repositoryId: string,
+    repositoryName: string,
+    organizationId: string,
+  ): Promise<void> {
+    try {
+      const existingLink = await this.prisma.projectRepository.findFirst({
+        where: { repositoryId },
+      });
+
+      if (existingLink) {
+        return;
+      }
+
+      // Check if project with same name already exists in organization
+      let project = await this.prisma.project.findFirst({
+        where: { organizationId, name: repositoryName },
+      });
+
+      if (!project) {
+        project = await this.prisma.project.create({
+          data: {
+            organizationId,
+            name: repositoryName,
+            description: `Auto-created project for repository ${repositoryName}`,
+            isActive: true,
+          },
+        });
+        this.logger.log(
+          `Auto-created Project '${repositoryName}' (${project.id}) for organization ${organizationId}`,
+        );
+      }
+
+      await this.prisma.projectRepository.create({
+        data: {
+          projectId: project.id,
+          repositoryId,
+        },
+      });
+      this.logger.log(
+        `Linked Repository ${repositoryId} to Project '${project.name}' (${project.id})`,
+      );
+    } catch (error: any) {
+      this.logger.warn(
+        `Failed to auto-link repository ${repositoryId} to project: ${error?.message}`,
+      );
+    }
   }
 
   /**

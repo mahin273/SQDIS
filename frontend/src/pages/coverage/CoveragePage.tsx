@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ShieldCheck,
@@ -27,11 +27,12 @@ import { Modal } from '@/components/ui/modal'
 import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/toast'
-import { coverageService, repositoriesService } from '@/services'
+import { coverageService } from '@/services'
+import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { queryKeys } from '@/lib/queryClient'
 import { formatBytes, formatDate, formatNumber } from '@/lib/utils'
 import { QueryState, formatScore } from '../pageUtils'
-import type { Repository, CoverageReport, CoverageModule } from '@/types'
+import type { CoverageReport, CoverageModule } from '@/types'
 import { useTheme } from '@/context/ThemeContext'
 import {
   AreaChart,
@@ -48,8 +49,12 @@ export function CoveragePage() {
   const { toast } = useToast()
   const { isDarkMode } = useTheme()
 
-  // Selected Repository State
-  const [selectedRepoId, setSelectedRepoId] = useState('')
+  // Centralized active repository state
+  const {
+    activeRepoId: selectedRepoId,
+    repositories,
+    setActiveRepoId,
+  } = useActiveRepository()
 
   // Upload modal state
   const [isUploadOpen, setIsUploadOpen] = useState(false)
@@ -70,26 +75,6 @@ export function CoveragePage() {
   const [healthFilter, setHealthFilter] = useState<'ALL' | 'HIGH' | 'MODERATE' | 'LOW'>('ALL')
   const [sortBy, setSortBy] = useState<'lowest' | 'highest' | 'lines' | 'path'>('lowest')
   const [copiedSha, setCopiedSha] = useState<string | null>(null)
-
-  // Repositories Query
-  const repositoriesQuery = useQuery({
-    queryKey: ['repositories', 'connected'],
-    queryFn: () => repositoriesService.getConnected(),
-  })
-
-  const rawRepos = repositoriesQuery.data ?? []
-  const repositories: Repository[] = useMemo(() => {
-    const list = Array.isArray(rawRepos) ? rawRepos : (rawRepos as any)?.data ?? []
-    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
-  }, [rawRepos])
-
-  // Auto-select first repository
-  useEffect(() => {
-    if (!selectedRepoId && repositories.length > 0) {
-      setSelectedRepoId(repositories[0].id)
-      setUploadRepoId(repositories[0].id)
-    }
-  }, [selectedRepoId, repositories])
 
   // Coverage Reports Query
   const coverageQuery = useQuery({
@@ -169,7 +154,6 @@ export function CoveragePage() {
   const handleRefresh = () => {
     coverageQuery.refetch()
     trendsQuery.refetch()
-    repositoriesQuery.refetch()
   }
 
   const handleCopySha = (sha: string, e?: React.MouseEvent) => {
@@ -356,7 +340,7 @@ export function CoveragePage() {
               <GitBranch className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
               <select
                 value={selectedRepoId}
-                onChange={(e) => setSelectedRepoId(e.target.value)}
+                onChange={(e) => setActiveRepoId(e.target.value)}
                 className="bg-transparent border-none text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
               >
                 {repositories.map((repo) => (

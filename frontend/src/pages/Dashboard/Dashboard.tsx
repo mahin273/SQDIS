@@ -45,6 +45,7 @@ export default function Dashboard() {
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>('quality')
   const [repoCenterTab, setRepoCenterTab] = useState<RepoCenterTab>('all')
   const [timeRange, setTimeRange] = useState<TimeRangeOption>('30')
+  const [selectedRepoFilter, setSelectedRepoFilter] = useState<string>('ALL')
   const [selectedDrawerItem, setSelectedDrawerItem] = useState<RecentActivity | null>(null)
   const [copiedSha, setCopiedSha] = useState(false)
 
@@ -63,7 +64,12 @@ export default function Dashboard() {
     return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
   }, [rawRepos])
 
-  const primaryRepoId = repos && repos.length > 0 ? repos[0].id : ''
+  const primaryRepoId =
+    selectedRepoFilter !== 'ALL'
+      ? selectedRepoFilter
+      : repos && repos.length > 0
+        ? repos[0].id
+        : ''
 
   const { data: commitsRisk } = useQuery({
     queryKey: ['commits-risk', primaryRepoId],
@@ -105,7 +111,39 @@ export default function Dashboard() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          {/* Multi-Repository Scope Filter Chips */}
+          {repos.length > 1 && (
+            <div className="flex items-center gap-1 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/80 p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => setSelectedRepoFilter('ALL')}
+                className={`rounded-lg px-2.5 py-1 font-medium transition-colors ${
+                  selectedRepoFilter === 'ALL'
+                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-xs font-semibold'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                }`}
+              >
+                All Repositories ({repos.length})
+              </button>
+              {repos.map((r: any) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => setSelectedRepoFilter(r.id)}
+                  className={`rounded-lg px-2.5 py-1 font-medium transition-colors truncate max-w-[130px] ${
+                    selectedRepoFilter === r.id
+                      ? 'bg-white dark:bg-slate-800 text-blue-600 dark:text-blue-400 shadow-xs font-semibold'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                  title={r.fullName || r.name}
+                >
+                  {r.name}
+                </button>
+              ))}
+            </div>
+          )}
+
           {/* Live WebSocket Status Indicator */}
           <div
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-xs font-medium text-emerald-700 dark:text-emerald-400"

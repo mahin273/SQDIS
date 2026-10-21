@@ -27,8 +27,9 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/toast'
-import { releasesService, sprintsService, repositoriesService } from '@/services'
+import { releasesService, sprintsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
+import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { QueryState } from '../pageUtils'
 import type {
   Release,
@@ -90,6 +91,8 @@ export function ReleasesPage() {
   // Ship Release Modal State
   const [isShipModalOpen, setIsShipModalOpen] = useState(false)
   const [targetShipRelease, setTargetShipRelease] = useState<Release | null>(null)
+  // Centralized active repository state
+  const { activeRepoId, repositories: connectedRepos } = useActiveRepository()
   const [selectedRepoId, setSelectedRepoId] = useState('')
   const [createGitHubRelease, setCreateGitHubRelease] = useState(true)
   const [tagName, setTagName] = useState('')
@@ -113,22 +116,11 @@ export function ReleasesPage() {
     queryFn: () => sprintsService.getAll(),
   })
 
-  const reposQuery = useQuery({
-    queryKey: ['github', 'repositories', 'connected'],
-    queryFn: () => repositoriesService.getConnected(),
-  })
-
   // Sprints & Repositories Extraction
   const allSprints: Sprint[] = useMemo(() => {
     const raw = sprintsQuery.data
     return Array.isArray(raw) ? raw : []
   }, [sprintsQuery.data])
-
-  const connectedRepos = useMemo(() => {
-    const raw = reposQuery.data
-    const list = Array.isArray(raw) ? raw : (raw as any)?.data ?? []
-    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? true) && !!r.id)
-  }, [reposQuery.data])
 
   // Releases Data Normalization
   const rawReleases = releasesQuery.data
@@ -320,8 +312,8 @@ export function ReleasesPage() {
     setTagName(tag)
     setReleaseTitle(`Release ${tag}`)
     setReleaseNotes(release.description || '')
-    if (connectedRepos.length > 0 && !selectedRepoId) {
-      setSelectedRepoId(connectedRepos[0].id)
+    if (!selectedRepoId) {
+      setSelectedRepoId(activeRepoId || connectedRepos[0]?.id || '')
     }
     setIsShipModalOpen(true)
   }

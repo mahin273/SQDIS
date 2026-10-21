@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Code2,
@@ -40,8 +40,9 @@ import {
   SheetDescription,
   SheetFooter,
 } from '@/components/ui/sheet'
-import { debtService, repositoriesService } from '@/services'
+import { debtService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
+import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { formatDate } from '@/lib/utils'
 import { QueryState } from '../pageUtils'
 import type {
@@ -68,7 +69,17 @@ export function DebtPage() {
 
   // Navigation & Filter States
   const [activeTab, setActiveTab] = useState<'inventory' | 'hotspots' | 'modules'>('inventory')
-  const [selectedRepoId, setSelectedRepoId] = useState<string>('ALL')
+  // Centralized active repository state
+  const { activeRepoId, repositories, setActiveRepoId } = useActiveRepository()
+  const [selectedRepoId, setSelectedRepoId] = useState<string>(activeRepoId || 'ALL')
+
+  // Keep selectedRepoId in sync with activeRepoId if changed from global selector
+  useEffect(() => {
+    if (activeRepoId) {
+      setSelectedRepoId(activeRepoId)
+    }
+  }, [activeRepoId])
+
   const [markerFilter, setMarkerFilter] = useState<string>('ALL')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'UNRESOLVED' | 'RESOLVED'>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
@@ -79,13 +90,6 @@ export function DebtPage() {
   const [selectedItem, setSelectedItem] = useState<DebtItem | null>(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [copiedText, setCopiedText] = useState<string | null>(null)
-
-  // Repositories Query
-  const repositoriesQuery = useQuery({
-    queryKey: ['repositories', 'connected'],
-    queryFn: () => repositoriesService.getConnected(),
-  })
-  const repositories = repositoriesQuery.data ?? []
 
   // Main Debt Inventory Query
   const debtQuery = useQuery({
@@ -438,6 +442,9 @@ export function DebtPage() {
                 value={selectedRepoId}
                 onChange={(e) => {
                   setSelectedRepoId(e.target.value)
+                  if (e.target.value !== 'ALL') {
+                    setActiveRepoId(e.target.value)
+                  }
                   setPage(1)
                 }}
                 className="bg-transparent border-none text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
