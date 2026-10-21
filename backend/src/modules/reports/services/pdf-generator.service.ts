@@ -847,7 +847,11 @@ export class PdfGeneratorService {
     for (let i = 0; i < pages.count; i++) {
       doc.switchToPage(i);
 
-      const footerY = doc.page.height - 35;
+      // Temporarily set bottom margin to 0 so PDFKit line wrapper never triggers an auto-page break
+      const oldBottomMargin = doc.page.margins.bottom;
+      doc.page.margins.bottom = 0;
+
+      const footerY = doc.page.height - 30;
       const contentWidth = doc.page.width - 80;
 
       // Divider line
@@ -867,7 +871,7 @@ export class PdfGeneratorService {
           `SQDIS v2.4  •  Confidential & Proprietary  •  Tenancy: ${data.organizationName}`,
           40,
           footerY + 6,
-          { align: 'left' }
+          { align: 'left', lineBreak: false }
         );
 
       // Right text
@@ -878,7 +882,10 @@ export class PdfGeneratorService {
         .text(`Page ${i + 1} of ${pages.count}`, 40, footerY + 6, {
           align: 'right',
           width: contentWidth,
+          lineBreak: false,
         });
+
+      doc.page.margins.bottom = oldBottomMargin;
     }
   }
 
