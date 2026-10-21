@@ -105,9 +105,14 @@ export function CoveragePage() {
     enabled: !!viewingReportId,
   })
 
-  const handleOpenUpload = () => {
+  const selectedRepo = useMemo(
+    () => repositories.find((r) => r.id === selectedRepoId),
+    [repositories, selectedRepoId]
+  )
+
+  const handleOpenUpload = (targetRepoId?: string) => {
     setUploadError(null)
-    setUploadRepoId(selectedRepoId || (repositories[0]?.id ?? ''))
+    setUploadRepoId(targetRepoId || selectedRepoId || (repositories[0]?.id ?? ''))
     setIsUploadOpen(true)
   }
 
@@ -171,6 +176,17 @@ export function CoveragePage() {
     : rawCoverage?.reports ?? []
   const completed = reports.filter((report) => report.status === 'COMPLETED')
   const latestReport = completed[0] ?? reports[0] ?? null
+
+  // Map of latest report per repository for organization-level grid
+  const latestReportByRepo = useMemo(() => {
+    const map = new Map<string, CoverageReport>()
+    for (const report of reports) {
+      if (report.repositoryId && !map.has(report.repositoryId)) {
+        map.set(report.repositoryId, report)
+      }
+    }
+    return map
+  }, [reports])
 
   const averageCoverage =
     completed.length > 0
@@ -343,6 +359,12 @@ export function CoveragePage() {
                 onChange={(e) => setActiveRepoId(e.target.value)}
                 className="bg-transparent border-none text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
               >
+                <option
+                  value=""
+                  className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                >
+                  All Repositories
+                </option>
                 {repositories.map((repo) => (
                   <option
                     key={repo.id}
@@ -373,7 +395,7 @@ export function CoveragePage() {
 
           <Button
             size="sm"
-            onClick={handleOpenUpload}
+            onClick={() => handleOpenUpload()}
             className="rounded-xl text-xs gap-1.5 shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
           >
             <Upload className="h-3.5 w-3.5" />
@@ -382,8 +404,186 @@ export function CoveragePage() {
         </div>
       </div>
 
-      {/* 4-Card Executive KPI Strip */}
-      <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Multi-Repository Mode vs Scoped Deep-Dive */}
+      {!selectedRepoId ? (
+        /* Executive Repository Coverage Summary Grid (All Repositories Mode) */
+        <div className="space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                Repository Coverage Portfolio
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Executive test coverage and telemetry status across all connected repositories
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs font-mono w-fit">
+              {repositories.length} Connected {repositories.length === 1 ? 'Repository' : 'Repositories'}
+            </Badge>
+          </div>
+
+          <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
+            {repositories.map((repo) => {
+              const repoReport = latestReportByRepo.get(repo.id)
+              const hasReport = !!repoReport && repoReport.status === 'COMPLETED'
+              const pct = repoReport?.coveragePercentage ?? 0
+
+              return (
+                <Card
+                  key={repo.id}
+                  className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md"
+                >
+                  <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                    <div className="flex items-center gap-2.5">
+                      <div className="p-2 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200 dark:border-indigo-900/40">
+                        <GitBranch className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-bold text-slate-900 dark:text-slate-100 font-mono">
+                          {repo.fullName || repo.name}
+                        </CardTitle>
+                        <p className="text-[11px] text-slate-400">
+                          Default branch: {repo.defaultBranch || 'main'}
+                        </p>
+                      </div>
+                    </div>
+                    {hasReport ? (
+                      <Badge
+                        variant="outline"
+                        className={`text-xs font-semibold ${
+                          pct >= 80
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                            : pct >= 50
+                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
+                            : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
+                        }`}
+                      >
+                        {pct >= 80 ? 'Healthy' : pct >= 50 ? 'Moderate' : 'At Risk'}
+                      </Badge>
+                    ) : (
+                      <Badge variant="secondary" className="text-[11px] font-medium text-slate-500">
+                        No Telemetry
+                      </Badge>
+                    )}
+                  </CardHeader>
+                  <CardContent className="space-y-4 pt-1">
+                    {hasReport ? (
+                      <>
+                        <div className="flex items-baseline justify-between">
+                          <div>
+                            <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-mono">
+                              {formatScore(pct)}%
+                            </span>
+                            <span className="text-xs text-slate-500 ml-2 font-medium">line coverage</span>
+                          </div>
+                          <div className="text-right text-xs text-slate-500 dark:text-slate-400 font-mono">
+                            <span>{formatNumber(repoReport.linesCovered ?? 0)}</span> /{' '}
+                            <span>{formatNumber(repoReport.linesTotal ?? 0)} lines</span>
+                          </div>
+                        </div>
+
+                        <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-500 ${
+                              pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(1, pct))}%` }}
+                          />
+                        </div>
+
+                        <div className="flex items-center justify-between pt-1 text-xs text-slate-500 dark:text-slate-400">
+                          <span className="truncate max-w-[200px]">
+                            Build {repoReport.commitSha ? repoReport.commitSha.slice(0, 7) : 'latest'} &bull;{' '}
+                            {repoReport.createdAt ? formatDate(repoReport.createdAt) : 'Recent'}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setActiveRepoId(repo.id)}
+                            className="h-7 text-xs gap-1 text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-900/60 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 rounded-lg cursor-pointer"
+                          >
+                            <Eye className="h-3 w-3" />
+                            <span>Explore Files</span>
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="py-3.5 px-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div className="space-y-0.5">
+                          <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            No coverage ingested yet
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            Upload LCOV, XML, or JSON reports to track test health
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleOpenUpload(repo.id)}
+                          className="h-7 text-xs gap-1 shrink-0 rounded-lg text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                        >
+                          <Upload className="h-3 w-3" />
+                          <span>Upload Report</span>
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        </div>
+      ) : reports.length === 0 ? (
+        /* Single Repo Selected with 0 Reports (Uninstrumented) */
+        <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
+          <CardContent className="py-12 px-6 flex flex-col items-center text-center max-w-xl mx-auto">
+            <div className="p-3.5 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-100 dark:border-indigo-900/50 text-indigo-600 dark:text-indigo-400 mb-4">
+              <ShieldCheck className="h-8 w-8" />
+            </div>
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100">
+              No Coverage Telemetry for {selectedRepo?.fullName || 'this repository'}
+            </h2>
+            <p className="mt-1.5 text-xs sm:text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
+              This repository has not ingested any test coverage reports yet. Upload a report from your test suite or configure CI telemetry to monitor line coverage and track regressions.
+            </p>
+
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              <Button
+                onClick={() => handleOpenUpload(selectedRepoId)}
+                className="rounded-xl text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+              >
+                <Upload className="h-3.5 w-3.5" />
+                <span>Upload Coverage Report</span>
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setActiveRepoId('')}
+                className="rounded-xl text-xs gap-1.5 border-slate-200 dark:border-slate-800"
+              >
+                <span>View All Repositories</span>
+              </Button>
+            </div>
+
+            <div className="mt-8 w-full p-4 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 text-left">
+              <p className="text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2">
+                Automated CI Integration (cURL / GitHub Actions):
+              </p>
+              <pre className="text-[11px] font-mono bg-slate-900 text-slate-100 dark:bg-slate-950 p-3 rounded-lg overflow-x-auto">
+{`curl -X POST https://api.sqdis.dev/coverage/upload \\
+  -H "Authorization: Bearer \$SQDIS_API_TOKEN" \\
+  -F "file=@coverage/lcov.info" \\
+  -F "repositoryId=${selectedRepoId}" \\
+  -F "branch=main"`}
+              </pre>
+            </div>
+          </CardContent>
+        </Card>
+      ) : (
+        /* Single Repo Selected with Active Reports */
+        <>
+          {/* 4-Card Executive KPI Strip */}
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
         {/* Card 1: Overall Line Coverage */}
         <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm transition-all hover:shadow-md">
           <CardContent className="flex items-start justify-between gap-4 p-5">
@@ -819,6 +1019,8 @@ export function CoveragePage() {
           )}
         </CardContent>
       </Card>
+      </>
+      )}
 
       {/* Coverage Build History & Ingestion Feed */}
       <Card className="bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-sm">
@@ -827,7 +1029,7 @@ export function CoveragePage() {
             Coverage Build History
           </CardTitle>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-            Audit log of uploaded and parsed coverage files for repository {repositories.find(r => r.id === selectedRepoId)?.fullName || 'SQDIS'}
+            Audit log of uploaded and parsed coverage files {selectedRepo ? `for repository ${selectedRepo.fullName}` : 'across all repositories'}
           </p>
         </CardHeader>
 
@@ -847,7 +1049,7 @@ export function CoveragePage() {
                   Upload an LCOV (.info), Cobertura (.xml), JaCoCo (.xml), or NYC JSON report to start tracking test coverage.
                 </p>
                 <Button
-                  onClick={handleOpenUpload}
+                  onClick={() => handleOpenUpload(selectedRepoId)}
                   className="mt-4 rounded-xl text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
                 >
                   <Upload className="h-3.5 w-3.5" />
@@ -868,8 +1070,16 @@ export function CoveragePage() {
                     >
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 mb-1.5">
-                          <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm truncate">
-                            {report.repository?.fullName || report.originalFilename}
+                          {report.repository?.fullName && (
+                            <Badge
+                              variant="outline"
+                              className="text-[11px] font-medium font-mono text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30"
+                            >
+                              {report.repository.fullName}
+                            </Badge>
+                          )}
+                          <h3 className="font-semibold text-slate-900 dark:text-slate-100 text-sm truncate font-mono">
+                            {report.originalFilename}
                           </h3>
                           <Badge
                             variant={
