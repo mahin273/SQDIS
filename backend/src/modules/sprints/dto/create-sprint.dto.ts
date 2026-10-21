@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsNotEmpty, IsString, IsUUID, IsDateString, MinLength, MaxLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsNotEmpty, IsString, IsUUID, IsDateString, IsOptional, MinLength, MaxLength } from 'class-validator';
 
 /**
  * DTO for creating a new sprint
@@ -40,4 +40,12 @@ export class CreateSprintDto {
   @IsUUID('4', { message: 'Team ID must be a valid UUID' })
   @IsNotEmpty({ message: 'Team ID is required' })
   teamId!: string;
+
+  @ApiPropertyOptional({
+    description: 'Sprint goal statement',
+    example: 'Deliver critical core features and stabilize test coverage',
+  })
+  @IsString()
+  @IsOptional()
+  goal?: string;
 }

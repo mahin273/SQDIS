@@ -32,4 +32,12 @@ export class UpdateSprintDto {
   @IsDateString({}, { message: 'End date must be a valid ISO 8601 date string' })
   @IsOptional()
   endDate?: string;
+
+  @ApiPropertyOptional({
+    description: 'Sprint status transition (ACTIVE, COMPLETED, CANCELLED)',
+    example: 'ACTIVE',
+  })
+  @IsString()
+  @IsOptional()
+  status?: string;
 }

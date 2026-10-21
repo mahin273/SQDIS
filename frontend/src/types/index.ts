@@ -526,15 +526,22 @@ export interface UpdateSprintRequest {
 export interface SprintReport {
   id: string;
   sprintId: string;
-  committedPoints: number;
-  completedPoints: number;
-  velocity: number;
-  avgDqs: number;
-  avgCodeQuality: number;
-  avgReviewSpeed: number;
-  bugFixRate: number;
-  totalCommits: number;
-  commitsByType: Record<string, number>;
+  committedPoints?: number;
+  completedPoints?: number;
+  velocity?: number;
+  avgDqs?: number;
+  avgDQS?: number;
+  coveragePct?: number;
+  avgCodeQuality?: number;
+  avgReviewSpeed?: number;
+  bugFixRate?: number;
+  totalCommits?: number;
+  featureCommits?: number;
+  bugfixCommits?: number;
+  refactorCommits?: number;
+  testCommits?: number;
+  docsCommits?: number;
+  commitsByType?: Record<string, number>;
 }
 
 export interface SprintCompareResponse {

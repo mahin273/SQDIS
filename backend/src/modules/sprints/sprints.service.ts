@@ -189,6 +189,19 @@ export class SprintsService {
       updateData.name = dto.name;
     }
 
+    // Handle status transitions
+    if (dto.status === 'ACTIVE') {
+      const now = new Date();
+      updateData.startDate = now;
+      if (sprint.endDate <= now) {
+        updateData.endDate = new Date(now.getTime() + 14 * 86400000);
+      }
+    } else if (dto.status === 'COMPLETED') {
+      updateData.endDate = new Date();
+    } else if (dto.status === 'CANCELLED') {
+      updateData.isActive = false;
+    }
+
     // Handle date updates with overlap validation
     if (dto.startDate !== undefined || dto.endDate !== undefined) {
       const startDate = dto.startDate ? new Date(dto.startDate) : sprint.startDate;
@@ -235,7 +248,7 @@ export class SprintsService {
       }
     }
 
-    return this.prisma.sprint.update({
+    const updated = await this.prisma.sprint.update({
       where: { id },
       data: updateData,
       include: {
@@ -247,6 +260,16 @@ export class SprintsService {
         },
       },
     });
+
+    const now = new Date();
+    const isActive = updated.startDate <= now && updated.endDate >= now;
+    const isCompleted = updated.endDate < now;
+    const status = isActive ? 'ACTIVE' : isCompleted ? 'COMPLETED' : 'PLANNED';
+
+    return {
+      ...updated,
+      status,
+    };
   }
 
   /**
