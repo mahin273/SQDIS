@@ -162,6 +162,7 @@ export default function DashboardSidebar() {
               to="/audit-logs"
               icon={<FiShield />}
               label="Audit Logs"
+              end
             />
             <SidebarItem
               to="/settings"
