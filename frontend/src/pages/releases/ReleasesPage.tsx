@@ -18,6 +18,7 @@ import {
   Filter,
   Tag,
   Check,
+  GitBranch,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -92,7 +93,7 @@ export function ReleasesPage() {
   const [isShipModalOpen, setIsShipModalOpen] = useState(false)
   const [targetShipRelease, setTargetShipRelease] = useState<Release | null>(null)
   // Centralized active repository state
-  const { activeRepoId, repositories: connectedRepos } = useActiveRepository()
+  const { activeRepoId, repositories: connectedRepos, setActiveRepoId } = useActiveRepository()
   const [selectedRepoId, setSelectedRepoId] = useState('')
   const [createGitHubRelease, setCreateGitHubRelease] = useState(true)
   const [tagName, setTagName] = useState('')
@@ -494,6 +495,24 @@ export function ReleasesPage() {
               className="pl-8 h-8 text-xs w-52 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800"
             />
           </div>
+
+          {connectedRepos.length > 0 && (
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-xs text-xs text-slate-700 dark:text-slate-200">
+              <GitBranch className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+              <select
+                value={activeRepoId}
+                onChange={(e) => setActiveRepoId(e.target.value)}
+                className="bg-transparent border-none text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="">All Connected Repos</option>
+                {connectedRepos.map((repo: any) => (
+                  <option key={repo.id} value={repo.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                    {repo.fullName || repo.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-900 p-0.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs">
             <Filter className="h-3.5 w-3.5 text-slate-400 ml-2" />
