@@ -1,6 +1,7 @@
 import {
   Controller,
   Get,
+  Post,
   Param,
   Query,
   UseGuards,
@@ -11,6 +12,7 @@ import { DebtService } from './debt.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
+import { GetUser } from '../auth/decorators/get-user.decorator';
 import { DebtFiltersDto } from './dto';
 
 /**
@@ -132,6 +134,27 @@ export class DebtController {
       repositoryId,
       threshold || 10,
     );
+  }
+
+  /**
+   * Mark a debt item as resolved
+   * POST /api/debt/:id/resolve
+   */
+  @Post(':id/resolve')
+  @ApiOperation({ summary: 'Mark a technical debt item as resolved' })
+  @ApiParam({ name: 'id', description: 'Debt item ID' })
+  @ApiResponse({ status: 200, description: 'Debt item resolved successfully' })
+  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 404, description: 'Debt item not found' })
+  async resolve(
+    @Param('id') id: string,
+    @GetUser('id') userId: string,
+  ) {
+    const existing = await this.debtService.findById(id);
+    if (!existing) {
+      throw new NotFoundException(`Debt item with ID ${id} not found`);
+    }
+    return await this.debtService.resolve(id, userId);
   }
 
   /**

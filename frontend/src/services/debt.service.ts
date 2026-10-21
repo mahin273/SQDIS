@@ -14,8 +14,12 @@ export const debtService = {
    * Get all debt items with pagination and filters
    */
   async getAll(filters?: DebtFilters): Promise<{ data: DebtItem[]; total: number; page: number; pageSize: number; totalPages: number }> {
+    const params = {
+      ...filters,
+      limit: filters?.limit || filters?.pageSize || 20,
+    };
     const response = await api.get<{ data: DebtItem[]; total: number; page: number; pageSize: number; totalPages: number }>('/debt', {
-      params: filters,
+      params,
     });
     return response.data;
   },
@@ -73,6 +77,14 @@ export const debtService = {
    */
   async getById(id: string): Promise<DebtItem> {
     const response = await api.get<DebtItem>(`/debt/${id}`);
+    return response.data;
+  },
+
+  /**
+   * Mark a debt item as resolved
+   */
+  async resolve(id: string): Promise<DebtItem> {
+    const response = await api.post<DebtItem>(`/debt/${id}/resolve`);
     return response.data;
   },
 };

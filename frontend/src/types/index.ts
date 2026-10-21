@@ -1415,28 +1415,64 @@ export interface TeamGoalComparison {
 
 // ============== DEBT ==============
 
+export type DebtMarkerType = 'TODO' | 'FIXME' | 'HACK' | 'XXX';
 export type DebtSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL';
 export type DebtType = 'BUG_RISK' | 'COMPLEXITY' | 'DUPLICATION' | 'CODE_SMELL' | 'TEST_GAP' | 'DEPRECATION' | 'PERFORMANCE';
 
 export interface DebtItem {
   id: string;
-  title: string;
-  description?: string;
-  type: DebtType;
-  severity: DebtSeverity;
-  status: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'WONTFIX';
   repositoryId: string;
-  repository?: Repository;
+  introducedCommitId?: string | null;
+  resolvedCommitId?: string | null;
+  authorId?: string | null;
+  resolverId?: string | null;
+  markerType: DebtMarkerType;
+  content: string;
+  filePath: string;
+  lineNumber: number;
+  isResolved: boolean;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  author?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  } | null;
+  repository?: {
+    id: string;
+    name: string;
+    fullName?: string;
+  } | null;
+  resolver?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  } | null;
+  introducedCommit?: {
+    id: string;
+    sha: string;
+    message: string;
+  } | null;
+  resolvedCommit?: {
+    id: string;
+    sha: string;
+    message: string;
+  } | null;
+  // Backwards compatibility / computed fields
+  title?: string;
+  description?: string;
+  type?: DebtType;
+  severity?: DebtSeverity;
+  status?: 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'WONTFIX';
   modulePath?: string;
   lineStart?: number;
   lineEnd?: number;
-  authorId?: string;
-  introducedAt?: string;
-  resolvedAt?: string;
   effortMinutes?: number;
-  score: number;
-  organizationId: string;
-  createdAt: string;
+  score?: number;
+  organizationId?: string;
 }
 
 export interface DebtListResponse {
@@ -1449,12 +1485,17 @@ export interface DebtListResponse {
 
 export interface DebtFilters {
   page?: number;
+  limit?: number;
   pageSize?: number;
   status?: DebtItem['status'];
   severity?: DebtSeverity;
   type?: DebtType;
+  markerType?: DebtMarkerType;
+  isResolved?: boolean;
   repositoryId?: string;
+  authorId?: string;
   modulePath?: string;
+  filePath?: string;
   startDate?: string;
   endDate?: string;
 }
@@ -1463,54 +1504,82 @@ export interface DebtHotspot {
   filePath: string;
   repositoryId: string;
   repositoryName: string;
-  churn: number;
+  churnRatio?: number;
+  churn?: number;
   bugCount: number;
-  complexity: number;
-  severityScore: number;
+  debtCount?: number;
+  complexity?: number;
+  severityScore?: number;
   severity: DebtSeverity;
-  lastModified: string;
+  lastModified?: string;
+}
+
+export interface DebtTrendPoint {
+  date: string | Date;
+  totalDebt: number;
+  addedDebt: number;
+  resolvedDebt: number;
+  netDebt: number;
 }
 
 export interface DebtTrend {
-  data: Array<{
+  points?: DebtTrendPoint[];
+  data?: Array<{
     date: string;
     totalDebt: number;
-    newDebt: number;
+    newDebt?: number;
+    addedDebt?: number;
     resolvedDebt: number;
     netDebt: number;
   }>;
-  velocity: {
+  velocity: number | {
     accumulationRate: number;
     resolutionRate: number;
     status: 'increasing' | 'decreasing' | 'stable';
   };
+  isAccumulating?: boolean;
 }
 
 export interface DebtRecommendation {
   id: string;
-  title: string;
-  description: string;
   filePath: string;
-  repositoryName: string;
-  estimatedEffortMinutes: number;
-  impactScore: number;
-  priority: 'HIGH' | 'MEDIUM' | 'LOW';
+  repositoryId?: string;
+  repositoryName?: string;
+  markerCount?: number;
+  complexity?: number;
+  impact?: number;
+  effort?: number;
+  priority?: number | 'HIGH' | 'MEDIUM' | 'LOW';
+  rationale?: string;
+  title?: string;
+  description?: string;
+  estimatedEffortMinutes?: number;
+  impactScore?: number;
 }
 
 export interface DebtAttribution {
   developerId: string;
   developerName: string;
-  introduced: number;
-  resolved: number;
+  developerEmail?: string;
+  avatarUrl?: string;
+  debtIntroduced?: number;
+  debtResolved?: number;
   netDebt: number;
-  avgSeverity: DebtSeverity;
+  introduced?: number;
+  resolved?: number;
+  avgSeverity?: DebtSeverity;
 }
 
 export interface ModuleDebtScore {
   modulePath: string;
   repositoryId: string;
   score: number;
-  markers: {
+  todoCount?: number;
+  fixmeCount?: number;
+  hackCount?: number;
+  xxxCount?: number;
+  exceedsThreshold?: boolean;
+  markers?: {
     bugs: number;
     codeSmells: number;
     complexity: number;
