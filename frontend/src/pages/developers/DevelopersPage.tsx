@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/sheet'
 import { developersService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
+import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { formatDate } from '@/lib/utils'
 import { PageHeader, QueryState, formatScore } from '../pageUtils'
 import type { Developer } from '@/types'
@@ -83,9 +84,12 @@ export function DevelopersPage() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedTeam, setSelectedTeam] = useState('ALL')
   const [selectedRole, setSelectedRole] = useState('ALL')
+  const [selectedRepo, setSelectedRepo] = useState('ALL')
   const [sortBy, setSortBy] = useState<'dqs-desc' | 'dqs-asc' | 'commits-desc' | 'name-asc' | 'activity-desc'>('dqs-desc')
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   const [inspectDeveloper, setInspectDeveloper] = useState<Developer | null>(null)
+
+  const { repositories } = useActiveRepository()
 
   const developersQuery = useQuery({
     queryKey: queryKeys.leaderboard.developers({ limit: 100 }),
@@ -318,6 +322,25 @@ export function DevelopersPage() {
                   <option value="UNASSIGNED">Unassigned</option>
                 </select>
               </div>
+
+              {/* Repository Filter */}
+              {repositories.length > 1 && (
+                <div className="flex items-center gap-1.5 text-xs">
+                  <span className="text-[11px] font-medium text-slate-400">Repo:</span>
+                  <select
+                    value={selectedRepo}
+                    onChange={(e) => setSelectedRepo(e.target.value)}
+                    className="h-8 rounded-md border border-slate-200 bg-slate-50/80 px-2.5 text-xs font-medium text-slate-800 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 focus:outline-hidden"
+                  >
+                    <option value="ALL">All Repositories</option>
+                    {repositories.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
 
               {/* Role Filter */}
               <div className="flex items-center gap-1.5 text-xs">
