@@ -13,8 +13,8 @@ export const releasesService = {
   /**
    * Get all releases for the current organization
    */
-  async getAll(): Promise<Release[]> {
-    const response = await api.get<Release[]>('/releases');
+  async getAll(params?: { repositoryId?: string }): Promise<Release[]> {
+    const response = await api.get<Release[]>('/releases', { params });
     return response.data;
   },
 

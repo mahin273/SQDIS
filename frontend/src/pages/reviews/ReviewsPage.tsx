@@ -115,18 +115,18 @@ export function ReviewsPage() {
   })
 
   const analyticsQuery = useQuery({
-    queryKey: queryKeys.reviews.analytics(),
-    queryFn: () => reviewsService.getAnalytics(),
+    queryKey: queryKeys.reviews.analytics({ repositoryId: selectedRepoId || undefined }),
+    queryFn: () => reviewsService.getAnalytics({ repositoryId: selectedRepoId || undefined }),
   })
 
   const activityTrendQuery = useQuery({
-    queryKey: ['reviews', 'activity-trend'],
-    queryFn: () => reviewsService.getActivityTrend(30),
+    queryKey: queryKeys.reviews.activityTrend(30, selectedRepoId || undefined),
+    queryFn: () => reviewsService.getActivityTrend(30, selectedRepoId || undefined),
   })
 
   const reviewersQuery = useQuery({
-    queryKey: ['reviews', 'leaderboard'],
-    queryFn: () => reviewsService.getLeaderboard(6),
+    queryKey: queryKeys.reviews.leaderboard(6, selectedRepoId || undefined),
+    queryFn: () => reviewsService.getLeaderboard(6, selectedRepoId || undefined),
   })
 
   const reviewsListResponse = reviewsQuery.data
@@ -250,17 +250,21 @@ export function ReviewsPage() {
   const totalReviewsCount =
     analytics?.totalReviews ?? (analytics as any)?.stats?.totalReviews ?? allReviews.length ?? 0
   const avgTurnaroundVal =
-    analytics?.averageTurnaroundHours !== undefined
+    totalReviewsCount === 0
+      ? '0.0h'
+      : analytics?.averageTurnaroundHours !== undefined
       ? `${analytics.averageTurnaroundHours.toFixed(1)}h`
       : (analytics as any)?.stats?.avgTurnaroundMinutes !== undefined
       ? `${((analytics as any).stats.avgTurnaroundMinutes / 60).toFixed(1)}h`
-      : '0.1h'
+      : '0.0h'
   const approvalRateVal =
-    analytics?.approvalRate !== undefined
+    totalReviewsCount === 0
+      ? '0%'
+      : analytics?.approvalRate !== undefined
       ? `${Math.round(analytics.approvalRate)}%`
       : (analytics as any)?.stats?.approvalRate !== undefined
       ? `${Math.round((analytics as any).stats.approvalRate)}%`
-      : '99%'
+      : '0%'
   const velocityVal =
     totalReviewsCount > 0 ? `${Math.max(1, Math.round(totalReviewsCount / 30))}/day` : '0/day'
 
@@ -364,7 +368,7 @@ export function ReviewsPage() {
                 {totalReviewsCount}
               </p>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                <span className="text-emerald-600 dark:text-emerald-400 font-medium">33</span> reviews past 30 days
+                <span className="text-emerald-600 dark:text-emerald-400 font-medium">{totalReviewsInTrend}</span> reviews past 30 days
               </p>
             </div>
             <div className="rounded-xl bg-blue-50 dark:bg-blue-950/60 p-3 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40">

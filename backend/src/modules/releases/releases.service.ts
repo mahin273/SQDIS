@@ -75,9 +75,17 @@ export class ReleasesService {
         targetDate: new Date(dto.targetDate),
         description: dto.description,
         organizationId,
+        repositoryId: dto.repositoryId || undefined,
         isActive: true,
       },
       include: {
+        repository: {
+          select: {
+            id: true,
+            name: true,
+            fullName: true,
+          },
+        },
         sprintAssociations: {
           include: {
             sprint: {
@@ -100,13 +108,25 @@ export class ReleasesService {
   /**
    * Get all releases for an organization
    */
-  async findAll(organizationId: string): Promise<ReleaseResponseDto[]> {
+  async findAll(organizationId: string, repositoryId?: string): Promise<ReleaseResponseDto[]> {
+    const where: any = {
+      organizationId,
+      isActive: true,
+    };
+    if (repositoryId) {
+      where.repositoryId = repositoryId;
+    }
+
     const releases = await this.prisma.release.findMany({
-      where: {
-        organizationId,
-        isActive: true,
-      },
+      where,
       include: {
+        repository: {
+          select: {
+            id: true,
+            name: true,
+            fullName: true,
+          },
+        },
         sprintAssociations: {
           include: {
             sprint: {
@@ -146,6 +166,13 @@ export class ReleasesService {
     const release = await this.prisma.release.findUnique({
       where: { id },
       include: {
+        repository: {
+          select: {
+            id: true,
+            name: true,
+            fullName: true,
+          },
+        },
         sprintAssociations: {
           include: {
             sprint: {
@@ -227,6 +254,13 @@ export class ReleasesService {
       where: { id },
       data: updateData,
       include: {
+        repository: {
+          select: {
+            id: true,
+            name: true,
+            fullName: true,
+          },
+        },
         sprintAssociations: {
           include: {
             sprint: {
@@ -285,6 +319,13 @@ export class ReleasesService {
       where: { id },
       data: { shippedAt },
       include: {
+        repository: {
+          select: {
+            id: true,
+            name: true,
+            fullName: true,
+          },
+        },
         sprintAssociations: {
           include: {
             sprint: {
@@ -920,6 +961,14 @@ export class ReleasesService {
       createdAt: release.createdAt,
       updatedAt: release.updatedAt,
       sprints,
+      repositoryId: release.repositoryId || undefined,
+      repository: release.repository
+        ? {
+            id: release.repository.id,
+            name: release.repository.name,
+            fullName: release.repository.fullName,
+          }
+        : undefined,
       latestTelemetry: release.telemetryAnalyses?.[0]
         ? this.formatTelemetryResponse(release.telemetryAnalyses[0])
         : undefined,

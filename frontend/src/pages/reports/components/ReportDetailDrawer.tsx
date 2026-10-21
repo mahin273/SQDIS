@@ -11,6 +11,7 @@ import {
   Database,
   AlertTriangle,
   ExternalLink,
+  GitBranch,
 } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -236,6 +237,27 @@ export function ReportDetailDrawer({
               className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-700 dark:text-slate-300"
             >
               Open Profile <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
+        )}
+
+        {/* Target Repository Association / Deep Link */}
+        {report.repositoryId && (
+          <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <GitBranch className="h-3.5 w-3.5 text-indigo-500" />
+                Target Repository
+              </p>
+              <p className="text-[11px] text-slate-500">
+                Code quality telemetry, line coverage, and commits scoped to this repository.
+              </p>
+            </div>
+            <Link
+              to={`/coverage?repo=${report.repositoryId}`}
+              className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded-md border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-slate-700 dark:text-slate-300"
+            >
+              Explore Telemetry <ExternalLink className="h-3 w-3" />
             </Link>
           </div>
         )}

@@ -339,9 +339,13 @@ export class ReviewsService {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    repositoryId?: string,
   ): Promise<ReviewQualityMetrics> {
     const where: any = {
-      review: { repository: { organizationId } },
+      review: {
+        repository: { organizationId },
+        ...(repositoryId ? { repositoryId } : {}),
+      },
       deletedAt: null,
     };
 
@@ -361,6 +365,7 @@ export class ReviewsService {
 
     const reviewWhere: any = {
       repository: { organizationId },
+      ...(repositoryId ? { repositoryId } : {}),
     };
     if (startDate || endDate) {
       reviewWhere.submittedAt = {};
@@ -399,13 +404,18 @@ export class ReviewsService {
   /**
    * Get review activity trend over time
    */
-  async getActivityTrend(organizationId: string, days = 30): Promise<ReviewActivityData[]> {
+  async getActivityTrend(
+    organizationId: string,
+    days = 30,
+    repositoryId?: string,
+  ): Promise<ReviewActivityData[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
     const reviews = await this.prisma.review.findMany({
       where: {
         repository: { organizationId },
+        ...(repositoryId ? { repositoryId } : {}),
         submittedAt: { gte: startDate },
       },
       select: {
@@ -451,13 +461,17 @@ export class ReviewsService {
   /**
    * Get peak review hours and days
    */
-  async getPeakTimes(organizationId: string): Promise<{
+  async getPeakTimes(
+    organizationId: string,
+    repositoryId?: string,
+  ): Promise<{
     peakHours: { hour: number; count: number }[];
     peakDays: { day: string; count: number }[];
   }> {
     const reviews = await this.prisma.review.findMany({
       where: {
         repository: { organizationId },
+        ...(repositoryId ? { repositoryId } : {}),
       },
       select: {
         submittedAt: true,
@@ -496,12 +510,13 @@ export class ReviewsService {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    repositoryId?: string,
   ): Promise<ReviewAnalytics> {
     const [stats, qualityMetrics, activityTrend, peakTimes] = await Promise.all([
-      this.getOrganizationStats(organizationId, startDate, endDate),
-      this.getQualityMetrics(organizationId, startDate, endDate),
-      this.getActivityTrend(organizationId, 30),
-      this.getPeakTimes(organizationId),
+      this.getOrganizationStats(organizationId, startDate, endDate, repositoryId),
+      this.getQualityMetrics(organizationId, startDate, endDate, repositoryId),
+      this.getActivityTrend(organizationId, 30, repositoryId),
+      this.getPeakTimes(organizationId, repositoryId),
     ]);
 
     const averageTurnaroundHours = stats.avgTurnaroundMinutes ? stats.avgTurnaroundMinutes / 60 : 0;
@@ -528,9 +543,11 @@ export class ReviewsService {
     organizationId: string,
     startDate?: string,
     endDate?: string,
+    repositoryId?: string,
   ): Promise<ReviewStats> {
     const where: any = {
       repository: { organizationId },
+      ...(repositoryId ? { repositoryId } : {}),
     };
 
     if (startDate || endDate) {
@@ -572,11 +589,16 @@ export class ReviewsService {
   /**
    * Get enhanced top reviewers leaderboard with more metrics
    */
-  async getEnhancedLeaderboard(organizationId: string, limit = 10): Promise<ReviewerRanking[]> {
+  async getEnhancedLeaderboard(
+    organizationId: string,
+    limit = 10,
+    repositoryId?: string,
+  ): Promise<ReviewerRanking[]> {
     const reviewers = await this.prisma.review.groupBy({
       by: ['reviewerId'],
       where: {
         repository: { organizationId },
+        ...(repositoryId ? { repositoryId } : {}),
         reviewerId: { not: null },
       },
       _count: { id: true },
@@ -598,12 +620,17 @@ export class ReviewsService {
           where: {
             reviewerId: reviewer.reviewerId,
             repository: { organizationId },
+            ...(repositoryId ? { repositoryId } : {}),
             state: 'APPROVED',
           },
         }),
         this.prisma.reviewComment.count({
           where: {
             authorId: reviewer.reviewerId,
+            review: {
+              repository: { organizationId },
+              ...(repositoryId ? { repositoryId } : {}),
+            },
             commentClass: 'CONSTRUCTIVE',
             deletedAt: null,
           },
@@ -772,11 +799,16 @@ export class ReviewsService {
   /**
    * Get top reviewers leaderboard
    */
-  async getLeaderboard(organizationId: string, limit = 10): Promise<ReviewerRanking[]> {
+  async getLeaderboard(
+    organizationId: string,
+    limit = 10,
+    repositoryId?: string,
+  ): Promise<ReviewerRanking[]> {
     const reviewers = await this.prisma.review.groupBy({
       by: ['reviewerId'],
       where: {
         repository: { organizationId },
+        ...(repositoryId ? { repositoryId } : {}),
         reviewerId: { not: null },
       },
       _count: { id: true },

@@ -1,4 +1,4 @@
-import { IsString, IsNotEmpty, IsDateString, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsNotEmpty, IsDateString, IsOptional, MaxLength, IsUUID } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
@@ -29,4 +29,12 @@ export class CreateReleaseDto {
   @IsOptional()
   @MaxLength(1000)
   description?: string;
+
+  @ApiPropertyOptional({
+    description: 'Target repository ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsUUID()
+  @IsOptional()
+  repositoryId?: string;
 }

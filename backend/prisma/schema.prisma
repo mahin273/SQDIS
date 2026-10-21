@@ -208,6 +208,7 @@ model Repository {
   commitComments      CommitComment[]
   fileASTMetrics      FileASTMetric[]
   qualityGatePolicy   QualityGatePolicy?
+  releases            Release[]
 
   @@unique([organizationId, githubId])
   @@map("repositories")
@@ -737,6 +738,7 @@ model SprintReport {
 model Release {
   id             String    @id @default(uuid())
   organizationId String
+  repositoryId   String?
   version        String
   targetDate     DateTime
   description    String?
@@ -751,11 +753,13 @@ model Release {
   updatedAt      DateTime  @updatedAt
 
   organization       Organization                @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  repository         Repository?                 @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
   sprintAssociations ReleaseSprintAssociation[]
   telemetryAnalyses  ReleaseTelemetryAnalysis[]
 
   @@unique([organizationId, version])
   @@index([organizationId])
+  @@index([repositoryId])
   @@map("releases")
 }
 
@@ -1295,6 +1299,7 @@ model Report {
   @@index([createdById])
   @@index([status])
   @@index([createdAt])
+  @@index([repositoryId])
   @@map("reports")
 }
 
@@ -1310,6 +1315,7 @@ enum ReportScope {
   TEAM
   PROJECT
   DEVELOPER
+  REPOSITORY
 }
 
 // Enum for report status

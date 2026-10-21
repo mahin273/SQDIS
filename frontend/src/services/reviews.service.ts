@@ -32,9 +32,9 @@ export const reviewsService = {
   /**
    * Get top reviewers leaderboard
    */
-  async getLeaderboard(limit?: number): Promise<ReviewLeaderboardEntry[]> {
+  async getLeaderboard(limit?: number, repositoryId?: string): Promise<ReviewLeaderboardEntry[]> {
     const response = await api.get<ReviewLeaderboardEntry[]>('/reviews/leaderboard', {
-      params: { limit },
+      params: { limit, repositoryId },
     });
     return response.data;
   },
@@ -42,29 +42,45 @@ export const reviewsService = {
   /**
    * Get comprehensive review analytics
    */
-  async getAnalytics(startDate?: string, endDate?: string): Promise<ReviewAnalytics> {
-    const response = await api.get<ReviewAnalytics>('/reviews/analytics', {
-      params: { startDate, endDate },
-    });
+  async getAnalytics(
+    startDateOrParams?: string | { startDate?: string; endDate?: string; repositoryId?: string },
+    endDate?: string,
+    repositoryId?: string
+  ): Promise<ReviewAnalytics> {
+    let params: { startDate?: string; endDate?: string; repositoryId?: string } = {};
+    if (typeof startDateOrParams === 'object' && startDateOrParams !== null) {
+      params = startDateOrParams;
+    } else {
+      params = { startDate: startDateOrParams, endDate, repositoryId };
+    }
+    const response = await api.get<ReviewAnalytics>('/reviews/analytics', { params });
     return response.data;
   },
 
   /**
    * Get review quality metrics
    */
-  async getQualityMetrics(startDate?: string, endDate?: string): Promise<ReviewQualityMetrics> {
-    const response = await api.get<ReviewQualityMetrics>('/reviews/quality-metrics', {
-      params: { startDate, endDate },
-    });
+  async getQualityMetrics(
+    startDateOrParams?: string | { startDate?: string; endDate?: string; repositoryId?: string },
+    endDate?: string,
+    repositoryId?: string
+  ): Promise<ReviewQualityMetrics> {
+    let params: { startDate?: string; endDate?: string; repositoryId?: string } = {};
+    if (typeof startDateOrParams === 'object' && startDateOrParams !== null) {
+      params = startDateOrParams;
+    } else {
+      params = { startDate: startDateOrParams, endDate, repositoryId };
+    }
+    const response = await api.get<ReviewQualityMetrics>('/reviews/quality-metrics', { params });
     return response.data;
   },
 
   /**
    * Get review activity trend over time
    */
-  async getActivityTrend(days?: number): Promise<ReviewActivityTrendPoint[]> {
+  async getActivityTrend(days?: number, repositoryId?: string): Promise<ReviewActivityTrendPoint[]> {
     const response = await api.get<ReviewActivityTrendPoint[]>('/reviews/activity-trend', {
-      params: { days },
+      params: { days, repositoryId },
     });
     return response.data;
   },
@@ -72,8 +88,10 @@ export const reviewsService = {
   /**
    * Get peak review activity days and hours
    */
-  async getPeakTimes(): Promise<PeakReviewTimes> {
-    const response = await api.get<PeakReviewTimes>('/reviews/peak-times');
+  async getPeakTimes(repositoryId?: string): Promise<PeakReviewTimes> {
+    const response = await api.get<PeakReviewTimes>('/reviews/peak-times', {
+      params: { repositoryId },
+    });
     return response.data;
   },
 

@@ -6,13 +6,14 @@ import {
   Delete,
   Body,
   Param,
+  Query,
   UseGuards,
   HttpCode,
   HttpStatus,
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiProduces } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiProduces } from '@nestjs/swagger';
 import { ReleasesService } from './releases.service';
 import { CreateReleaseDto } from './dto/create-release.dto';
 import { UpdateReleaseDto } from './dto/update-release.dto';
@@ -84,12 +85,16 @@ export class ReleasesController {
    */
   @Get()
   @ApiOperation({ summary: 'Get all releases for the current organization' })
+  @ApiQuery({ name: 'repositoryId', required: false, type: String })
   @ApiResponse({
     status: 200,
     description: 'List of releases',
   })
-  async findAll(@GetUser('organizationId') organizationId: string) {
-    return this.releasesService.findAll(organizationId);
+  async findAll(
+    @GetUser('organizationId') organizationId: string,
+    @Query('repositoryId') repositoryId?: string,
+  ) {
+    return this.releasesService.findAll(organizationId, repositoryId);
   }
 
   /**

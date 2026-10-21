@@ -74,6 +74,18 @@ describe('ReleasesService', () => {
       );
       expect(result).toHaveLength(1);
     });
+
+    it('should filter releases by repositoryId when provided', async () => {
+      prisma.release.findMany.mockResolvedValue([mockRelease] as any);
+
+      await service.findAll('org-123', 'repo-456');
+
+      expect(prisma.release.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { organizationId: 'org-123', isActive: true, repositoryId: 'repo-456' },
+        }),
+      );
+    });
   });
 
   describe('evaluateCanaryTelemetry', () => {

@@ -269,6 +269,28 @@ describe('ReviewsService', () => {
       expect(stats.turnaroundDistribution.FAST).toBe(2);
       expect(stats.turnaroundDistribution.NORMAL).toBe(1);
     });
+
+    it('scopes query to specific repositoryId when provided', async () => {
+      prisma.review.findMany.mockResolvedValue([
+        { state: 'APPROVED', turnaroundMinutes: 45, turnaroundClass: 'FAST' },
+      ]);
+
+      const stats = await service.getOrganizationStats('org-1', undefined, undefined, 'repo-123');
+
+      expect(prisma.review.findMany).toHaveBeenCalledWith({
+        where: {
+          repository: { organizationId: 'org-1' },
+          repositoryId: 'repo-123',
+        },
+        select: {
+          state: true,
+          turnaroundMinutes: true,
+          turnaroundClass: true,
+        },
+      });
+      expect(stats.totalReviews).toBe(1);
+      expect(stats.approvalRate).toBe(100);
+    });
   });
 
   describe('getLeaderboard', () => {

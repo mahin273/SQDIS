@@ -701,6 +701,12 @@ export interface Release {
   sprints?: (Sprint | ReleaseSprintSummary)[];
   latestTelemetry?: ReleaseTelemetryAnalysis;
   name?: string;
+  repositoryId?: string;
+  repository?: {
+    id: string;
+    name: string;
+    fullName: string;
+  };
 }
 
 
@@ -708,6 +714,7 @@ export interface CreateReleaseRequest {
   version: string;
   targetDate: string;
   description?: string;
+  repositoryId?: string;
 }
 
 export interface UpdateReleaseRequest {
@@ -1798,7 +1805,7 @@ export interface NotificationFilters {
 export type ReportType = 'PDF' | 'CSV';
 export type ReportStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED';
 export type ReportCategory = 'DEVELOPER' | 'TEAM' | 'PROJECT' | 'ORGANIZATION' | 'SPRINT' | 'RELEASE';
-export type ReportScope = 'ORGANIZATION' | 'TEAM' | 'PROJECT' | 'DEVELOPER';
+export type ReportScope = 'ORGANIZATION' | 'TEAM' | 'PROJECT' | 'DEVELOPER' | 'REPOSITORY';
 
 export interface Report {
   id: string;
@@ -1848,7 +1855,9 @@ export interface ReportFilters {
   pageSize?: number;
   type?: ReportType;
   category?: ReportCategory;
+  scope?: ReportScope;
   status?: ReportStatus;
+  repositoryId?: string;
   startDate?: string;
   endDate?: string;
 }

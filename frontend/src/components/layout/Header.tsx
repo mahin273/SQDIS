@@ -7,7 +7,6 @@ import { Dropdown, DropdownItem, DropdownDivider } from '@/components/ui/dropdow
 import { Menu, Sun, Moon, LogOut, User as UserIcon, Settings, Building2, ChevronDown } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
-import { RepositorySelector } from './RepositorySelector'
 
 export function Header() {
   const { toggleSidebar, theme, setTheme } = useUIStore()
@@ -61,9 +60,6 @@ export function Header() {
             ))}
           </Dropdown>
         )}
-
-        {/* Global Repository Switcher */}
-        <RepositorySelector />
       </div>
 
       {/* Right side: Notifications, Theme, Profile */}
