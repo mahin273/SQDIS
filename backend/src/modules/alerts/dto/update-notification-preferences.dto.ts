@@ -16,6 +16,11 @@ export class UpdateNotificationPreferencesDto {
   @IsBoolean()
   slackEnabled?: boolean;
 
+  @ApiPropertyOptional({ description: 'Slack incoming webhook URL for notifications' })
+  @IsOptional()
+  @IsString()
+  slackWebhookUrl?: string;
+
   @ApiPropertyOptional({ description: 'Enable in-app notifications' })
   @IsOptional()
   @IsBoolean()
