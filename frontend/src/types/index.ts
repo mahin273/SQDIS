@@ -1689,18 +1689,26 @@ export interface AlertPreference {
   id: string;
   userId: string;
   emailEnabled: boolean;
-  pushEnabled: boolean;
+  slackEnabled: boolean;
+  slackWebhookUrl?: string | null;
   inAppEnabled: boolean;
-  digestFrequency: 'REAL_TIME' | 'HOURLY' | 'DAILY' | 'WEEKLY';
-  types: AlertType[];
+  quietStart?: string | null;
+  quietEnd?: string | null;
+  digestMode: boolean;
+  digestFrequency: 'hourly' | 'daily' | 'weekly' | 'REAL_TIME' | 'HOURLY' | 'DAILY' | 'WEEKLY' | string;
+  types?: AlertType[];
   minSeverity: AlertSeverity;
 }
 
 export interface UpdatePreferenceRequest {
   emailEnabled?: boolean;
-  pushEnabled?: boolean;
+  slackEnabled?: boolean;
+  slackWebhookUrl?: string;
   inAppEnabled?: boolean;
-  digestFrequency?: AlertPreference['digestFrequency'];
+  quietStart?: string;
+  quietEnd?: string;
+  digestMode?: boolean;
+  digestFrequency?: string;
   types?: AlertType[];
   minSeverity?: AlertSeverity;
 }
