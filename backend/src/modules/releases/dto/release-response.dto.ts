@@ -149,5 +149,10 @@ export class ReleaseResponseDto {
     description: 'User ID who triggered the rollback',
   })
   rollbackTriggeredBy?: string;
+
+  @ApiPropertyOptional({
+    description: 'Latest canary telemetry analysis',
+  })
+  latestTelemetry?: any;
 }
 

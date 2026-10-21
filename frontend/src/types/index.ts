@@ -674,6 +674,14 @@ export interface CreateCarryOverRequest {
 
 export type ReleaseStatus = 'DRAFT' | 'PLANNED' | 'IN_PROGRESS' | 'READY' | 'RELEASED' | 'ROLLED_BACK';
 
+export interface ReleaseSprintSummary {
+  id: string;
+  name: string;
+  startDate: string;
+  endDate: string;
+  teamName?: string;
+}
+
 export interface Release {
   id: string;
   version: string;
@@ -690,7 +698,8 @@ export interface Release {
   rollbackTriggeredBy?: string;
   createdAt: string;
   updatedAt: string;
-  sprints?: Sprint[];
+  sprints?: (Sprint | ReleaseSprintSummary)[];
+  latestTelemetry?: ReleaseTelemetryAnalysis;
   name?: string;
 }
 
@@ -800,13 +809,22 @@ export interface ReleaseTelemetryAnalysis {
   id: string;
   releaseId: string;
   serviceName: string;
-  verdict: 'HEALTHY' | 'DEGRADED' | 'CRITICAL_REGRESSION';
-  recommendation: 'PROCEED' | 'MONITOR_CLOSELY' | 'TRIGGER_ROLLBACK';
+  verdict: 'HEALTHY' | 'DEGRADED' | 'CRITICAL_REGRESSION' | string;
+  recommendation: 'PROCEED' | 'MONITOR_CLOSELY' | 'TRIGGER_ROLLBACK' | string;
   score: number;
   baselineMetrics: CanaryMetricSnapshot;
   canaryMetrics: CanaryMetricSnapshot;
   deltas: CanaryMetricDelta;
-  violations: CanaryViolation[];
+  violations?: CanaryViolation[];
+  p95BaselineMs?: number;
+  p95CanaryMs?: number;
+  p95DeltaPct?: number;
+  errorBaseline?: number;
+  errorCanary?: number;
+  errorDelta?: number;
+  memoryBaselineMb?: number;
+  memoryCanaryMb?: number;
+  memoryDeltaPct?: number;
   createdAt: string;
 }
 

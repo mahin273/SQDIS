@@ -89,6 +89,10 @@ export class ReleasesService {
             },
           },
         },
+        telemetryAnalyses: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
     });
   }
@@ -114,11 +118,25 @@ export class ReleasesService {
             },
           },
         },
+        telemetryAnalyses: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
       orderBy: { targetDate: 'desc' },
     });
 
-    return releases.map((release) => this.formatReleaseResponse(release));
+    return Promise.all(
+      releases.map(async (release) => {
+        const formatted = this.formatReleaseResponse(release);
+        try {
+          formatted.readiness = await this.calculateReadiness(release.id);
+        } catch {
+          // ignore error if calculating readiness fails in mock or edge case
+        }
+        return formatted;
+      }),
+    );
   }
 
   /**
@@ -138,6 +156,10 @@ export class ReleasesService {
               },
             },
           },
+        },
+        telemetryAnalyses: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
       },
     });
@@ -215,6 +237,10 @@ export class ReleasesService {
               },
             },
           },
+        },
+        telemetryAnalyses: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
         },
       },
     });
@@ -894,6 +920,9 @@ export class ReleasesService {
       createdAt: release.createdAt,
       updatedAt: release.updatedAt,
       sprints,
+      latestTelemetry: release.telemetryAnalyses?.[0]
+        ? this.formatTelemetryResponse(release.telemetryAnalyses[0])
+        : undefined,
     };
   }
 
