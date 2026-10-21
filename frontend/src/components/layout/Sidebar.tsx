@@ -60,8 +60,6 @@ const SECONDARY_NAV_LABELS = [
   'Organization Members',
   'Onboarding',
   'Audit Logs',
-  'Audit Analytics',
-  'Real-Time Monitor',
 ]
 
 const iconMap: Record<string, React.ReactNode> = {
@@ -101,9 +99,8 @@ function NavItemComponent({
 }) {
   const icon = iconMap[item.label] || <LayoutDashboard className="h-5 w-5" />
 
-  // Exact match for routes that have sister sub-routes (e.g. /audit-logs vs /audit-logs/monitor)
+  // Exact match for root-level routes or routes that have sister sub-routes (e.g. /dashboard)
   const isExact =
-    item.path === '/audit-logs' ||
     item.path === '/dashboard' ||
     (allNavItems?.some((other) => other.path !== item.path && other.path.startsWith(item.path + '/')) ?? false)
 

@@ -45,17 +45,5 @@ export const NAV_CONFIG: NavItemConfig[] = [
     requiredRole: 'ADMIN',
     requiredPermission: 'audit:view',
   },
-  {
-    label: 'Audit Analytics',
-    path: '/audit-logs/analytics',
-    requiredRole: 'ADMIN',
-    requiredPermission: 'audit:view',
-  },
-  {
-    label: 'Real-Time Monitor',
-    path: '/audit-logs/monitor',
-    requiredRole: 'ADMIN',
-    requiredPermission: 'audit:view',
-  },
   { label: 'Settings', path: '/settings' },
 ]
