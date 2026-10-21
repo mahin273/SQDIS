@@ -65,7 +65,7 @@ export class GoalsService {
           project: {
             select: { id: true, name: true },
           },
-          keyResults: includeKeyResults || false,
+          keyResults: true,
         },
         orderBy: { createdAt: 'desc' },
         skip: (page - 1) * limit,

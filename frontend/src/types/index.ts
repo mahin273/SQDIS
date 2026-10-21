@@ -1270,6 +1270,7 @@ export interface Goal {
     daysRemaining: number;
   };
   keyResults?: KeyResult[];
+  achievedAt?: string;
   createdAt: string;
   updatedAt: string;
   title?: string;
@@ -1278,14 +1279,17 @@ export interface Goal {
 export interface KeyResult {
   id: string;
   goalId: string;
-  title: string;
+  title?: string;
+  description?: string;
   targetValue: number;
   currentValue: number;
   unit?: string;
   weight?: number;
-  status: 'NOT_STARTED' | 'ON_TRACK' | 'BEHIND' | 'COMPLETED';
-  createdAt: string;
-  updatedAt: string;
+  status?: 'NOT_STARTED' | 'ON_TRACK' | 'BEHIND' | 'COMPLETED' | string;
+  isAchieved?: boolean;
+  progressPercentage?: number;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CreateGoalRequest {
@@ -1363,11 +1367,16 @@ export interface GoalTemplate {
   id: string;
   name: string;
   description?: string;
-  category: string;
-  organizationId: string;
-  isDefault: boolean;
-  fields: Record<string, unknown>;
-  createdAt: string;
+  category?: string;
+  metricType?: GoalMetricType;
+  targetValue?: number;
+  operator?: GoalOperator;
+  durationDays?: number;
+  organizationId?: string;
+  isDefault?: boolean;
+  fields?: Record<string, unknown>;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface GoalAchievement {
