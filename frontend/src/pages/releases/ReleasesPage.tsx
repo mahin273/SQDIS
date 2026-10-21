@@ -87,6 +87,7 @@ export function ReleasesPage() {
   const [description, setDescription] = useState('')
   const [targetDate, setTargetDate] = useState('')
   const [selectedSprintId, setSelectedSprintId] = useState('')
+  const [createRepoId, setCreateRepoId] = useState('')
   const [createError, setCreateError] = useState('')
 
   // Ship Release Modal State
@@ -108,8 +109,8 @@ export function ReleasesPage() {
 
   // Primary Queries
   const releasesQuery = useQuery({
-    queryKey: queryKeys.releases.all(),
-    queryFn: () => releasesService.getAll(),
+    queryKey: queryKeys.releases.all('', activeRepoId || undefined),
+    queryFn: () => releasesService.getAll({ repositoryId: activeRepoId || undefined }),
   })
 
   const sprintsQuery = useQuery({
@@ -147,6 +148,10 @@ export function ReleasesPage() {
   // Filtered Releases
   const filteredReleases = useMemo(() => {
     let result = releases
+
+    if (activeRepoId) {
+      result = result.filter((r) => r.repositoryId === activeRepoId)
+    }
 
     if (statusFilter === 'ACTIVE') {
       result = result.filter((r) => {
@@ -216,11 +221,12 @@ export function ReleasesPage() {
 
   // Mutations
   const createMutation = useMutation({
-    mutationFn: async (data: { version: string; description?: string; targetDate: string; sprintId?: string }) => {
+    mutationFn: async (data: { version: string; description?: string; targetDate: string; sprintId?: string; repositoryId?: string }) => {
       const newRelease = await releasesService.create({
         version: data.version,
         description: data.description,
         targetDate: data.targetDate,
+        repositoryId: data.repositoryId,
       })
       if (data.sprintId && newRelease?.id) {
         try {
@@ -279,6 +285,7 @@ export function ReleasesPage() {
     setCreateError('')
     setVersion('')
     setDescription('')
+    setCreateRepoId(activeRepoId || connectedRepos[0]?.id || '')
     // Default target date 14 days from now
     const d = new Date()
     d.setDate(d.getDate() + 14)
@@ -304,6 +311,7 @@ export function ReleasesPage() {
       description: description.trim() || undefined,
       targetDate,
       sprintId: selectedSprintId || undefined,
+      repositoryId: createRepoId || undefined,
     })
   }
 
@@ -695,6 +703,12 @@ export function ReleasesPage() {
                             <h2 className="text-base font-bold font-mono text-slate-900 dark:text-slate-100">
                               {release.version}
                             </h2>
+                            {release.repository?.fullName ? (
+                              <Badge variant="outline" className="text-[11px] font-mono gap-1 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+                                <GitBranch className="h-3 w-3 text-indigo-500" />
+                                {release.repository.fullName}
+                              </Badge>
+                            ) : null}
                             {getStatusBadge(status)}
                             {getReadinessBadge(readiness?.score, readiness?.isAtRisk)}
                             {release.latestTelemetry && (
@@ -931,6 +945,12 @@ export function ReleasesPage() {
                         <h4 className="font-mono font-bold text-sm text-rose-950 dark:text-rose-200">
                           {release.version} (Rolled Back Incident)
                         </h4>
+                        {release.repository?.fullName && (
+                          <Badge variant="outline" className="text-[10px] font-mono gap-1 text-rose-700 dark:text-rose-300 border-rose-300 dark:border-rose-800">
+                            <GitBranch className="h-3 w-3" />
+                            {release.repository.fullName}
+                          </Badge>
+                        )}
                         <Badge variant="destructive" className="text-[10px] font-mono">
                           INCIDENT MITIGATED
                         </Badge>
@@ -1009,6 +1029,12 @@ export function ReleasesPage() {
                         <h4 className="font-mono font-bold text-sm text-slate-900 dark:text-slate-100">
                           {release.version}
                         </h4>
+                        {release.repository?.fullName && (
+                          <Badge variant="outline" className="text-[10px] font-mono gap-1 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-800">
+                            <GitBranch className="h-3 w-3" />
+                            {release.repository.fullName}
+                          </Badge>
+                        )}
                         <Badge variant="outline" className="text-[10px] font-mono text-emerald-600 border-emerald-500/30">
                           LIVE IN PRODUCTION
                         </Badge>
@@ -1242,6 +1268,24 @@ export function ReleasesPage() {
               required
               className="text-xs font-mono"
             />
+          </div>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Target Repository / Codebase
+            </label>
+            <select
+              value={createRepoId}
+              onChange={(e) => setCreateRepoId(e.target.value)}
+              className="w-full h-9 rounded-md border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-3 py-1 text-xs text-slate-800 dark:text-slate-200 focus:outline-none"
+            >
+              <option value="">Organization-wide Release</option>
+              {connectedRepos.map((repo: any) => (
+                <option key={repo.id} value={repo.id}>
+                  {repo.fullName || repo.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

@@ -76,7 +76,7 @@ export const queryKeys = {
     carryOvers: (id: string) => ['sprints', 'carry-overs', id] as const,
   },
   releases: {
-    all: (organizationId?: string) => ['releases', 'all', organizationId ?? ''] as const,
+    all: (organizationId?: string, repositoryId?: string) => ['releases', 'all', organizationId ?? '', repositoryId ?? ''] as const,
     detail: (id: string) => ['releases', 'detail', id] as const,
     readiness: (id: string) => ['releases', 'readiness', id] as const,
   },

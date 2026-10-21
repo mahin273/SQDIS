@@ -701,6 +701,12 @@ export interface Release {
   sprints?: (Sprint | ReleaseSprintSummary)[];
   latestTelemetry?: ReleaseTelemetryAnalysis;
   name?: string;
+  repositoryId?: string;
+  repository?: {
+    id: string;
+    name: string;
+    fullName: string;
+  };
 }
 
 
@@ -708,6 +714,7 @@ export interface CreateReleaseRequest {
   version: string;
   targetDate: string;
   description?: string;
+  repositoryId?: string;
 }
 
 export interface UpdateReleaseRequest {

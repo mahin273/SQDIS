@@ -122,6 +122,18 @@ export class ReleaseResponseDto {
   })
   sprints!: SprintSummaryDto[];
 
+  @ApiPropertyOptional({ description: 'Target repository ID' })
+  repositoryId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Target repository details',
+  })
+  repository?: {
+    id: string;
+    name: string;
+    fullName: string;
+  };
+
   @ApiPropertyOptional({
     description: 'Release readiness score (calculated on demand)',
     type: ReadinessScoreDto,

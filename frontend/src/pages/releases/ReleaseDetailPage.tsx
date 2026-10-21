@@ -15,6 +15,7 @@ import {
   ExternalLink,
   Github,
   Play,
+  GitBranch,
 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -144,6 +145,12 @@ export function ReleaseDetailPage() {
               title={
                 <div className="flex items-center gap-3">
                   <span>{release.version}</span>
+                  {release.repository?.fullName && (
+                    <Badge variant="outline" className="font-mono text-xs gap-1 text-slate-700 dark:text-slate-300">
+                      <GitBranch className="h-3.5 w-3.5 text-indigo-500" />
+                      {release.repository.fullName}
+                    </Badge>
+                  )}
                   {release.isRolledBack && (
                     <Badge variant="destructive" className="gap-1 text-xs py-1 px-2.5 font-bold">
                       <AlertOctagon className="h-3.5 w-3.5" /> ROLLED BACK
