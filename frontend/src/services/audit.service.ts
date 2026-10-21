@@ -43,6 +43,14 @@ export const auditService = {
   },
 
   /**
+   * Get audit log statistics (total count, today count, action distribution)
+   */
+  async getStats(): Promise<{ total: number; totalLogs: number; todayLogs: number; actionCounts: any[] }> {
+    const response = await api.get('/audit-logs/stats');
+    return response.data;
+  },
+
+  /**
    * Trigger a test audit event to verify real-time websocket monitoring
    */
   async triggerTestEvent(action?: string, severity?: string): Promise<{ success: boolean; message: string; action: string; severity: string }> {

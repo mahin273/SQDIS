@@ -2146,6 +2146,8 @@ export interface AuditLog {
   ipAddress?: string;
   userAgent?: string;
   severity?: AuditSeverity;
+  entryHash?: string;
+  previousEntryHash?: string;
   timestamp: string;
 }
 
