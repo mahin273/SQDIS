@@ -18,6 +18,7 @@ import {
   Database,
   Layers,
   Eye,
+  GitBranch,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
@@ -55,7 +56,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { reportsService, teamsService, projectsService, membersService } from '@/services'
+import { reportsService, teamsService, projectsService, membersService, repositoriesService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { QueryState } from '../pageUtils'
 import { ReportDetailDrawer, ReportPresetsBar, type ReportPreset } from './components'
@@ -76,6 +77,7 @@ export function ReportsPage() {
   const [scopeFilter, setScopeFilter] = useState<string>('ALL')
   const [formatFilter, setFormatFilter] = useState<'ALL' | 'PDF' | 'CSV'>('ALL')
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'PROCESSING' | 'FAILED'>('ALL')
+  const [repositoryFilter, setRepositoryFilter] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
 
   // Generation Sheet State
@@ -86,6 +88,7 @@ export function ReportsPage() {
   const [selectedTeamId, setSelectedTeamId] = useState('')
   const [selectedProjectId, setSelectedProjectId] = useState('')
   const [selectedDeveloperId, setSelectedDeveloperId] = useState('')
+  const [selectedRepoId, setSelectedRepoId] = useState('')
   const [dateRange, setDateRange] = useState({ start: '', end: '' })
   const [sheetError, setSheetError] = useState<string | null>(null)
 
@@ -96,6 +99,17 @@ export function ReportsPage() {
 
   // Download state
   const [downloadingId, setDownloadingId] = useState<string | null>(null)
+
+  // Query connected repositories for filtering and generation
+  const { data: repositories = [] } = useQuery({
+    queryKey: queryKeys.repositories.all(),
+    queryFn: () => repositoriesService.getAll(),
+  })
+
+  const repoMap = useMemo(
+    () => new Map(repositories.map((r: any) => [r.id, r])),
+    [repositories]
+  )
 
   // Query reports with auto-polling when any report is processing or pending
   const reportsQuery = useQuery({
@@ -228,6 +242,11 @@ export function ReportsPage() {
         if (reportType !== formatFilter) return false
       }
 
+      // Repository filter
+      if (repositoryFilter !== 'ALL') {
+        if (r.repositoryId !== repositoryFilter) return false
+      }
+
       // Status filter
       if (statusFilter !== 'ALL') {
         if (statusFilter === 'COMPLETED' && r.status !== 'COMPLETED') return false
@@ -296,6 +315,7 @@ export function ReportsPage() {
     setSelectedTeamId('')
     setSelectedProjectId('')
     setSelectedDeveloperId('')
+    setSelectedRepoId('')
     setSheetError(null)
     setIsGenerateSheetOpen(true)
   }
@@ -316,15 +336,23 @@ export function ReportsPage() {
     setSelectedTeamId('')
     setSelectedProjectId('')
     setSelectedDeveloperId('')
+    setSelectedRepoId('')
     setSheetError(null)
     setIsGenerateSheetOpen(true)
   }
 
   const handleScopeChange = (scope: ReportScope) => {
     setNewReportScope(scope)
+    setSelectedTeamId('')
+    setSelectedProjectId('')
+    setSelectedDeveloperId('')
+    setSelectedRepoId('')
     switch (scope) {
       case 'ORGANIZATION':
         setNewReportTitle('Monthly Executive Quality Report')
+        break
+      case 'REPOSITORY':
+        setNewReportTitle('Repository Quality Audit Report')
         break
       case 'TEAM':
         setNewReportTitle('Team Engineering Performance Report')
@@ -361,6 +389,11 @@ export function ReportsPage() {
       return
     }
 
+    if (newReportScope === 'REPOSITORY' && !selectedRepoId) {
+      setSheetError('Please select a repository for repository-scoped reports')
+      return
+    }
+
     if (newReportScope === 'TEAM' && !selectedTeamId) {
       setSheetError('Please select a team for team-scoped reports')
       return
@@ -383,6 +416,7 @@ export function ReportsPage() {
       endDate: endDate.toISOString(),
     }
 
+    if (newReportScope === 'REPOSITORY') payload.repositoryId = selectedRepoId
     if (newReportScope === 'TEAM') payload.teamId = selectedTeamId
     if (newReportScope === 'PROJECT') payload.projectId = selectedProjectId
     if (newReportScope === 'DEVELOPER') payload.developerId = selectedDeveloperId
@@ -394,6 +428,8 @@ export function ReportsPage() {
     switch (scope) {
       case 'ORGANIZATION':
         return 'High-level executive summary of organizational engineering health, velocity, and quality scores.'
+      case 'REPOSITORY':
+        return 'Codebase line coverage, technical debt markers, commit velocity, and review turnaround scoped strictly to one repository.'
       case 'TEAM':
         return 'Detailed team-level velocity metrics, code quality trends, and pull request turnaround.'
       case 'PROJECT':
@@ -406,8 +442,9 @@ export function ReportsPage() {
   const scopeTabs = [
     { value: 'ALL', label: 'All Scopes' },
     { value: 'ORGANIZATION', label: 'Organization' },
-    { value: 'TEAM', label: 'Team' },
+    { value: 'REPOSITORY', label: 'Repository' },
     { value: 'PROJECT', label: 'Project' },
+    { value: 'TEAM', label: 'Team' },
     { value: 'DEVELOPER', label: 'Developer' },
   ]
 
@@ -614,6 +651,31 @@ export function ReportsPage() {
               ))}
             </div>
 
+            {/* Repository Filter Select */}
+            {repositories.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800/80 px-2.5 rounded-lg border border-slate-200 dark:border-slate-700/60 h-8 text-xs">
+                <GitBranch className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+                <select
+                  value={repositoryFilter}
+                  onChange={(e) => setRepositoryFilter(e.target.value)}
+                  className="bg-transparent border-none text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
+                >
+                  <option value="ALL" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                    All Repositories
+                  </option>
+                  {repositories.map((repo: any) => (
+                    <option
+                      key={repo.id}
+                      value={repo.id}
+                      className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100"
+                    >
+                      {repo.fullName || repo.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
             {/* Status Filter Pills */}
             <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 h-8">
               {statusTabs.map((tab) => (
@@ -720,11 +782,22 @@ export function ReportsPage() {
                       </div>
                     </TableCell>
 
-                    {/* Scope Badge */}
+                    {/* Scope Badge & Repo Badge */}
                     <TableCell className="py-3">
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                        {report.scope || 'ORGANIZATION'}
-                      </span>
+                      <div className="flex flex-col gap-1 items-start">
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                          {report.scope || 'ORGANIZATION'}
+                        </span>
+                        {report.repositoryId && (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] font-mono text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 bg-indigo-50/50 dark:bg-indigo-950/30 truncate max-w-[130px]"
+                            title={repoMap.get(report.repositoryId)?.fullName || 'Repository'}
+                          >
+                            {repoMap.get(report.repositoryId)?.name || 'Repository'}
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
 
                     {/* Period */}
@@ -959,8 +1032,9 @@ export function ReportsPage() {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="ORGANIZATION">Organization-Wide</SelectItem>
-                      <SelectItem value="TEAM">Team Specific</SelectItem>
+                      <SelectItem value="REPOSITORY">Repository Specific</SelectItem>
                       <SelectItem value="PROJECT">Project Specific</SelectItem>
+                      <SelectItem value="TEAM">Team Specific</SelectItem>
                       <SelectItem value="DEVELOPER">Developer Specific</SelectItem>
                     </SelectContent>
                   </Select>
@@ -984,6 +1058,23 @@ export function ReportsPage() {
               </div>
 
               {/* Conditional Entity Selectors */}
+              {newReportScope === 'REPOSITORY' && (
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Select Repository</label>
+                  <Select value={selectedRepoId} onValueChange={setSelectedRepoId}>
+                    <SelectTrigger className="text-xs">
+                      <SelectValue placeholder="Choose a repository" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {repositories.map((r: any) => (
+                        <SelectItem key={r.id} value={r.id}>
+                          {r.fullName || r.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {newReportScope === 'TEAM' && (
                 <div className="space-y-1.5">
                   <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Select Team</label>

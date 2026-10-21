@@ -94,7 +94,7 @@ export class ReportGeneratorProcessor extends WorkerHost {
    * Gather report data based on scope
    */
   private async gatherReportData(jobData: ReportJobData): Promise<any> {
-    const { scope, organizationId, teamId, projectId, developerId, startDate, endDate } = jobData;
+    const { scope, organizationId, teamId, projectId, repositoryId, developerId, startDate, endDate } = jobData;
     const start = new Date(startDate);
     const end = new Date(endDate);
 
@@ -123,7 +123,8 @@ export class ReportGeneratorProcessor extends WorkerHost {
     baseData.organizationName = org?.name || 'Organization';
 
     // Gather global telemetry (SQS, coverage, debt, PRs/reviews)
-    const telemetry = await this.gatherQualityIntelligence(organizationId, start, end, projectId ? [projectId] : undefined);
+    const effectiveRepoIds = repositoryId ? [repositoryId] : undefined;
+    const telemetry = await this.gatherQualityIntelligence(organizationId, start, end, effectiveRepoIds);
     Object.assign(baseData, telemetry);
 
     switch (scope) {
@@ -135,6 +136,8 @@ export class ReportGeneratorProcessor extends WorkerHost {
         return this.gatherProjectData(baseData, projectId!, start, end);
       case ReportScope.DEVELOPER:
         return this.gatherDeveloperData(baseData, developerId!, start, end);
+      case ReportScope.REPOSITORY:
+        return this.gatherRepositoryData(baseData, repositoryId!, start, end);
       default:
         return baseData;
     }
@@ -265,6 +268,80 @@ export class ReportGeneratorProcessor extends WorkerHost {
     const commits = await this.prisma.commit.findMany({
       where: {
         repositoryId: { in: repoIds },
+        committedAt: { gte: start, lte: end },
+        developerId: { not: null },
+      },
+      include: {
+        developer: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    // Group by developer
+    const developerMap = new Map<string, any>();
+    for (const commit of commits) {
+      if (!commit.developer) continue;
+      const devId = commit.developer.id;
+      if (!developerMap.has(devId)) {
+        developerMap.set(devId, {
+          id: devId,
+          name: commit.developer.name,
+          email: commit.developer.email,
+          totalCommits: 0,
+          bugfixCommits: 0,
+          featureCommits: 0,
+          refactorCommits: 0,
+          linesAdded: 0,
+          linesDeleted: 0,
+          dqsScore: null,
+        });
+      }
+      const dev = developerMap.get(devId)!;
+      dev.totalCommits++;
+      if (commit.classification === 'BUGFIX') dev.bugfixCommits++;
+      else if (commit.classification === 'FEATURE') dev.featureCommits++;
+      else dev.refactorCommits = (dev.refactorCommits || 0) + 1;
+      dev.linesAdded += commit.linesAdded || 0;
+      dev.linesDeleted += commit.linesDeleted || 0;
+    }
+
+    // Get DQS scores
+    for (const [devId, dev] of developerMap) {
+      const dqs = await this.prisma.dQSScore.findFirst({
+        where: { developerId: devId },
+        orderBy: { calculatedAt: 'desc' },
+        select: { score: true },
+      });
+      dev.dqsScore = dqs?.score ?? 78.5;
+    }
+
+    baseData.developers = Array.from(developerMap.values());
+    baseData.summary = this.calculateSummary(baseData.developers);
+
+    return baseData;
+  }
+
+  /**
+   * Gather repository-specific report data
+   */
+  private async gatherRepositoryData(baseData: any, repositoryId: string, start: Date, end: Date) {
+    const repository = await this.prisma.repository.findUnique({
+      where: { id: repositoryId },
+      select: {
+        id: true,
+        name: true,
+        fullName: true,
+      },
+    });
+
+    baseData.title = `Repository Quality Audit - ${repository?.fullName || repository?.name || 'Repository'}`;
+    baseData.repositoryName = repository?.fullName || repository?.name;
+
+    // Get commits for this repository
+    const commits = await this.prisma.commit.findMany({
+      where: {
+        repositoryId,
         committedAt: { gte: start, lte: end },
         developerId: { not: null },
       },

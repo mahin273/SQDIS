@@ -1299,6 +1299,7 @@ model Report {
   @@index([createdById])
   @@index([status])
   @@index([createdAt])
+  @@index([repositoryId])
   @@map("reports")
 }
 
@@ -1314,6 +1315,7 @@ enum ReportScope {
   TEAM
   PROJECT
   DEVELOPER
+  REPOSITORY
 }
 
 // Enum for report status
