@@ -29,6 +29,7 @@ import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/toast'
 import { releasesService, sprintsService, repositoriesService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
+import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { QueryState } from '../pageUtils'
 import type {
   Release,
@@ -90,6 +91,8 @@ export function ReleasesPage() {
   // Ship Release Modal State
   const [isShipModalOpen, setIsShipModalOpen] = useState(false)
   const [targetShipRelease, setTargetShipRelease] = useState<Release | null>(null)
+  // Centralized active repository state
+  const { activeRepoId, repositories: connectedRepos, setActiveRepoId } = useActiveRepository()
   const [selectedRepoId, setSelectedRepoId] = useState('')
   const [createGitHubRelease, setCreateGitHubRelease] = useState(true)
   const [tagName, setTagName] = useState('')
@@ -111,11 +114,6 @@ export function ReleasesPage() {
   const sprintsQuery = useQuery({
     queryKey: ['sprints', 'all'],
     queryFn: () => sprintsService.getAll(),
-  })
-
-  const reposQuery = useQuery({
-    queryKey: ['github', 'repositories', 'connected'],
-    queryFn: () => repositoriesService.getConnected(),
   })
 
   // Sprints & Repositories Extraction
@@ -320,8 +318,8 @@ export function ReleasesPage() {
     setTagName(tag)
     setReleaseTitle(`Release ${tag}`)
     setReleaseNotes(release.description || '')
-    if (connectedRepos.length > 0 && !selectedRepoId) {
-      setSelectedRepoId(connectedRepos[0].id)
+    if (!selectedRepoId) {
+      setSelectedRepoId(activeRepoId || connectedRepos[0]?.id || '')
     }
     setIsShipModalOpen(true)
   }

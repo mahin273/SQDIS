@@ -24,6 +24,7 @@ import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
 import { releasesService, repositoriesService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
+import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
 import { CanaryTelemetryRadarCard } from './components'
 import type { ReleaseStatus, ShipReleaseRequest, ShipReleaseResponse } from '@/types'
@@ -68,15 +69,8 @@ export function ReleaseDetailPage() {
     enabled: !!id,
   })
 
-  const reposQuery = useQuery({
-    queryKey: ['github', 'repositories', 'connected'],
-    queryFn: () => repositoriesService.getConnected(),
-  })
-
-  const repos = useMemo(() => {
-    const list = Array.isArray(reposQuery.data) ? reposQuery.data : (reposQuery.data as any)?.data ?? []
-    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
-  }, [reposQuery.data])
+  // Centralized active repository state
+  const { activeRepoId, repositories: repos, setActiveRepoId } = useActiveRepository()
 
   const shipMutation = useMutation({
     mutationFn: (req: ShipReleaseRequest) => releasesService.ship(id!, req),
@@ -114,8 +108,8 @@ export function ReleaseDetailPage() {
       setTagName(defaultTag)
       setReleaseTitle(`Release ${defaultTag}`)
       setReleaseNotes(release.description || '')
-      if (repos.length > 0 && !selectedRepoId) {
-        setSelectedRepoId(repos[0].id)
+      if (!selectedRepoId) {
+        setSelectedRepoId(activeRepoId || repos[0]?.id || '')
       }
     }
     setIsShipModalOpen(true)

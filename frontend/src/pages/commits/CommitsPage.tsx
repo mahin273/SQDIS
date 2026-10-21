@@ -43,6 +43,7 @@ import { commitsService, repositoriesService } from '@/services'
 import { codeIntelligenceService, type CommitRiskItem } from '@/services/codeIntelligence.service'
 import { formatDate, formatNumber, cn } from '@/lib/utils'
 import { Pagination } from '@/components/ui/pagination'
+import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { QueryState } from '../pageUtils'
 import type { Commit, CommitClassification } from '@/types'
 
@@ -180,7 +181,6 @@ export function CommitsPage() {
   const [search, setSearch] = useState('')
   const [classificationFilter, setClassificationFilter] = useState<string>('ALL')
   const [riskFilter, setRiskFilter] = useState<string>('ALL')
-  const [selectedRepoId, setSelectedRepoId] = useState<string>('')
   const [selectedAuthorId, setSelectedAuthorId] = useState<string>('')
   const [anomalyOnly, setAnomalyOnly] = useState<boolean>(false)
   const [currentPage, setCurrentPage] = useState<number>(1)
@@ -191,27 +191,13 @@ export function CommitsPage() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [copiedSha, setCopiedSha] = useState<string | null>(null)
 
-  // Repositories Query
-  const reposQuery = useQuery({
-    queryKey: ['repositories', 'connected'],
-    queryFn: () => repositoriesService.getConnected(),
-  })
-
-  const connectedRepos = useMemo(() => {
-    const list = Array.isArray(reposQuery.data)
-      ? reposQuery.data
-      : (reposQuery.data as any)?.data ?? []
-    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id)
-  }, [reposQuery.data])
-
-  const activeRepo = useMemo(() => {
-    if (selectedRepoId) {
-      return connectedRepos.find((r: any) => r.id === selectedRepoId) || null
-    }
-    return connectedRepos[0] || null
-  }, [connectedRepos, selectedRepoId])
-
-  const effectiveRepoId = selectedRepoId || activeRepo?.id || ''
+  // Centralized active repository hook
+  const {
+    activeRepoId: effectiveRepoId,
+    activeRepo,
+    repositories: connectedRepos,
+    setActiveRepoId,
+  } = useActiveRepository()
 
   // Commits Query
   const commitsQuery = useQuery({
@@ -444,9 +430,9 @@ export function CommitsPage() {
             <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-xs text-xs text-slate-700 dark:text-slate-200">
               <GitBranch className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
               <select
-                value={selectedRepoId}
+                value={effectiveRepoId}
                 onChange={(e) => {
-                  setSelectedRepoId(e.target.value)
+                  setActiveRepoId(e.target.value)
                   setCurrentPage(1)
                 }}
                 className="bg-transparent border-none text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"

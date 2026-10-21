@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/sheet';
 import { DefectRiskGauge } from './components/DefectRiskGauge';
 import { ArchitectureTreemapCard } from './components/ArchitectureTreemapCard';
+import { useActiveRepository } from '@/hooks/useActiveRepository';
 import {
   codeIntelligenceService,
   repositoriesService,
@@ -64,7 +65,14 @@ export const CodeIntelligencePage: React.FC = () => {
   // =========================================================================
   // MODE 1: LIVE REPOSITORY EXPLORER STATE & QUERIES
   // =========================================================================
-  const [selectedRepoId, setSelectedRepoId] = useState<string>('');
+  // Centralized active repository state
+  const {
+    activeRepoId,
+    activeRepo,
+    repositories: repos,
+    setActiveRepoId,
+  } = useActiveRepository();
+
   const [activeLiveTab, setActiveLiveTab] = useState<'hotspots' | 'commits' | 'tia' | 'bus-factor'>('hotspots');
   const [hotspotSearch, setHotspotSearch] = useState('');
   const [hotspotRiskFilter, setHotspotRiskFilter] = useState<'ALL' | 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW'>('ALL');
@@ -78,26 +86,6 @@ export const CodeIntelligencePage: React.FC = () => {
   const [remediationAdvice, setRemediationAdvice] = useState<RemediationResponse | null>(null);
   const [remediationLoading, setRemediationLoading] = useState(false);
   const [selectedCommit, setSelectedCommit] = useState<CommitRiskItem | null>(null);
-
-  // Fetch only connected / ingested repositories for the organization
-  const reposQuery = useQuery({
-    queryKey: ['repositories', 'connected'],
-    queryFn: () => repositoriesService.getConnected(),
-  });
-
-  const repos = useMemo(() => {
-    const data = reposQuery.data;
-    let list: any[] = [];
-    if (Array.isArray(data)) list = data;
-    else if (data && typeof data === 'object' && Array.isArray((data as any).data)) list = (data as any).data;
-    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? false) && !!r.id);
-  }, [reposQuery.data]);
-
-  const activeRepo = useMemo(() => {
-    return repos.find((r: any) => r.id === selectedRepoId) || repos[0] || null;
-  }, [repos, selectedRepoId]);
-
-  const activeRepoId = activeRepo?.id || '';
 
   // 0. Live Repository Telemetry Aggregates (True DB Totals)
   const repoStatsQuery = useQuery({
@@ -348,7 +336,7 @@ export const CodeIntelligencePage: React.FC = () => {
                   <span className="text-slate-400 font-medium">Repository:</span>
                   <select
                     value={activeRepoId}
-                    onChange={(e) => setSelectedRepoId(e.target.value)}
+                    onChange={(e) => setActiveRepoId(e.target.value)}
                     className="bg-transparent font-semibold text-slate-900 dark:text-slate-100 focus:outline-none cursor-pointer"
                   >
                     {repos.map((r: any) => (
