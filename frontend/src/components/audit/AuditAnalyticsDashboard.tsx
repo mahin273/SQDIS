@@ -475,7 +475,7 @@ export function AuditAnalyticsDashboard() {
 
           <div className="pt-3 border-t border-slate-800/80">
             <Link
-              to="/audit-logs"
+              to="/audit-logs/monitor"
               className="w-full flex items-center justify-center gap-1.5 py-2 px-3 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-lg text-xs font-medium transition-colors"
             >
               <span>View Raw Audit Log Stream</span>
