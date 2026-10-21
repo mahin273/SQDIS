@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useMemo } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   FileText,
   FileSpreadsheet,
@@ -12,10 +12,18 @@ import {
   RotateCcw,
   MoreHorizontal,
   Copy,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+  CheckCircle2,
+  Clock,
+  ShieldCheck,
+  Database,
+  Layers,
+  Eye,
+} from 'lucide-react'
+import { toast } from 'sonner'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Table,
   TableHeader,
@@ -23,7 +31,7 @@ import {
   TableHead,
   TableRow,
   TableCell,
-} from '@/components/ui/table';
+} from '@/components/ui/table'
 import {
   Sheet,
   SheetContent,
@@ -31,273 +39,341 @@ import {
   SheetTitle,
   SheetDescription,
   SheetFooter,
-} from '@/components/ui/sheet';
+} from '@/components/ui/sheet'
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from '@/components/ui/select';
+} from '@/components/ui/select'
 import {
   DropdownMenu,
   DropdownMenuTrigger,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
-import { reportsService, teamsService, projectsService, membersService } from '@/services';
-import { queryKeys } from '@/lib/queryClient';
-import { PageHeader, QueryState } from '../pageUtils';
-import type { Report, ReportScope } from '@/types';
+} from '@/components/ui/dropdown-menu'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { reportsService, teamsService, projectsService, membersService } from '@/services'
+import { queryKeys } from '@/lib/queryClient'
+import { QueryState } from '../pageUtils'
+import { ReportDetailDrawer, ReportPresetsBar, type ReportPreset } from './components'
+import type { Report, ReportScope } from '@/types'
 
 function formatBytes(bytes?: number | null): string {
-  if (!bytes || bytes === 0) return '0 B';
-  const k = 1024;
-  const sizes = ['B', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  if (!bytes || bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
 
 export function ReportsPage() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryClient()
 
   // Filters
-  const [scopeFilter, setScopeFilter] = useState<string>('ALL');
-  const [formatFilter, setFormatFilter] = useState<'ALL' | 'PDF' | 'CSV'>('ALL');
-  const [searchQuery, setSearchQuery] = useState('');
+  const [scopeFilter, setScopeFilter] = useState<string>('ALL')
+  const [formatFilter, setFormatFilter] = useState<'ALL' | 'PDF' | 'CSV'>('ALL')
+  const [statusFilter, setStatusFilter] = useState<'ALL' | 'COMPLETED' | 'PROCESSING' | 'FAILED'>('ALL')
+  const [searchQuery, setSearchQuery] = useState('')
 
-  // Sheet State
-  const [isGenerateSheetOpen, setIsGenerateSheetOpen] = useState(false);
-  const [newReportScope, setNewReportScope] = useState<ReportScope>('ORGANIZATION');
-  const [newReportFormat, setNewReportFormat] = useState<'pdf' | 'csv'>('pdf');
-  const [newReportTitle, setNewReportTitle] = useState('');
-  const [selectedTeamId, setSelectedTeamId] = useState('');
-  const [selectedProjectId, setSelectedProjectId] = useState('');
-  const [selectedDeveloperId, setSelectedDeveloperId] = useState('');
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
-  const [sheetError, setSheetError] = useState<string | null>(null);
+  // Generation Sheet State
+  const [isGenerateSheetOpen, setIsGenerateSheetOpen] = useState(false)
+  const [newReportScope, setNewReportScope] = useState<ReportScope>('ORGANIZATION')
+  const [newReportFormat, setNewReportFormat] = useState<'pdf' | 'csv'>('pdf')
+  const [newReportTitle, setNewReportTitle] = useState('')
+  const [selectedTeamId, setSelectedTeamId] = useState('')
+  const [selectedProjectId, setSelectedProjectId] = useState('')
+  const [selectedDeveloperId, setSelectedDeveloperId] = useState('')
+  const [dateRange, setDateRange] = useState({ start: '', end: '' })
+  const [sheetError, setSheetError] = useState<string | null>(null)
+
+  // Inspection Drawer & Confirm Delete
+  const [selectedReportForDrawer, setSelectedReportForDrawer] = useState<Report | null>(null)
+  const [isDetailDrawerOpen, setIsDetailDrawerOpen] = useState(false)
+  const [reportToDelete, setReportToDelete] = useState<string | null>(null)
 
   // Download state
-  const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null)
 
   // Query reports with auto-polling when any report is processing or pending
   const reportsQuery = useQuery({
     queryKey: queryKeys.reports.all(),
     queryFn: () => reportsService.getAll(),
     refetchInterval: (query) => {
-      const data = query.state.data;
+      const data = query.state.data
       const hasInProgress = data?.reports?.some(
         (r: Report) => r.status === 'PENDING' || r.status === 'PROCESSING'
-      );
-      return hasInProgress ? 2500 : false;
+      )
+      return hasInProgress ? 2500 : false
     },
-  });
+  })
 
   // Query helper entities for sheet dropdowns
   const { data: teams = [] } = useQuery({
     queryKey: queryKeys.teams.all(),
     queryFn: () => teamsService.getAll(),
     enabled: isGenerateSheetOpen && newReportScope === 'TEAM',
-  });
+  })
 
   const { data: projects = [] } = useQuery({
     queryKey: queryKeys.projects.all(),
     queryFn: () => projectsService.getAll(),
     enabled: isGenerateSheetOpen && newReportScope === 'PROJECT',
-  });
+  })
 
   const { data: members = [] } = useQuery({
     queryKey: ['members'],
     queryFn: () => membersService.getAll(),
     enabled: isGenerateSheetOpen && newReportScope === 'DEVELOPER',
-  });
+  })
 
-  // Create mutation
+  // Mutations
   const createMutation = useMutation({
     mutationFn: (payload: any) => reportsService.create(payload, newReportFormat),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() });
-      setIsGenerateSheetOpen(false);
-      setSheetError(null);
-      setNewReportTitle('');
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() })
+      setIsGenerateSheetOpen(false)
+      setSheetError(null)
+      setNewReportTitle('')
       toast.success('Report generation initiated', {
         description: `Export queued as ${newReportFormat.toUpperCase()}. It will download once ready.`,
-      });
+      })
     },
     onError: (err: any) => {
-      const msg = err.response?.data?.message || err.message || 'Failed to generate report';
-      const formatted = Array.isArray(msg) ? msg.join(', ') : msg;
-      setSheetError(formatted);
-      toast.error('Failed to start report generation', { description: formatted });
+      const msg = err.response?.data?.message || err.message || 'Failed to generate report'
+      const formatted = Array.isArray(msg) ? msg.join(', ') : msg
+      setSheetError(formatted)
+      toast.error('Failed to start report generation', { description: formatted })
     },
-  });
+  })
 
-  // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (id: string) => reportsService.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() });
-      toast.success('Report deleted successfully');
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() })
+      setReportToDelete(null)
+      setIsDetailDrawerOpen(false)
+      setSelectedReportForDrawer(null)
+      toast.success('Report deleted successfully')
     },
     onError: (err: any) => {
+      setReportToDelete(null)
       toast.error('Failed to delete report', {
         description: err?.message || 'Please try again later',
-      });
+      })
     },
-  });
+  })
 
-  // Retry mutation
   const retryMutation = useMutation({
     mutationFn: (id: string) => reportsService.retry(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() });
-      toast.info('Report retry triggered');
+      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() })
+      toast.info('Report retry triggered')
     },
-  });
+    onError: (err: any) => {
+      toast.error('Failed to retry report compilation', {
+        description: err?.message || 'Please try again later',
+      })
+    },
+  })
 
-  const reportsList = reportsQuery.data?.reports ?? [];
+  const reportsList = reportsQuery.data?.reports ?? []
+
+  // Metrics Calculations for Executive KPI Strip
+  const completedReports = useMemo(
+    () => reportsList.filter((r: Report) => r.status === 'COMPLETED'),
+    [reportsList]
+  )
+  const inProgressReports = useMemo(
+    () => reportsList.filter((r: Report) => r.status === 'PENDING' || r.status === 'PROCESSING'),
+    [reportsList]
+  )
+  const failedReports = useMemo(
+    () => reportsList.filter((r: Report) => r.status === 'FAILED'),
+    [reportsList]
+  )
+  const pdfCount = useMemo(
+    () => reportsList.filter((r: Report) => (r.type || 'PDF').toUpperCase() === 'PDF').length,
+    [reportsList]
+  )
+  const csvCount = useMemo(
+    () => reportsList.filter((r: Report) => (r.type || 'PDF').toUpperCase() === 'CSV').length,
+    [reportsList]
+  )
+  const totalStorageBytes = useMemo(
+    () => reportsList.reduce((acc: number, r: Report) => acc + (r.fileSize || 0), 0),
+    [reportsList]
+  )
+  const successRate = useMemo(() => {
+    if (reportsList.length === 0) return 100
+    const finishedCount = completedReports.length + failedReports.length
+    if (finishedCount === 0) return 100
+    return Math.round((completedReports.length / finishedCount) * 100)
+  }, [reportsList, completedReports, failedReports])
 
   // Filtered reports
   const filteredReports = useMemo(() => {
     return reportsList.filter((r: Report) => {
       // Scope filter
       if (scopeFilter !== 'ALL') {
-        const reportScope = (r.scope || 'ORGANIZATION').toUpperCase();
-        if (reportScope !== scopeFilter) return false;
+        const reportScope = (r.scope || 'ORGANIZATION').toUpperCase()
+        if (reportScope !== scopeFilter) return false
       }
 
       // Format filter
       if (formatFilter !== 'ALL') {
-        const reportType = (r.type || 'PDF').toUpperCase();
-        if (reportType !== formatFilter) return false;
+        const reportType = (r.type || 'PDF').toUpperCase()
+        if (reportType !== formatFilter) return false
+      }
+
+      // Status filter
+      if (statusFilter !== 'ALL') {
+        if (statusFilter === 'COMPLETED' && r.status !== 'COMPLETED') return false
+        if (statusFilter === 'PROCESSING' && (r.status !== 'PENDING' && r.status !== 'PROCESSING')) return false
+        if (statusFilter === 'FAILED' && r.status !== 'FAILED') return false
       }
 
       // Search query filter
       if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const titleMatch = r.title?.toLowerCase().includes(q);
-        const filenameMatch = r.filename?.toLowerCase().includes(q);
-        if (!titleMatch && !filenameMatch) return false;
+        const q = searchQuery.toLowerCase()
+        const titleMatch = r.title?.toLowerCase().includes(q)
+        const filenameMatch = r.filename?.toLowerCase().includes(q)
+        if (!titleMatch && !filenameMatch) return false
       }
 
-      return true;
-    });
-  }, [reportsList, scopeFilter, formatFilter, searchQuery]);
+      return true
+    })
+  }, [reportsList, scopeFilter, formatFilter, statusFilter, searchQuery])
 
   // Handle browser file download
   const handleDownload = async (report: Report) => {
     try {
-      setDownloadingId(report.id);
-      const blob = await reportsService.download(report.id);
-      const mimeType = report.type === 'CSV' ? 'text/csv' : 'application/pdf';
-      const fileBlob = new Blob([blob], { type: mimeType });
-      const url = window.URL.createObjectURL(fileBlob);
-      const a = document.createElement('a');
-      a.href = url;
-      const ext = (report.type || 'PDF').toLowerCase();
-      const filename = report.filename || `${report.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success(`Downloaded ${filename}`);
+      setDownloadingId(report.id)
+      const blob = await reportsService.download(report.id)
+      const mimeType = report.type === 'CSV' ? 'text/csv' : 'application/pdf'
+      const fileBlob = new Blob([blob], { type: mimeType })
+      const url = window.URL.createObjectURL(fileBlob)
+      const a = document.createElement('a')
+      a.href = url
+      const ext = (report.type || 'PDF').toLowerCase()
+      const filename = report.filename || `${report.title.replace(/[^a-zA-Z0-9_-]/g, '_')}.${ext}`
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      toast.success(`Downloaded ${filename}`)
     } catch (e: any) {
-      console.error('Failed to download report', e);
+      console.error('Failed to download report', e)
       toast.error('Failed to download report', {
         description: e?.message || 'File artifact not available',
-      });
+      })
     } finally {
-      setDownloadingId(null);
+      setDownloadingId(null)
     }
-  };
-
-  const handleDelete = (id: string) => {
-    if (window.confirm('Are you sure you want to delete this report?')) {
-      deleteMutation.mutate(id);
-    }
-  };
+  }
 
   const handleCopyId = (id: string) => {
-    navigator.clipboard.writeText(id);
-    toast.success('Report ID copied to clipboard');
-  };
+    navigator.clipboard.writeText(id)
+    toast.success('Report ID copied to clipboard')
+  }
 
   // Open sheet and seed defaults
   const openGenerateSheet = () => {
-    const today = new Date();
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(today.getDate() - 30);
+    const today = new Date()
+    const thirtyDaysAgo = new Date()
+    thirtyDaysAgo.setDate(today.getDate() - 30)
 
     setDateRange({
       start: thirtyDaysAgo.toISOString().split('T')[0],
       end: today.toISOString().split('T')[0],
-    });
-    setNewReportScope('ORGANIZATION');
-    setNewReportFormat('pdf');
-    setNewReportTitle('Monthly Executive Quality Report');
-    setSelectedTeamId('');
-    setSelectedProjectId('');
-    setSelectedDeveloperId('');
-    setSheetError(null);
-    setIsGenerateSheetOpen(true);
-  };
+    })
+    setNewReportScope('ORGANIZATION')
+    setNewReportFormat('pdf')
+    setNewReportTitle('Monthly Executive Quality Report')
+    setSelectedTeamId('')
+    setSelectedProjectId('')
+    setSelectedDeveloperId('')
+    setSheetError(null)
+    setIsGenerateSheetOpen(true)
+  }
+
+  // Quick preset trigger
+  const handleSelectPreset = (preset: ReportPreset) => {
+    const today = new Date()
+    const startDate = new Date()
+    startDate.setDate(today.getDate() - preset.days)
+
+    setDateRange({
+      start: startDate.toISOString().split('T')[0],
+      end: today.toISOString().split('T')[0],
+    })
+    setNewReportScope(preset.scope)
+    setNewReportFormat(preset.format)
+    setNewReportTitle(preset.title)
+    setSelectedTeamId('')
+    setSelectedProjectId('')
+    setSelectedDeveloperId('')
+    setSheetError(null)
+    setIsGenerateSheetOpen(true)
+  }
 
   const handleScopeChange = (scope: ReportScope) => {
-    setNewReportScope(scope);
+    setNewReportScope(scope)
     switch (scope) {
       case 'ORGANIZATION':
-        setNewReportTitle('Monthly Executive Quality Report');
-        break;
+        setNewReportTitle('Monthly Executive Quality Report')
+        break
       case 'TEAM':
-        setNewReportTitle('Team Engineering Performance Report');
-        break;
+        setNewReportTitle('Team Engineering Performance Report')
+        break
       case 'PROJECT':
-        setNewReportTitle('Project System Quality Report');
-        break;
+        setNewReportTitle('Project System Quality Report')
+        break
       case 'DEVELOPER':
-        setNewReportTitle('Developer Quality Score (DQS) Report');
-        break;
+        setNewReportTitle('Developer Quality Score (DQS) Report')
+        break
     }
-  };
+  }
 
   // Submit report generation
   const handleGenerate = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSheetError(null);
+    e.preventDefault()
+    setSheetError(null)
 
     if (!newReportTitle.trim()) {
-      setSheetError('Report title is required');
-      return;
+      setSheetError('Report title is required')
+      return
     }
 
     if (!dateRange.start || !dateRange.end) {
-      setSheetError('Start and end dates are required');
-      return;
+      setSheetError('Start and end dates are required')
+      return
     }
 
-    const startDate = new Date(dateRange.start);
-    const endDate = new Date(dateRange.end);
+    const startDate = new Date(dateRange.start)
+    const endDate = new Date(dateRange.end)
 
     if (endDate <= startDate) {
-      setSheetError('End date must be strictly after start date');
-      return;
+      setSheetError('End date must be strictly after start date')
+      return
     }
 
     if (newReportScope === 'TEAM' && !selectedTeamId) {
-      setSheetError('Please select a team for team-scoped reports');
-      return;
+      setSheetError('Please select a team for team-scoped reports')
+      return
     }
 
     if (newReportScope === 'PROJECT' && !selectedProjectId) {
-      setSheetError('Please select a project for project-scoped reports');
-      return;
+      setSheetError('Please select a project for project-scoped reports')
+      return
     }
 
     if (newReportScope === 'DEVELOPER' && !selectedDeveloperId) {
-      setSheetError('Please select a developer for developer-scoped reports');
-      return;
+      setSheetError('Please select a developer for developer-scoped reports')
+      return
     }
 
     const payload: any = {
@@ -305,27 +381,27 @@ export function ReportsPage() {
       scope: newReportScope,
       startDate: startDate.toISOString(),
       endDate: endDate.toISOString(),
-    };
+    }
 
-    if (newReportScope === 'TEAM') payload.teamId = selectedTeamId;
-    if (newReportScope === 'PROJECT') payload.projectId = selectedProjectId;
-    if (newReportScope === 'DEVELOPER') payload.developerId = selectedDeveloperId;
+    if (newReportScope === 'TEAM') payload.teamId = selectedTeamId
+    if (newReportScope === 'PROJECT') payload.projectId = selectedProjectId
+    if (newReportScope === 'DEVELOPER') payload.developerId = selectedDeveloperId
 
-    createMutation.mutate(payload);
-  };
+    createMutation.mutate(payload)
+  }
 
   const getScopeDescription = (scope: ReportScope) => {
     switch (scope) {
       case 'ORGANIZATION':
-        return 'High-level executive summary of organizational engineering health, velocity, and quality scores.';
+        return 'High-level executive summary of organizational engineering health, velocity, and quality scores.'
       case 'TEAM':
-        return 'Detailed team-level velocity metrics, code quality trends, and pull request turnaround.';
+        return 'Detailed team-level velocity metrics, code quality trends, and pull request turnaround.'
       case 'PROJECT':
-        return 'Repository health, test coverage benchmarks, and system quality scores (SQS).';
+        return 'Repository health, test coverage benchmarks, and system quality scores (SQS).'
       case 'DEVELOPER':
-        return 'Developer quality metrics (DQS), contribution volume, and review activity breakdown.';
+        return 'Developer quality metrics (DQS), contribution volume, and review activity breakdown.'
     }
-  };
+  }
 
   const scopeTabs = [
     { value: 'ALL', label: 'All Scopes' },
@@ -333,117 +409,287 @@ export function ReportsPage() {
     { value: 'TEAM', label: 'Team' },
     { value: 'PROJECT', label: 'Project' },
     { value: 'DEVELOPER', label: 'Developer' },
-  ];
+  ]
+
+  const statusTabs = [
+    { value: 'ALL', label: 'All Statuses' },
+    { value: 'COMPLETED', label: 'Ready' },
+    { value: 'PROCESSING', label: 'Compiling' },
+    { value: 'FAILED', label: 'Failed' },
+  ]
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <PageHeader
-        title="Engineering Reports"
-        description="Audit, monitor, and export executive quality summaries, DQS telemetry, and sprint velocity."
-        action={
-          <Button onClick={openGenerateSheet} className="gap-2 shadow-xs cursor-pointer">
-            <Plus className="h-4 w-4 shrink-0" /> New Report
-          </Button>
-        }
-      />
-
-      {/* Unified Enterprise Toolbar */}
-      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-card border border-border rounded-xl p-2.5 shadow-xs">
-        {/* Left: Search Bar & Scope Pills */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <div className="relative w-full sm:w-64">
-            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter by report title or file..."
-              className="w-full h-9 pl-9 pr-3 bg-background border border-input rounded-lg text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring transition-colors"
-            />
+    <div className="space-y-6">
+      {/* Executive Top Header Toolbar */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-slate-200/80 dark:border-slate-800 pb-5">
+        <div className="flex items-center gap-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 shadow-xs">
+            <FileText className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
           </div>
-
-          {/* Scope Filters */}
-          <div className="inline-flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/40 h-9">
-            {scopeTabs.map((tab) => (
-              <button
-                key={tab.value}
-                type="button"
-                onClick={() => setScopeFilter(tab.value)}
-                className={`h-8 px-2.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
-                  scopeFilter === tab.value
-                    ? 'bg-background text-foreground shadow-xs font-semibold'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                Engineering Reports &amp; Compliance Studio
+              </h1>
+              <Badge
+                variant="outline"
+                className="text-[11px] font-semibold bg-indigo-50 dark:bg-indigo-950/40 text-indigo-700 dark:text-indigo-300 border-indigo-200 dark:border-indigo-800"
               >
-                {tab.label}
-              </button>
-            ))}
+                Executive Telemetry
+              </Badge>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Compile, audit, and export executive quality summaries, DQS telemetry, and sprint velocity.
+            </p>
           </div>
         </div>
 
-        {/* Right: Format Pills, Counter & Actions */}
-        <div className="flex items-center gap-2 justify-between lg:justify-end">
-          <div className="inline-flex items-center gap-1 bg-muted/60 p-0.5 rounded-lg border border-border/40 h-9">
-            {(['ALL', 'PDF', 'CSV'] as const).map((fmt) => (
-              <button
-                key={fmt}
-                type="button"
-                onClick={() => setFormatFilter(fmt)}
-                className={`h-8 px-2.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
-                  formatFilter === fmt
-                    ? 'bg-background text-foreground shadow-xs font-semibold'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                {fmt}
-              </button>
-            ))}
-          </div>
-
-          <div className="text-[11px] font-mono tabular-nums text-muted-foreground px-2">
-            {filteredReports.length} {filteredReports.length === 1 ? 'record' : 'records'}
-          </div>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {inProgressReports.length > 0 && (
+            <div className="flex items-center gap-2 px-2.5 py-1 rounded-lg bg-indigo-50 dark:bg-indigo-950/40 border border-indigo-200 dark:border-indigo-800 text-xs text-indigo-700 dark:text-indigo-300 font-medium">
+              <span className="h-2 w-2 rounded-full bg-indigo-500 animate-ping" />
+              <span>{inProgressReports.length} compiling</span>
+            </div>
+          )}
 
           <Button
-            size="icon"
+            size="sm"
+            onClick={openGenerateSheet}
+            className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Compile New Report
+          </Button>
+
+          <Button
             variant="ghost"
+            size="sm"
             onClick={() => reportsQuery.refetch()}
             disabled={reportsQuery.isFetching}
-            className="h-9 w-9 text-muted-foreground hover:text-foreground cursor-pointer"
+            className="h-8 w-8 p-0 cursor-pointer text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
             title="Refresh Data"
           >
-            <RefreshCw className={`h-3.5 w-3.5 ${reportsQuery.isFetching ? 'animate-spin' : ''}`} />
+            <RotateCcw className={`h-3.5 w-3.5 ${reportsQuery.isFetching ? 'animate-spin' : ''}`} />
           </Button>
         </div>
       </div>
 
-      {/* High-Density Data Table */}
       <QueryState isLoading={reportsQuery.isLoading} error={reportsQuery.error} onRetry={() => reportsQuery.refetch()}>
-        <div className="border border-border/80 rounded-xl overflow-hidden bg-card shadow-xs">
+        {/* Executive 5-Card KPI Strip */}
+        <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-5">
+          {/* Card 1: Total Reports */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Total Reports</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                    {reportsList.length}
+                  </span>
+                  <span className="text-xs text-slate-500">artifacts</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {pdfCount} PDF • {csvCount} CSV
+                </p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50">
+                <FileText className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 2: Ready Artifacts */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Ready Artifacts</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tracking-tight text-emerald-600 dark:text-emerald-400">
+                    {completedReports.length}
+                  </span>
+                  <span className="text-xs text-slate-500">compiled</span>
+                </div>
+                <p className="text-[11px] text-slate-400">Available for download</p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/50 dark:border-emerald-800/50">
+                <CheckCircle2 className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 3: Active Compilation Queue */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Compilation Queue</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                    {inProgressReports.length}
+                  </span>
+                  <span className="text-xs text-slate-500">jobs</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {inProgressReports.length > 0 ? 'Active workers compiling' : 'Workers idle'}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-200/50 dark:border-amber-800/50">
+                <Clock className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 4: Generation Reliability */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Reliability Rate</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tracking-tight text-blue-600 dark:text-blue-400">
+                    {successRate}%
+                  </span>
+                  <span className="text-xs text-slate-500">success</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  {failedReports.length} compilation {failedReports.length === 1 ? 'error' : 'errors'}
+                </p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200/50 dark:border-blue-800/50">
+                <ShieldCheck className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Card 5: Export Volume */}
+          <Card className="border-slate-200 dark:border-slate-800 shadow-xs">
+            <CardContent className="p-4 flex items-center justify-between">
+              <div className="space-y-1">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400">Storage Volume</p>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-bold tracking-tight text-purple-600 dark:text-purple-400">
+                    {formatBytes(totalStorageBytes)}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">Cumulative artifact size</p>
+              </div>
+              <div className="p-2.5 rounded-lg bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 border border-purple-200/50 dark:border-purple-800/50">
+                <Database className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* 1-Click Executive Presets Bar */}
+        <ReportPresetsBar onSelectPreset={handleSelectPreset} />
+
+        {/* Filter Toolbar */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 shadow-xs">
+          {/* Left: Search Bar & Scope Pills */}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <div className="relative w-full sm:w-60">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search report title or filename..."
+                className="w-full h-8 pl-8 pr-3 bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-lg text-xs text-slate-900 dark:text-slate-100 placeholder:text-slate-400 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-colors"
+              />
+            </div>
+
+            {/* Scope Filter Pills */}
+            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 h-8">
+              {scopeTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setScopeFilter(tab.value)}
+                  className={`h-7 px-2.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
+                    scopeFilter === tab.value
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs font-semibold'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Status Filter Pills */}
+            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 h-8">
+              {statusTabs.map((tab) => (
+                <button
+                  key={tab.value}
+                  type="button"
+                  onClick={() => setStatusFilter(tab.value as any)}
+                  className={`h-7 px-2.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
+                    statusFilter === tab.value
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs font-semibold'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Right: Format Pills & Counter */}
+          <div className="flex items-center gap-2 justify-between lg:justify-end">
+            <div className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60 h-8">
+              {(['ALL', 'PDF', 'CSV'] as const).map((fmt) => (
+                <button
+                  key={fmt}
+                  type="button"
+                  onClick={() => setFormatFilter(fmt)}
+                  className={`h-7 px-2.5 rounded-md text-xs font-medium transition-all select-none cursor-pointer ${
+                    formatFilter === fmt
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs font-semibold'
+                      : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`}
+                >
+                  {fmt}
+                </button>
+              ))}
+            </div>
+
+            <div className="text-[11px] font-mono tabular-nums text-slate-400 px-2">
+              {filteredReports.length} {filteredReports.length === 1 ? 'record' : 'records'}
+            </div>
+          </div>
+        </div>
+
+        {/* High-Density Reports Table */}
+        <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-xs">
           <Table>
             <TableHeader>
-              <TableRow className="h-10 hover:bg-transparent">
-                <TableHead className="w-[340px]">Report Name</TableHead>
-                <TableHead className="w-[130px]">Scope</TableHead>
-                <TableHead className="w-[190px]">Period</TableHead>
-                <TableHead className="w-[90px]">Size</TableHead>
-                <TableHead className="w-[130px]">Created</TableHead>
-                <TableHead className="w-[120px]">Status</TableHead>
-                <TableHead className="w-[90px] text-right">Actions</TableHead>
+              <TableRow className="h-10 hover:bg-transparent bg-slate-50/75 dark:bg-slate-900/50">
+                <TableHead className="w-[340px] text-xs font-semibold">Report Name</TableHead>
+                <TableHead className="w-[130px] text-xs font-semibold">Scope</TableHead>
+                <TableHead className="w-[190px] text-xs font-semibold">Period</TableHead>
+                <TableHead className="w-[90px] text-xs font-semibold">Size</TableHead>
+                <TableHead className="w-[130px] text-xs font-semibold">Created</TableHead>
+                <TableHead className="w-[120px] text-xs font-semibold">Status</TableHead>
+                <TableHead className="w-[120px] text-right text-xs font-semibold">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredReports.map((report: Report) => {
-                const isCompleted = report.status === 'COMPLETED';
-                const isProcessing = report.status === 'PROCESSING' || report.status === 'PENDING';
-                const isFailed = report.status === 'FAILED';
-                const isPdf = (report.type || 'PDF').toUpperCase() === 'PDF';
+                const isCompleted = report.status === 'COMPLETED'
+                const isProcessing = report.status === 'PROCESSING' || report.status === 'PENDING'
+                const isFailed = report.status === 'FAILED'
+                const isPdf = (report.type || 'PDF').toUpperCase() === 'PDF'
 
                 return (
-                  <TableRow key={report.id} className="group">
+                  <TableRow
+                    key={report.id}
+                    className="hover:bg-slate-50/60 dark:hover:bg-slate-900/40 transition-colors group cursor-pointer"
+                    onClick={() => {
+                      setSelectedReportForDrawer(report)
+                      setIsDetailDrawerOpen(true)
+                    }}
+                  >
                     {/* Report Name & Type Icon */}
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium py-3">
                       <div className="flex items-center gap-3">
                         <div
                           className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 border ${
@@ -460,14 +706,13 @@ export function ReportsPage() {
                         </div>
                         <div className="min-w-0">
                           <span
-                            className="font-medium text-foreground hover:underline cursor-pointer truncate block text-xs"
+                            className="font-medium text-slate-900 dark:text-slate-100 hover:text-indigo-600 dark:hover:text-indigo-400 truncate block text-xs"
                             title={report.title}
-                            onClick={() => isCompleted && handleDownload(report)}
                           >
                             {report.title}
                           </span>
                           {report.filename && (
-                            <span className="text-[11px] font-mono text-muted-foreground truncate block">
+                            <span className="text-[11px] font-mono text-slate-400 truncate block">
                               {report.filename}
                             </span>
                           )}
@@ -476,14 +721,14 @@ export function ReportsPage() {
                     </TableCell>
 
                     {/* Scope Badge */}
-                    <TableCell>
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-muted/60 text-muted-foreground border border-border/50">
+                    <TableCell className="py-3">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
                         {report.scope || 'ORGANIZATION'}
                       </span>
                     </TableCell>
 
                     {/* Period */}
-                    <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                    <TableCell className="font-mono text-xs tabular-nums text-slate-500 py-3">
                       {report.startDate
                         ? `${new Date(report.startDate).toLocaleDateString(undefined, {
                             month: 'short',
@@ -493,16 +738,16 @@ export function ReportsPage() {
                             day: 'numeric',
                             year: 'numeric',
                           })}`
-                        : 'Last 30 Days'}
+                        : 'Standard 30 Days'}
                     </TableCell>
 
                     {/* Size */}
-                    <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                    <TableCell className="font-mono text-xs tabular-nums text-slate-500 py-3">
                       {report.fileSize ? formatBytes(report.fileSize) : '—'}
                     </TableCell>
 
                     {/* Created */}
-                    <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">
+                    <TableCell className="font-mono text-xs tabular-nums text-slate-500 py-3">
                       {new Date(report.createdAt).toLocaleDateString(undefined, {
                         month: 'short',
                         day: 'numeric',
@@ -511,7 +756,7 @@ export function ReportsPage() {
                     </TableCell>
 
                     {/* Status */}
-                    <TableCell>
+                    <TableCell className="py-3">
                       {isCompleted && (
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -519,8 +764,8 @@ export function ReportsPage() {
                         </span>
                       )}
                       {isProcessing && (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20">
-                          <span className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-pulse" />
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[11px] font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 border border-indigo-500/20">
+                          <span className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-pulse" />
                           Compiling
                         </span>
                       )}
@@ -536,13 +781,26 @@ export function ReportsPage() {
                     </TableCell>
 
                     {/* Actions */}
-                    <TableCell className="text-right">
+                    <TableCell className="text-right py-3" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 px-2 text-xs text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 gap-1 cursor-pointer"
+                          onClick={() => {
+                            setSelectedReportForDrawer(report)
+                            setIsDetailDrawerOpen(true)
+                          }}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                          <span className="hidden sm:inline">Inspect</span>
+                        </Button>
+
                         {isCompleted && (
                           <Button
                             size="icon"
                             variant="ghost"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                            className="h-7 w-7 text-slate-500 hover:text-slate-900 dark:hover:text-slate-100 cursor-pointer"
                             onClick={() => handleDownload(report)}
                             disabled={downloadingId === report.id}
                             title={`Download ${report.type || 'PDF'}`}
@@ -573,7 +831,7 @@ export function ReportsPage() {
                             <Button
                               size="icon"
                               variant="ghost"
-                              className="h-7 w-7 text-muted-foreground hover:text-foreground cursor-pointer"
+                              className="h-7 w-7 text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
@@ -594,8 +852,8 @@ export function ReportsPage() {
                             )}
                             <DropdownMenuSeparator />
                             <DropdownMenuItem
-                              onClick={() => handleDelete(report.id)}
-                              className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                              onClick={() => setReportToDelete(report.id)}
+                              className="text-red-600 focus:text-red-600 focus:bg-red-50 dark:focus:bg-red-950/40"
                             >
                               <Trash2 className="h-3.5 w-3.5 mr-2" /> Delete report
                             </DropdownMenuItem>
@@ -604,27 +862,32 @@ export function ReportsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                );
+                )
               })}
 
               {filteredReports.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="h-48 text-center">
-                    <div className="flex flex-col items-center justify-center space-y-2">
-                      <FileText className="h-8 w-8 text-muted-foreground/40" />
-                      <p className="text-xs font-medium text-foreground">No reports found</p>
-                      <p className="text-[11px] text-muted-foreground max-w-sm">
-                        {scopeFilter === 'ALL' && formatFilter === 'ALL' && !searchQuery
-                          ? 'Generate your first executive report to begin auditing quality telemetry.'
-                          : 'No generated reports match your current filter parameters.'}
-                      </p>
+                  <TableCell colSpan={7} className="h-64 text-center">
+                    <div className="flex flex-col items-center justify-center space-y-3 p-6">
+                      <div className="h-12 w-12 rounded-2xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/60 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shadow-xs">
+                        <FileText className="h-6 w-6" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                          No reports match current filters
+                        </p>
+                        <p className="text-xs text-slate-400 max-w-md">
+                          {reportsList.length === 0
+                            ? 'Compile your first executive report or select one of the 1-click presets above to generate quality telemetry.'
+                            : 'Adjust your search query, scope, or status filters to inspect archived reports.'}
+                        </p>
+                      </div>
                       <Button
-                        variant="outline"
                         size="sm"
                         onClick={openGenerateSheet}
-                        className="mt-2 gap-1.5 text-xs cursor-pointer"
+                        className="gap-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs mt-1"
                       >
-                        <Plus className="h-3.5 w-3.5" /> New Report
+                        <Plus className="h-3.5 w-3.5" /> Compile New Report
                       </Button>
                     </div>
                   </TableCell>
@@ -635,12 +898,30 @@ export function ReportsPage() {
         </div>
       </QueryState>
 
+      {/* Slide-Over Drawer for Report Inspection */}
+      <ReportDetailDrawer
+        report={selectedReportForDrawer}
+        open={isDetailDrawerOpen}
+        onClose={() => {
+          setIsDetailDrawerOpen(false)
+          setSelectedReportForDrawer(null)
+        }}
+        onDownload={handleDownload}
+        onRetry={(id) => retryMutation.mutate(id)}
+        onDelete={(id) => setReportToDelete(id)}
+        isDownloading={downloadingId === selectedReportForDrawer?.id}
+        isRetrying={retryMutation.isPending}
+      />
+
       {/* Slide-Over Drawer (Sheet) for Report Generation */}
       <Sheet open={isGenerateSheetOpen} onOpenChange={setIsGenerateSheetOpen}>
         <SheetContent side="right" className="flex flex-col h-full w-full sm:max-w-lg">
-          <SheetHeader>
-            <SheetTitle>Generate Engineering Report</SheetTitle>
-            <SheetDescription>
+          <SheetHeader className="border-b border-slate-200 dark:border-slate-800 pb-4">
+            <SheetTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+              <FileText className="h-4 w-4 text-indigo-500" />
+              Generate Engineering Report
+            </SheetTitle>
+            <SheetDescription className="text-xs text-slate-500">
               Compile automated quality metrics, DQS benchmarks, and velocity telemetry.
             </SheetDescription>
           </SheetHeader>
@@ -648,8 +929,8 @@ export function ReportsPage() {
           <form onSubmit={handleGenerate} className="flex-1 flex flex-col justify-between overflow-y-auto pt-4 space-y-4">
             <div className="space-y-4">
               {sheetError && (
-                <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/60 text-red-800 dark:text-red-300 text-xs flex items-start gap-2">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
                   <span>{sheetError}</span>
                 </div>
               )}
@@ -662,17 +943,18 @@ export function ReportsPage() {
                 placeholder="e.g. Monthly Executive Quality Report"
                 required
                 autoFocus
+                className="text-xs"
               />
 
               {/* Scope & Format Custom Selects */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Report Scope</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Report Scope</label>
                   <Select
                     value={newReportScope}
                     onValueChange={(val) => handleScopeChange(val as ReportScope)}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="text-xs">
                       <SelectValue placeholder="Select scope" />
                     </SelectTrigger>
                     <SelectContent>
@@ -685,12 +967,12 @@ export function ReportsPage() {
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Export Format</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Export Format</label>
                   <Select
                     value={newReportFormat}
                     onValueChange={(val) => setNewReportFormat(val as 'pdf' | 'csv')}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className="text-xs">
                       <SelectValue placeholder="Select format" />
                     </SelectTrigger>
                     <SelectContent>
@@ -704,9 +986,9 @@ export function ReportsPage() {
               {/* Conditional Entity Selectors */}
               {newReportScope === 'TEAM' && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Select Team</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Select Team</label>
                   <Select value={selectedTeamId} onValueChange={setSelectedTeamId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="text-xs">
                       <SelectValue placeholder="Choose a team" />
                     </SelectTrigger>
                     <SelectContent>
@@ -722,9 +1004,9 @@ export function ReportsPage() {
 
               {newReportScope === 'PROJECT' && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Select Project</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Select Project</label>
                   <Select value={selectedProjectId} onValueChange={setSelectedProjectId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="text-xs">
                       <SelectValue placeholder="Choose a project" />
                     </SelectTrigger>
                     <SelectContent>
@@ -740,9 +1022,9 @@ export function ReportsPage() {
 
               {newReportScope === 'DEVELOPER' && (
                 <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-foreground">Select Developer</label>
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">Select Developer</label>
                   <Select value={selectedDeveloperId} onValueChange={setSelectedDeveloperId}>
-                    <SelectTrigger>
+                    <SelectTrigger className="text-xs">
                       <SelectValue placeholder="Choose a developer" />
                     </SelectTrigger>
                     <SelectContent>
@@ -764,6 +1046,7 @@ export function ReportsPage() {
                   value={dateRange.start}
                   onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
                   required
+                  className="text-xs"
                 />
                 <Input
                   label="End Date"
@@ -771,41 +1054,58 @@ export function ReportsPage() {
                   value={dateRange.end}
                   onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
                   required
+                  className="text-xs"
                 />
               </div>
 
               {/* Scope Detail Callout */}
-              <div className="rounded-lg border border-border/60 bg-muted/40 p-3.5 space-y-1 text-xs">
-                <div className="font-semibold text-foreground flex items-center gap-1.5">
-                  <FileText className="h-3.5 w-3.5 text-primary" /> Scope Parameters
+              <div className="rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/40 p-3.5 space-y-1 text-xs">
+                <div className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-indigo-500" /> Scope Parameters
                 </div>
-                <p className="text-muted-foreground leading-relaxed">
+                <p className="text-slate-500 leading-relaxed">
                   {getScopeDescription(newReportScope)}
                 </p>
               </div>
             </div>
 
-            <SheetFooter>
+            <SheetFooter className="border-t border-slate-200 dark:border-slate-800 pt-4">
               <Button
                 type="button"
                 variant="outline"
+                size="sm"
                 onClick={() => setIsGenerateSheetOpen(false)}
-                className="cursor-pointer"
+                className="text-xs cursor-pointer"
               >
                 Cancel
               </Button>
               <Button
                 type="submit"
+                size="sm"
                 isLoading={createMutation.isPending}
-                className="gap-2 font-medium cursor-pointer shadow-xs"
+                className="text-xs gap-1.5 font-medium bg-indigo-600 hover:bg-indigo-700 text-white cursor-pointer shadow-xs"
               >
-                <FileText className="h-4 w-4 shrink-0" />
+                <FileText className="h-3.5 w-3.5 shrink-0" />
                 Compile {newReportFormat.toUpperCase()}
               </Button>
             </SheetFooter>
           </form>
         </SheetContent>
       </Sheet>
+
+      {/* Delete Confirmation Dialog */}
+      <ConfirmDialog
+        isOpen={!!reportToDelete}
+        onClose={() => setReportToDelete(null)}
+        onConfirm={() => reportToDelete && deleteMutation.mutate(reportToDelete)}
+        title="Delete Engineering Report"
+        description="Are you sure you want to permanently delete this report artifact? Any downloaded local copies will remain unaffected, but the server record and artifact will be removed."
+        confirmText="Delete Artifact"
+        confirmVariant="destructive"
+        isLoading={deleteMutation.isPending}
+      />
     </div>
-  );
+  )
 }
+
+export default ReportsPage
