@@ -131,9 +131,18 @@ services:
     image: grafana/grafana:latest
     container_name: sqdis-grafana
     restart: always
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ ! -f /etc/grafana/provisioning/dashboards/dashboards.yml ] || [ ! -f /etc/grafana/dashboards/api-health.json ]; then
+          echo "Waiting for SQDIS storage mount: provisioning or dashboards not ready. Exiting to allow Docker restart policy to retry..."
+          exit 1
+        fi
+        exec /run.sh
     volumes:
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro,z
+      - ./monitoring/grafana/dashboards:/etc/grafana/dashboards:ro,z
       - grafana_data:/var/lib/grafana
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_USER}
