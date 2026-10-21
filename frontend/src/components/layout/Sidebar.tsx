@@ -90,12 +90,27 @@ const iconMap: Record<string, React.ReactNode> = {
   Settings: <Settings className="h-5 w-5" />,
 }
 
-function NavItemComponent({ item, collapsed }: { item: NavItemConfig; collapsed: boolean }) {
+function NavItemComponent({
+  item,
+  collapsed,
+  allNavItems,
+}: {
+  item: NavItemConfig
+  collapsed: boolean
+  allNavItems?: NavItemConfig[]
+}) {
   const icon = iconMap[item.label] || <LayoutDashboard className="h-5 w-5" />
+
+  // Exact match for routes that have sister sub-routes (e.g. /audit-logs vs /audit-logs/monitor)
+  const isExact =
+    item.path === '/audit-logs' ||
+    item.path === '/dashboard' ||
+    (allNavItems?.some((other) => other.path !== item.path && other.path.startsWith(item.path + '/')) ?? false)
 
   return (
     <NavLink
       to={item.path}
+      end={isExact}
       className={({ isActive }) =>
         cn(
           'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors select-none',
@@ -181,7 +196,7 @@ export function Sidebar() {
             </p>
           )}
           {mainNav.map((item) => (
-            <NavItemComponent key={item.path} item={item} collapsed={sidebarCollapsed} />
+            <NavItemComponent key={item.path} item={item} collapsed={sidebarCollapsed} allNavItems={navItems} />
           ))}
         </div>
 
@@ -194,7 +209,7 @@ export function Sidebar() {
               </p>
             )}
             {secondaryNav.map((item) => (
-              <NavItemComponent key={item.path} item={item} collapsed={sidebarCollapsed} />
+              <NavItemComponent key={item.path} item={item} collapsed={sidebarCollapsed} allNavItems={navItems} />
             ))}
           </div>
         )}
@@ -203,7 +218,7 @@ export function Sidebar() {
         {settingsNav.length > 0 && (
           <div className="space-y-1 pt-2 border-t border-slate-100 dark:border-slate-800/80">
             {settingsNav.map((item) => (
-              <NavItemComponent key={item.path} item={item} collapsed={sidebarCollapsed} />
+              <NavItemComponent key={item.path} item={item} collapsed={sidebarCollapsed} allNavItems={navItems} />
             ))}
           </div>
         )}
