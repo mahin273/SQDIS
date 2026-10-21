@@ -285,81 +285,76 @@ export function ReviewsPage() {
 
   return (
     <div className="w-full space-y-6 pb-12">
-      {/* Executive Hero Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 p-6 sm:p-8 text-white shadow-xl border border-slate-800">
-        <div className="absolute -right-16 -top-16 h-64 w-64 rounded-full bg-indigo-500/10 blur-3xl pointer-events-none" />
-        <div className="absolute right-32 -bottom-20 h-56 w-56 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
-
-        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
-          <div className="space-y-2 max-w-3xl">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-indigo-400/30 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300 backdrop-blur-md">
-                <Shield className="h-3.5 w-3.5 text-indigo-400" />
-                Code Reviews & Quality Intelligence
-              </span>
-              <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-0.5 text-xs font-medium text-emerald-300">
-                <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse" />
+      {/* Clean Top Header Toolbar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-800 pb-5">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200 dark:border-indigo-900/40 text-indigo-600 dark:text-indigo-400">
+            <GitPullRequest className="h-5 w-5" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+                Code Review Hub & Telemetry
+              </h1>
+              <Badge
+                variant="outline"
+                className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50/50 dark:bg-emerald-950/30"
+              >
                 Live Telemetry
-              </span>
+              </Badge>
             </div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-              Code Review Hub & Telemetry
-            </h1>
-            <p className="text-sm text-slate-300 leading-relaxed">
-              Real-time pull request velocity, reviewer workload distribution, AI quality gates,
-              and automated test impact analysis.
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Real-time pull request velocity, reviewer workload distribution, AI quality gates, and automated test impact analysis.
             </p>
           </div>
+        </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 shrink-0">
-            {connectedRepos.length > 0 && (
-              <div className="flex items-center gap-2 bg-slate-800/80 backdrop-blur-md border border-slate-700 rounded-xl px-3 py-2 text-xs text-slate-200">
-                <GitBranch className="h-4 w-4 text-indigo-400 shrink-0" />
-                <select
-                  value={selectedRepoId}
-                  onChange={(e) => {
-                    setSelectedRepoId(e.target.value)
-                    setPage(1)
-                  }}
-                  className="bg-transparent border-none text-xs text-white focus:outline-none cursor-pointer pr-2"
-                >
-                  <option value="" className="bg-slate-900 text-white">
-                    All Connected Repos
+        <div className="flex items-center gap-2.5 flex-wrap shrink-0">
+          {connectedRepos.length > 0 && (
+            <div className="flex items-center gap-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-3 py-1.5 shadow-xs text-xs text-slate-700 dark:text-slate-200">
+              <GitBranch className="h-3.5 w-3.5 text-indigo-500 shrink-0" />
+              <select
+                value={selectedRepoId}
+                onChange={(e) => {
+                  setSelectedRepoId(e.target.value)
+                  setPage(1)
+                }}
+                className="bg-transparent border-none text-xs text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer pr-1"
+              >
+                <option value="">All Connected Repos</option>
+                {connectedRepos.map((repo: any) => (
+                  <option key={repo.id} value={repo.id} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                    {repo.fullName || repo.name}
                   </option>
-                  {connectedRepos.map((repo: any) => (
-                    <option key={repo.id} value={repo.id} className="bg-slate-900 text-white">
-                      {repo.fullName || repo.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
+                ))}
+              </select>
+            </div>
+          )}
 
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={reviewsQuery.isFetching}
+            className="text-xs h-8 gap-1.5"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${reviewsQuery.isFetching ? 'animate-spin' : ''}`}
+            />
+            <span>Refresh</span>
+          </Button>
+
+          <Link to="/reviews/debt">
             <Button
               variant="outline"
               size="sm"
-              onClick={handleRefresh}
-              disabled={reviewsQuery.isFetching}
-              className="bg-slate-800/80 hover:bg-slate-700 text-white border-slate-700 rounded-xl px-3 py-2 text-xs gap-1.5"
+              className="text-xs h-8 gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-800 dark:text-amber-400 dark:hover:bg-amber-950/30"
             >
-              <RefreshCw
-                className={`h-3.5 w-3.5 text-slate-300 ${reviewsQuery.isFetching ? 'animate-spin' : ''}`}
-              />
-              <span>Refresh</span>
+              <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+              <span>Review Debt</span>
+              <ArrowRight className="h-3.5 w-3.5" />
             </Button>
-
-            <Link to="/reviews/debt">
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-200 border-indigo-500/40 rounded-xl px-3 py-2 text-xs gap-1.5"
-              >
-                <AlertCircle className="h-3.5 w-3.5 text-amber-400" />
-                <span>Review Debt</span>
-                <ArrowRight className="h-3.5 w-3.5 text-indigo-300" />
-              </Button>
-            </Link>
-          </div>
+          </Link>
         </div>
       </div>
 
