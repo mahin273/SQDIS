@@ -18,7 +18,6 @@ import { ArchitectureTreemapCard } from './components/ArchitectureTreemapCard';
 import { useActiveRepository } from '@/hooks/useActiveRepository';
 import {
   codeIntelligenceService,
-  repositoriesService,
   teamsService,
   type AstDefectResponse,
   type CommitRiskResponse,

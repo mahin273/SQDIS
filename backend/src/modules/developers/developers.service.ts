@@ -13,8 +13,18 @@ export interface DeveloperDto {
   dqs?: number | null;
   dqsTrend?: number | null;
   commitCount?: number;
+  repositories?: Array<{ id: string; name: string; commitCount: number }>;
   lastActive?: Date | null;
   status: 'ACTIVE' | 'INACTIVE';
+}
+
+export interface RepositoryContributionDto {
+  repositoryId: string;
+  repositoryName: string;
+  commitCount: number;
+  linesAdded: number;
+  linesDeleted: number;
+  percentage: number;
 }
 
 export interface DeveloperStatsDto {
@@ -35,6 +45,7 @@ export interface DeveloperStatsDto {
   techDebtIntroduced: number;
   techDebtResolved: number;
   teams: Array<{ id: string; name: string }>;
+  repositoryBreakdown?: RepositoryContributionDto[];
   recentCommits: Array<{
     id: string;
     sha: string;
@@ -65,7 +76,7 @@ export class DevelopersService {
       return [];
     }
 
-    const [members, commitGroups] = await Promise.all([
+    const [members, commitGroups, orgRepos] = await Promise.all([
       this.prisma.organizationMember.findMany({
         where: { organizationId },
         include: {
@@ -86,19 +97,41 @@ export class DevelopersService {
         orderBy: { joinedAt: 'asc' },
       }),
       this.prisma.commit.groupBy({
-        by: ['developerId'],
+        by: ['developerId', 'repositoryId'],
         where: {
           repository: { organizationId },
           developerId: { not: null },
         },
         _count: { id: true },
       }),
+      this.prisma.repository.findMany({
+        where: { organizationId },
+        select: { id: true, name: true },
+      }),
     ]);
 
+    const repoMap = new Map<string, string>();
+    for (const r of orgRepos || []) {
+      repoMap.set(r.id, r.name);
+    }
+
     const commitMap = new Map<string, number>();
+    const developerReposMap = new Map<string, Array<{ id: string; name: string; commitCount: number }>>();
+
     for (const cg of commitGroups || []) {
       if (cg.developerId) {
-        commitMap.set(cg.developerId, cg._count?.id || 0);
+        const count = cg._count?.id || 0;
+        commitMap.set(cg.developerId, (commitMap.get(cg.developerId) || 0) + count);
+
+        if (cg.repositoryId) {
+          const list = developerReposMap.get(cg.developerId) || [];
+          list.push({
+            id: cg.repositoryId,
+            name: repoMap.get(cg.repositoryId) || 'Unknown',
+            commitCount: count,
+          });
+          developerReposMap.set(cg.developerId, list);
+        }
       }
     }
 
@@ -132,6 +165,7 @@ export class DevelopersService {
         }
 
         const commitCount = commitMap.get(user.id) || 0;
+        const repositories = developerReposMap.get(user.id) || [];
 
         return {
           id: user.id,
@@ -144,6 +178,7 @@ export class DevelopersService {
           dqs: latestDqs,
           dqsTrend,
           commitCount,
+          repositories,
           lastActive,
           status: 'ACTIVE',
         };
@@ -243,7 +278,8 @@ export class DevelopersService {
       reviewsGiven,
       debtIntroducedCount,
       debtResolvedCount,
-      distinctRepos,
+      repoCommitGroups,
+      orgRepos,
     ] = await Promise.all([
       // DQS score history (ordered ascending by date for line chart)
       this.prisma.dQSScore.findMany({
@@ -310,33 +346,67 @@ export class DevelopersService {
         },
       }),
 
-      // Distinct repositories contributed to
-      this.prisma.commit.findMany({
+      // Per-repository commit & churn breakdown
+      this.prisma.commit.groupBy({
+        by: ['repositoryId'],
         where: {
           developerId,
           repository: { organizationId },
         },
-        distinct: ['repositoryId'],
-        select: { repositoryId: true },
+        _count: { id: true },
+        _sum: { linesAdded: true, linesDeleted: true },
+        orderBy: { _count: { id: 'desc' } },
+      }),
+
+      // Organization repositories for name mapping
+      this.prisma.repository.findMany({
+        where: { organizationId },
+        select: { id: true, name: true },
       }),
     ]);
 
     // 3. Calculate coverage across contributed repositories
     let avgCoverage = 0;
-    if (distinctRepos.length > 0) {
-      const repoIds = distinctRepos.map((r) => r.repositoryId);
-      const coverageReports = await this.prisma.coverageReport.findMany({
-        where: { repositoryId: { in: repoIds } },
-        orderBy: { createdAt: 'desc' },
-        distinct: ['repositoryId'],
-        select: { coveragePercentage: true },
-      });
+    if (repoCommitGroups.length > 0) {
+      const repoIds = repoCommitGroups
+        .map((r) => r.repositoryId)
+        .filter((id): id is string => Boolean(id));
 
-      if (coverageReports.length > 0) {
-        const total = coverageReports.reduce((sum, r) => sum + (r.coveragePercentage || 0), 0);
-        avgCoverage = Math.round((total / coverageReports.length) * 100) / 100;
+      if (repoIds.length > 0) {
+        const coverageReports = await this.prisma.coverageReport.findMany({
+          where: { repositoryId: { in: repoIds } },
+          orderBy: { createdAt: 'desc' },
+          distinct: ['repositoryId'],
+          select: { coveragePercentage: true },
+        });
+
+        if (coverageReports.length > 0) {
+          const total = coverageReports.reduce((sum, r) => sum + (r.coveragePercentage || 0), 0);
+          avgCoverage = Math.round((total / coverageReports.length) * 100) / 100;
+        }
       }
     }
+
+    // 3b. Build empirical repository breakdown
+    const repoNameMap = new Map<string, string>();
+    for (const r of orgRepos || []) {
+      repoNameMap.set(r.id, r.name);
+    }
+
+    const totalCommits = commitAgg._count.id || 0;
+    const repositoryBreakdown: RepositoryContributionDto[] = (repoCommitGroups || []).map((rcg) => {
+      const repoId = rcg.repositoryId || '';
+      const cCount = rcg._count?.id || 0;
+      const pct = totalCommits > 0 ? Number(((cCount / totalCommits) * 100).toFixed(1)) : 0;
+      return {
+        repositoryId: repoId,
+        repositoryName: repoNameMap.get(repoId) || 'Unknown',
+        commitCount: cCount,
+        linesAdded: rcg._sum?.linesAdded || 0,
+        linesDeleted: rcg._sum?.linesDeleted || 0,
+        percentage: pct,
+      };
+    });
 
     // 4. Format DQS history points
     const formattedDqsScores = [...dqsScores];
@@ -385,6 +455,7 @@ export class DevelopersService {
       techDebtIntroduced: debtIntroducedCount,
       techDebtResolved: debtResolvedCount,
       teams,
+      repositoryBreakdown,
       recentCommits: recentCommits.map((c) => ({
         id: c.id,
         sha: c.sha,

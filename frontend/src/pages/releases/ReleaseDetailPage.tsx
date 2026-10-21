@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -22,7 +22,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { releasesService, repositoriesService } from '@/services'
+import { releasesService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { PageHeader, MetricTile, QueryState } from '../pageUtils'
@@ -70,7 +70,7 @@ export function ReleaseDetailPage() {
   })
 
   // Centralized active repository state
-  const { activeRepoId, repositories: repos, setActiveRepoId } = useActiveRepository()
+  const { activeRepoId, repositories: repos } = useActiveRepository()
 
   const shipMutation = useMutation({
     mutationFn: (req: ShipReleaseRequest) => releasesService.ship(id!, req),

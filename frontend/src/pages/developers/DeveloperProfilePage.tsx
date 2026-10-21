@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
@@ -9,6 +9,8 @@ import {
   Activity,
   Clock,
   ArrowLeft,
+  ArrowUpRight,
+  FolderGit2,
   RefreshCw,
   Sparkles,
   Award,
@@ -70,6 +72,7 @@ export function DeveloperProfilePage() {
   const { id = '' } = useParams()
   const queryClient = useQueryClient()
   const [activeTab, setActiveTab] = useState('explainability')
+  const [selectedCommitRepo, setSelectedCommitRepo] = useState('ALL')
 
   const developerQuery = useQuery({
     queryKey: ['developers', 'detail', id],
@@ -122,6 +125,12 @@ export function DeveloperProfilePage() {
       ? `${(stats.avgReviewTurnaround / 60).toFixed(1)}h`
       : `${stats.avgReviewTurnaround}m`
     : 'No reviews'
+
+  const filteredCommits = useMemo(() => {
+    const list = stats?.recentCommits ?? []
+    if (selectedCommitRepo === 'ALL') return list
+    return list.filter((c: any) => c.repositoryId === selectedCommitRepo)
+  }, [stats?.recentCommits, selectedCommitRepo])
 
   return (
     <div className="space-y-6">
@@ -292,6 +301,70 @@ export function DeveloperProfilePage() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Multi-Repository Contribution Footprint */}
+        {stats?.repositoryBreakdown && stats.repositoryBreakdown.length > 0 && (
+          <Card className="border-slate-200/80 bg-white shadow-xs dark:border-slate-800 dark:bg-slate-900">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                    <FolderGit2 className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                    <span>Multi-Repository Contribution Footprint</span>
+                  </CardTitle>
+                  <CardDescription className="text-xs text-slate-500 mt-0.5">
+                    Decomposition of authored commits and code churn across connected codebases.
+                  </CardDescription>
+                </div>
+                <Badge variant="outline" className="font-mono text-xs">
+                  {stats.repositoryBreakdown.length} {stats.repositoryBreakdown.length === 1 ? 'Repository' : 'Repositories'}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="pt-0">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {stats.repositoryBreakdown.map((repo) => (
+                  <div
+                    key={repo.repositoryId}
+                    className="p-3.5 rounded-xl border border-slate-200/70 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-800/40 flex flex-col justify-between gap-3"
+                  >
+                    <div>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">
+                          {repo.repositoryName}
+                        </span>
+                        <span className="font-mono text-xs font-bold text-blue-600 dark:text-blue-400">
+                          {repo.percentage}%
+                        </span>
+                      </div>
+                      <div className="h-1.5 w-full rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden mb-2">
+                        <div
+                          className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                          style={{ width: `${Math.min(100, Math.max(0, repo.percentage))}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+                        <span>{repo.commitCount} commits</span>
+                        <span className="font-mono text-[11px]">
+                          <span className="text-emerald-600 dark:text-emerald-400 font-semibold">+{formatNumber(repo.linesAdded)}</span>
+                          {' / '}
+                          <span className="text-rose-500 font-semibold">-{formatNumber(repo.linesDeleted)}</span>
+                        </span>
+                      </div>
+                    </div>
+                    <Link
+                      to={`/commits?repo=${repo.repositoryId}`}
+                      className="inline-flex items-center justify-center gap-1.5 w-full py-1.5 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200 dark:hover:bg-slate-700/60 transition-colors shadow-2xs"
+                    >
+                      <span>Inspect {repo.repositoryName} Commits</span>
+                      <ArrowUpRight className="h-3.5 w-3.5 text-slate-400" />
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* 3-Tab Operational Workbench */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
@@ -506,13 +579,50 @@ export function DeveloperProfilePage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-0">
+                {/* Repository Filter Chips */}
+                {stats?.repositoryBreakdown && stats.repositoryBreakdown.length > 1 && (
+                  <div className="flex flex-wrap items-center gap-1.5 mb-4 p-2.5 rounded-lg border border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50">
+                    <span className="text-xs text-slate-400 mr-1 font-medium">Filter by Repo:</span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCommitRepo('ALL')}
+                      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                        selectedCommitRepo === 'ALL'
+                          ? 'bg-blue-600 text-white shadow-xs'
+                          : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <span>All Repositories ({stats.recentCommits?.length ?? 0})</span>
+                    </button>
+                    {stats.repositoryBreakdown.map((r) => {
+                      const countInRecent = (stats.recentCommits ?? []).filter(
+                        (c: any) => c.repositoryId === r.repositoryId
+                      ).length
+                      return (
+                        <button
+                          key={r.repositoryId}
+                          type="button"
+                          onClick={() => setSelectedCommitRepo(r.repositoryId)}
+                          className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                            selectedCommitRepo === r.repositoryId
+                              ? 'bg-blue-600 text-white shadow-xs'
+                              : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          <span>{r.repositoryName} ({countInRecent})</span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+
                 <div className="space-y-3">
-                  {(stats?.recentCommits ?? []).length === 0 ? (
+                  {filteredCommits.length === 0 ? (
                     <div className="p-8 text-center text-slate-400 text-xs">
-                      No commits recorded for this developer.
+                      No commits recorded for this filter selection.
                     </div>
                   ) : (
-                    (stats?.recentCommits ?? []).map((commit) => (
+                    filteredCommits.map((commit: any) => (
                       <div
                         key={commit.id}
                         className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border border-slate-200/70 bg-slate-50/40 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60 transition-colors"
@@ -540,10 +650,13 @@ export function DeveloperProfilePage() {
                             <span className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">
                               {commit.sha.slice(0, 7)}
                             </span>
-                            {commit.repository?.name && (
-                              <span className="rounded bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                                {commit.repository.name}
-                              </span>
+                            {(commit.repository?.name || commit.repositoryName) && (
+                              <Link
+                                to={`/commits?repo=${commit.repositoryId}`}
+                                className="rounded bg-slate-200/80 px-1.5 py-0.5 text-[10px] font-medium text-slate-700 hover:bg-blue-100 hover:text-blue-700 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-blue-900/40 dark:hover:text-blue-300 transition-colors"
+                              >
+                                {commit.repository?.name || commit.repositoryName}
+                              </Link>
                             )}
                           </div>
                           <p className="line-clamp-2 text-xs font-medium text-slate-900 dark:text-slate-100">

@@ -2367,8 +2367,18 @@ export interface Developer {
   dqs?: number;
   dqsTrend?: number;
   commitCount?: number;
+  repositories?: Array<{ id: string; name: string; commitCount: number }>;
   lastActive?: string;
   status: 'ACTIVE' | 'INACTIVE';
+}
+
+export interface RepositoryContribution {
+  repositoryId: string;
+  repositoryName: string;
+  commitCount: number;
+  linesAdded: number;
+  linesDeleted: number;
+  percentage: number;
 }
 
 export interface DeveloperStats {
@@ -2389,6 +2399,7 @@ export interface DeveloperStats {
   techDebtIntroduced: number;
   techDebtResolved: number;
   teams: Team[];
+  repositoryBreakdown?: RepositoryContribution[];
   recentCommits: Commit[];
 }
 

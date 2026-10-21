@@ -40,7 +40,7 @@ import {
   SheetDescription,
   SheetFooter,
 } from '@/components/ui/sheet'
-import { debtService, repositoriesService } from '@/services'
+import { debtService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { formatDate } from '@/lib/utils'

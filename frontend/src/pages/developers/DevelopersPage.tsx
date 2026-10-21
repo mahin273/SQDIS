@@ -156,6 +156,11 @@ export function DevelopersPage() {
           return false
         }
 
+        if (selectedRepo !== 'ALL') {
+          const hasRepo = (dev.repositories || []).some((r) => r.id === selectedRepo)
+          if (!hasRepo) return false
+        }
+
         return true
       })
       .sort((a, b) => {
@@ -170,7 +175,7 @@ export function DevelopersPage() {
         }
         return 0
       })
-  }, [developers, searchQuery, selectedTeam, selectedRole, sortBy])
+  }, [developers, searchQuery, selectedTeam, selectedRole, selectedRepo, sortBy])
 
   const avgTier = getDqsTier(avgDqs)
 
@@ -783,6 +788,45 @@ export function DevelopersPage() {
                     {inspectDeveloper.lastActive ? formatDate(inspectDeveloper.lastActive) : 'Inactive'}
                   </p>
                 </div>
+              </div>
+
+              {/* Repository Contributions Footprint */}
+              <div className="space-y-2.5">
+                <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  Repository Contributions
+                </span>
+                {(!inspectDeveloper.repositories || inspectDeveloper.repositories.length === 0) ? (
+                  <p className="text-xs text-slate-400 italic">No direct repository commits recorded</p>
+                ) : (
+                  <div className="space-y-2">
+                    {inspectDeveloper.repositories.map((repo) => {
+                      const totalC = inspectDeveloper.commitCount || 1
+                      const pct = Math.round((repo.commitCount / totalC) * 100)
+                      return (
+                        <div
+                          key={repo.id}
+                          className="flex items-center justify-between p-2.5 rounded-lg border border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900 text-xs"
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                              {repo.name}
+                            </span>
+                            <Badge variant="outline" className="font-mono text-[10px] px-1.5 py-0">
+                              {repo.commitCount} commits ({pct}%)
+                            </Badge>
+                          </div>
+                          <Link
+                            to={`/commits?repo=${repo.id}`}
+                            className="inline-flex items-center gap-1 text-[11px] font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 hover:underline shrink-0"
+                          >
+                            <span>Commits</span>
+                            <ArrowUpRight className="h-3 w-3" />
+                          </Link>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
 
               {/* Action Links */}

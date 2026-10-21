@@ -27,7 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/toast'
-import { releasesService, sprintsService, repositoriesService } from '@/services'
+import { releasesService, sprintsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { QueryState } from '../pageUtils'
@@ -92,7 +92,7 @@ export function ReleasesPage() {
   const [isShipModalOpen, setIsShipModalOpen] = useState(false)
   const [targetShipRelease, setTargetShipRelease] = useState<Release | null>(null)
   // Centralized active repository state
-  const { activeRepoId, repositories: connectedRepos, setActiveRepoId } = useActiveRepository()
+  const { activeRepoId, repositories: connectedRepos } = useActiveRepository()
   const [selectedRepoId, setSelectedRepoId] = useState('')
   const [createGitHubRelease, setCreateGitHubRelease] = useState(true)
   const [tagName, setTagName] = useState('')
@@ -121,12 +121,6 @@ export function ReleasesPage() {
     const raw = sprintsQuery.data
     return Array.isArray(raw) ? raw : []
   }, [sprintsQuery.data])
-
-  const connectedRepos = useMemo(() => {
-    const raw = reposQuery.data
-    const list = Array.isArray(raw) ? raw : (raw as any)?.data ?? []
-    return list.filter((r: any) => (r.isActive ?? r.isEnabled ?? true) && !!r.id)
-  }, [reposQuery.data])
 
   // Releases Data Normalization
   const rawReleases = releasesQuery.data

@@ -39,7 +39,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet'
 import { CommitChart, ChartSuspense } from '@/components/charts'
-import { commitsService, repositoriesService } from '@/services'
+import { commitsService } from '@/services'
 import { codeIntelligenceService, type CommitRiskItem } from '@/services/codeIntelligence.service'
 import { formatDate, formatNumber, cn } from '@/lib/utils'
 import { Pagination } from '@/components/ui/pagination'
@@ -194,7 +194,6 @@ export function CommitsPage() {
   // Centralized active repository hook
   const {
     activeRepoId: effectiveRepoId,
-    activeRepo,
     repositories: connectedRepos,
     setActiveRepoId,
   } = useActiveRepository()
