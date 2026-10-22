@@ -5,7 +5,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 
 @ApiTags('App')
 @Controller()
-@SkipThrottle()
+@SkipThrottle({ default: true, auth: true, passwordReset: true })
 export class AppController {
   constructor(private readonly appService: AppService) {}
 

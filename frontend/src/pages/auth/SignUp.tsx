@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Link, useLocation, useSearchParams } from 'react-router-dom'
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, ShieldCheck } from 'lucide-react'
+import { Eye, EyeOff } from 'lucide-react'
 import { useRegisterMutation } from '@/hooks/useAuthMutations'
 
 export default function SignUp() {
@@ -32,30 +32,41 @@ export default function SignUp() {
   }
 
   return (
-    <div className="w-full rounded-2xl border border-slate-800/90 bg-[#0c101d]/90 p-7 sm:p-9 shadow-[0_25px_60px_-15px_rgba(0,0,0,0.8),0_0_35px_rgba(99,102,241,0.12)] backdrop-blur-2xl">
+    <div className="w-full space-y-6">
       {/* Header */}
-      <div className="space-y-1.5 mb-6">
-        <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-[11px] font-semibold text-indigo-400">
-          <ShieldCheck className="h-3.5 w-3.5 text-indigo-400" />
-          Get Started with SQDIS
-        </div>
-        <h1 className="text-2xl font-extrabold tracking-tight text-white">
+      <div className="space-y-1.5">
+        <h1 className="text-2xl font-bold tracking-tight text-zinc-100">
           Create an account
         </h1>
-        <p className="text-xs text-slate-400">
-          Start tracking code quality and developer insight across your repositories.
+        <p className="text-xs text-zinc-400">
+          Start tracking code quality across your repositories.
         </p>
       </div>
 
       {/* Social Logins */}
-      <div className="grid gap-2.5 sm:grid-cols-2 mb-6">
+      <div className="grid grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => {
+            window.location.href = `${backendBaseUrl.replace(/\/$/, '')}/auth/github`
+          }}
+          className="flex h-10 w-full items-center justify-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 text-xs font-medium text-zinc-200 transition-all hover:bg-zinc-800 hover:border-zinc-700 hover:text-white active:scale-[0.99] shadow-sm"
+        >
+          {/* Authentic GitHub Invertocat SVG */}
+          <svg className="h-4 w-4 shrink-0 fill-current text-white" viewBox="0 0 24 24">
+            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12Z" />
+          </svg>
+          <span>GitHub</span>
+        </button>
+
         <button
           type="button"
           onClick={() => {
             window.location.href = `${backendBaseUrl.replace(/\/$/, '')}/auth/google`
           }}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-800/90 bg-slate-900/60 px-3 text-xs font-medium text-slate-200 transition-all hover:bg-slate-800 hover:border-slate-700 hover:text-white active:scale-[0.99]"
+          className="flex h-10 w-full items-center justify-center gap-2.5 rounded-lg border border-zinc-800 bg-zinc-900/80 px-3 text-xs font-medium text-zinc-200 transition-all hover:bg-zinc-800 hover:border-zinc-700 hover:text-white active:scale-[0.99] shadow-sm"
         >
+          {/* Authentic Google 'G' Logo SVG */}
           <svg className="h-4 w-4 shrink-0" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
@@ -76,36 +87,23 @@ export default function SignUp() {
           </svg>
           <span>Google</span>
         </button>
-
-        <button
-          type="button"
-          onClick={() => {
-            window.location.href = `${backendBaseUrl.replace(/\/$/, '')}/auth/github`
-          }}
-          className="flex h-10 w-full items-center justify-center gap-2 rounded-xl border border-slate-800/90 bg-slate-900/60 px-3 text-xs font-medium text-slate-200 transition-all hover:bg-slate-800 hover:border-slate-700 hover:text-white active:scale-[0.99]"
-        >
-          <svg className="h-4 w-4 shrink-0 fill-current text-white" viewBox="0 0 24 24">
-            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12Z" />
-          </svg>
-          <span>GitHub</span>
-        </button>
       </div>
 
       {/* Divider */}
-      <div className="relative mb-6">
+      <div className="relative">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-slate-800/80" />
+          <div className="w-full border-t border-zinc-800" />
         </div>
-        <div className="relative flex justify-center text-[10px] uppercase font-semibold tracking-widest">
-          <span className="bg-[#0c101d] px-3 text-slate-400">
+        <div className="relative flex justify-center text-[10px] uppercase font-mono tracking-wider">
+          <span className="bg-[#090a0f] px-3 text-zinc-400">
             or register with email
           </span>
         </div>
       </div>
 
       {urlError && (
-        <div className="mb-4 rounded-xl bg-rose-500/10 border border-rose-500/20 p-3">
-          <p className="text-xs font-medium text-rose-400">
+        <div className="mb-4 rounded-lg bg-rose-950/40 border border-rose-800/50 p-2.5">
+          <p className="text-xs text-rose-300">
             {urlError}
           </p>
         </div>
@@ -114,52 +112,39 @@ export default function SignUp() {
       {/* Form */}
       <form className="space-y-4" onSubmit={onSubmit}>
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-300">
+          <label className="block text-xs font-medium text-zinc-300">
             Full name
           </label>
-          <div className="relative flex items-center">
-            <div className="absolute left-3.5 text-slate-400 pointer-events-none flex items-center">
-              <User className="h-4 w-4" />
-            </div>
-            <input
-              type="text"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="Mahin Hasan"
-              required
-              className="flex h-11 w-full rounded-xl border border-slate-800 bg-slate-950/70 pl-10 pr-3.5 text-sm text-white placeholder:text-slate-400 transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
+          <input
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            placeholder="Mahin Hasan"
+            required
+            className="flex h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 text-sm text-zinc-100 placeholder:text-zinc-600 transition-all focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-300">
+          <label className="block text-xs font-medium text-zinc-300">
             Work email
           </label>
-          <div className="relative flex items-center">
-            <div className="absolute left-3.5 text-slate-400 pointer-events-none flex items-center">
-              <Mail className="h-4 w-4" />
-            </div>
-            <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="name@company.com"
-              autoComplete="email"
-              required
-              className="flex h-11 w-full rounded-xl border border-slate-800 bg-slate-950/70 pl-10 pr-3.5 text-sm text-white placeholder:text-slate-400 transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-            />
-          </div>
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="name@company.com"
+            autoComplete="email"
+            required
+            className="flex h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 text-sm text-zinc-100 placeholder:text-zinc-600 transition-all focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
         </div>
 
         <div className="space-y-1.5">
-          <label className="block text-xs font-medium text-slate-300">
-            Password <span className="text-slate-400 font-normal">(min 8 characters)</span>
+          <label className="block text-xs font-medium text-zinc-300">
+            Password <span className="text-zinc-500 font-normal">(min 8 characters)</span>
           </label>
           <div className="relative flex items-center">
-            <div className="absolute left-3.5 text-slate-400 pointer-events-none flex items-center">
-              <Lock className="h-4 w-4" />
-            </div>
             <input
               type={showPassword ? 'text' : 'password'}
               value={password}
@@ -167,12 +152,12 @@ export default function SignUp() {
               placeholder="••••••••••••"
               autoComplete="new-password"
               required
-              className="flex h-11 w-full rounded-xl border border-slate-800 bg-slate-950/70 pl-10 pr-10 text-sm text-white placeholder:text-slate-400 transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="flex h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/70 pl-3 pr-10 text-sm text-zinc-100 placeholder:text-zinc-600 transition-all focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
             />
             <button
               type="button"
               onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 text-slate-400 hover:text-slate-300 transition-colors p-1"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors p-1"
             >
               {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
             </button>
@@ -180,8 +165,8 @@ export default function SignUp() {
         </div>
 
         {(localError || register.error) && (
-          <div className="rounded-xl bg-rose-500/10 border border-rose-500/20 p-2.5">
-            <p className="text-xs font-medium text-rose-400">
+          <div className="rounded-lg bg-rose-950/40 border border-rose-800/50 p-2.5">
+            <p className="text-xs text-rose-300">
               {localError || (register.error instanceof Error ? register.error.message : 'Registration failed')}
             </p>
           </div>
@@ -190,26 +175,23 @@ export default function SignUp() {
         <button
           type="submit"
           disabled={register.isPending}
-          className="group relative flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 px-4 text-sm font-semibold text-white shadow-lg shadow-indigo-600/30 transition-all duration-200 hover:shadow-indigo-600/50 active:scale-[0.99] disabled:opacity-60 disabled:cursor-not-allowed"
+          className="flex h-10 w-full items-center justify-center rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-950 hover:bg-white active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed mt-2 shadow-sm"
         >
           {register.isPending ? (
             <span className="flex items-center gap-2">
-              <span className="h-4 w-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Creating workspace...
+              <span className="h-3.5 w-3.5 border-2 border-zinc-950/30 border-t-zinc-950 rounded-full animate-spin" />
+              Creating account...
             </span>
           ) : (
-            <>
-              <span>Create account</span>
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-            </>
+            <span>Create account</span>
           )}
         </button>
       </form>
 
       {/* Footer link */}
-      <div className="mt-6 pt-5 border-t border-slate-800/80 text-center text-xs text-slate-400">
+      <div className="mt-6 pt-5 border-t border-zinc-800/80 text-center text-xs text-zinc-400">
         Already have an account?{' '}
-        <Link to="/login" className="font-semibold text-indigo-400 hover:text-indigo-300 transition-colors">
+        <Link to="/login" className="font-medium text-zinc-200 hover:text-white underline-offset-4 hover:underline transition-colors">
           Sign in
         </Link>
       </div>
