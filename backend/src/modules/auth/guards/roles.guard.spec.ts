@@ -89,4 +89,32 @@ describe('RolesGuard', () => {
     ).resolves.toBe(false);
     expect(permissionCache.setCachedPermission).not.toHaveBeenCalled();
   });
+
+  it('denies access when user has no membership in the targeted organization', async () => {
+    const mockPrisma = {
+      organizationMember: {
+        findUnique: jest.fn().mockResolvedValue(null),
+      },
+    };
+    guard = new RolesGuard(
+      reflector as unknown as Reflector,
+      permissionCache as any,
+      auditLog as any,
+      mockPrisma as any,
+    );
+    reflector.getAllAndOverride.mockReturnValue([Role.ADMIN]);
+
+    const context = {
+      getHandler: () => function handler() {},
+      getClass: () => class TestController {},
+      switchToHttp: () => ({
+        getRequest: () => ({
+          user: { id: 'user-1', organizationId: 'org-1', role: Role.ADMIN },
+          headers: { 'x-organization-id': 'org-2' },
+        }),
+      }),
+    } as unknown as ExecutionContext;
+
+    await expect(guard.canActivate(context)).resolves.toBe(false);
+  });
 });

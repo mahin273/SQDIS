@@ -13,14 +13,14 @@ import {
   ApiParam,
 } from '@nestjs/swagger';
 import { DevelopersService } from './developers.service';
-import { JwtAuthGuard } from '../auth/guards';
+import { JwtAuthGuard, OrganizationGuard } from '../auth/guards';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 
 @ApiTags('Developers')
 @ApiBearerAuth()
 @Controller('developers')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard)
 export class DevelopersController {
   constructor(private readonly developersService: DevelopersService) {}
 
