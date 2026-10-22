@@ -1,7 +1,5 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
 import { useForgotPasswordMutation } from '@/hooks/useAuthMutations'
 
 export function ForgotPasswordPage() {
@@ -9,13 +7,14 @@ export function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
 
   return (
-    <div className="mx-auto w-full max-w-md space-y-6 rounded-lg border border-slate-200 bg-white p-6 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-950 dark:text-white">Reset password</h1>
-        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-          Enter your email and we will send reset instructions.
+    <div className="w-full space-y-6">
+      <div className="text-center space-y-1">
+        <h1 className="text-xl font-semibold tracking-tight text-zinc-100">Reset your password</h1>
+        <p className="text-xs text-zinc-400">
+          Enter your account email to receive reset instructions.
         </p>
       </div>
+
       <form
         className="space-y-4"
         onSubmit={(event) => {
@@ -23,22 +22,48 @@ export function ForgotPasswordPage() {
           forgotPassword.mutate(email)
         }}
       >
-        <Input label="Email" type="email" value={email} onChange={(event) => setEmail(event.target.value)} required />
+        <div className="space-y-1.5">
+          <label className="block text-xs font-medium text-zinc-300">
+            Email address
+          </label>
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            placeholder="name@company.com"
+            required
+            className="flex h-10 w-full rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 text-sm text-zinc-100 placeholder:text-zinc-600 transition-all focus:border-zinc-500 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+          />
+        </div>
+
         {forgotPassword.isSuccess && (
-          <p className="text-sm text-emerald-600 dark:text-emerald-400">Reset instructions sent.</p>
+          <div className="rounded-lg bg-emerald-950/40 border border-emerald-800/50 p-2.5">
+            <p className="text-xs text-emerald-300">Reset instructions sent. Please check your inbox.</p>
+          </div>
         )}
+
         {forgotPassword.error && (
-          <p className="text-sm text-rose-600 dark:text-rose-400">
-            {forgotPassword.error instanceof Error ? forgotPassword.error.message : 'Unable to request reset'}
-          </p>
+          <div className="rounded-lg bg-rose-950/40 border border-rose-800/50 p-2.5">
+            <p className="text-xs text-rose-300">
+              {forgotPassword.error instanceof Error ? forgotPassword.error.message : 'Unable to request reset'}
+            </p>
+          </div>
         )}
-        <Button type="submit" className="w-full" isLoading={forgotPassword.isPending}>
-          Send reset link
-        </Button>
+
+        <button
+          type="submit"
+          disabled={forgotPassword.isPending}
+          className="flex h-10 w-full items-center justify-center rounded-lg bg-zinc-100 text-xs font-semibold text-zinc-950 hover:bg-white active:scale-[0.99] transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed mt-2 shadow-sm"
+        >
+          {forgotPassword.isPending ? 'Sending instructions...' : 'Send reset instructions'}
+        </button>
       </form>
-      <Link to="/login" className="text-sm font-medium text-blue-600 hover:underline">
-        Back to sign in
-      </Link>
+
+      <div className="pt-4 border-t border-zinc-800/80 text-center">
+        <Link to="/login" className="text-xs font-medium text-zinc-400 hover:text-white transition-colors">
+          Return to sign in
+        </Link>
+      </div>
     </div>
   )
 }
