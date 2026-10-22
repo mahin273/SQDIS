@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException, BadRequestException } from '@nestjs/common';
 import { ReleasesService } from './releases.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
@@ -197,7 +197,8 @@ describe('ReleasesService', () => {
       expect(readiness.telemetryScore).toBe(95);
       expect(readiness.telemetryVerdict).toBe('HEALTHY');
       expect(readiness.isAtRisk).toBe(false);
-      expect(readiness.score).toBe(89);
+      expect(readiness.score).toBe(90);
+      expect(readiness.testPassRate).toBeNull();
     });
 
     it('should mark release as at-risk if telemetry reports CRITICAL_REGRESSION', async () => {
@@ -319,6 +320,98 @@ describe('ReleasesService', () => {
           data: expect.objectContaining({ shippedAt: expect.any(Date) }),
         }),
       );
+    });
+
+    it('should throw BadRequestException if dto.repositoryId does not belong to organization', async () => {
+      prisma.release.findFirst.mockResolvedValue(mockRelease as any);
+      prisma.repository.findFirst.mockResolvedValueOnce(null);
+
+      await expect(
+        service.shipRelease('rel-123', 'org-123', {
+          createGitHubRelease: true,
+          repositoryId: 'foreign-repo',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('should leave shippedAt unset when external GitHub release creation fails', async () => {
+      prisma.release.findFirst.mockResolvedValue({
+        ...mockRelease,
+        shippedAt: null,
+      } as any);
+      // Repository found
+      prisma.repository.findFirst.mockResolvedValue({
+        id: 'repo-1',
+        fullName: 'owner/repo',
+        organizationId: 'org-123',
+      } as any);
+
+      // GitHub service returns octokit that throws on createRelease
+      const mockOctokit = {
+        repos: {
+          createRelease: jest.fn().mockRejectedValue(new Error('GitHub 401 Unauthorized')),
+        },
+      };
+      (service as any).githubService = {
+        getOctokitForOrganization: jest.fn().mockResolvedValue(mockOctokit),
+      };
+
+      const result = await service.shipRelease('rel-123', 'org-123', {
+        createGitHubRelease: true,
+      });
+
+      expect(result.githubRelease?.success).toBe(false);
+      expect(result.githubRelease?.error).toContain('GitHub 401 Unauthorized');
+      expect(result.release.shippedAt).toBeNull();
+      // Should not call update with shippedAt
+      expect(prisma.release.update).not.toHaveBeenCalled();
+    });
+
+    it('should default target repository to release.repositoryId when dto.repositoryId is omitted', async () => {
+      const releaseWithRepo = {
+        ...mockRelease,
+        repositoryId: 'bound-repo-id',
+        shippedAt: null,
+      };
+      prisma.release.findFirst.mockResolvedValue(releaseWithRepo as any);
+      prisma.repository.findFirst.mockResolvedValue({
+        id: 'bound-repo-id',
+        fullName: 'owner/bound-repo',
+        organizationId: 'org-123',
+      } as any);
+
+      const mockOctokit = {
+        repos: {
+          createRelease: jest.fn().mockResolvedValue({
+            data: {
+              id: 999,
+              tag_name: 'v1.0.0',
+              name: 'Release v1.0.0',
+              html_url: 'https://github.com/owner/bound-repo/releases/tag/v1.0.0',
+            },
+          }),
+        },
+      };
+      (service as any).githubService = {
+        getOctokitForOrganization: jest.fn().mockResolvedValue(mockOctokit),
+      };
+      prisma.gitHubRelease.upsert.mockResolvedValue({} as any);
+      prisma.release.update.mockResolvedValue({
+        ...releaseWithRepo,
+        shippedAt: new Date(),
+      } as any);
+
+      const result = await service.shipRelease('rel-123', 'org-123', {
+        createGitHubRelease: true,
+      });
+
+      expect(prisma.repository.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'bound-repo-id', organizationId: 'org-123' },
+        }),
+      );
+      expect(result.githubRelease?.success).toBe(true);
+      expect(result.release.shippedAt).toBeDefined();
     });
   });
 

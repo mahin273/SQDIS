@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ConflictException,
   ForbiddenException,
+  BadRequestException,
   Logger,
   Optional,
   Inject,
@@ -336,6 +337,13 @@ export class ReleasesService {
     const release = await this.prisma.release.findFirst({
       where: { id, organizationId, isActive: true },
       include: {
+        repository: {
+          select: {
+            id: true,
+            name: true,
+            fullName: true,
+          },
+        },
         sprintAssociations: {
           include: {
             sprint: {
@@ -354,43 +362,35 @@ export class ReleasesService {
       throw new ConflictException(`Cannot ship release "${release.version}" because it has been rolled back.`);
     }
 
-    // 1. Update release in PostgreSQL with shippedAt timestamp
-    const shippedAt = new Date();
-    const updated = await this.prisma.release.update({
-      where: { id },
-      data: { shippedAt },
-      include: {
-        repository: {
-          select: {
-            id: true,
-            name: true,
-            fullName: true,
-          },
-        },
-        sprintAssociations: {
-          include: {
-            sprint: {
-              include: { team: { select: { name: true } } },
-            },
-          },
-        },
-      },
-    });
-
-    const releaseResponse = this.formatReleaseResponse(updated);
     let githubReleaseResult: GitHubReleaseDetails | undefined = undefined;
     let workflowDispatchResult: WorkflowDispatchDetails | undefined = undefined;
+    const hasExternal = Boolean(dto?.createGitHubRelease || dto?.triggerWorkflow);
+    let externalFailed = false;
 
     // Resolve target repository if Option A or Option B is enabled
-    if (dto?.createGitHubRelease || dto?.triggerWorkflow) {
-      let repository = dto?.repositoryId
-        ? await this.prisma.repository.findFirst({
-            where: { id: dto.repositoryId, organizationId },
-          })
-        : await this.prisma.repository.findFirst({
-            where: { organizationId, isEnabled: true },
-            orderBy: { createdAt: 'asc' },
-          });
+    if (hasExternal) {
+      const targetRepoId = dto?.repositoryId || release.repositoryId;
+      let repository: any = null;
+
+      if (dto?.repositoryId) {
+        repository = await this.prisma.repository.findFirst({
+          where: { id: dto.repositoryId, organizationId },
+        });
+        if (!repository) {
+          throw new BadRequestException('Target repository does not belong to organization');
+        }
+      } else if (targetRepoId) {
+        repository = await this.prisma.repository.findFirst({
+          where: { id: targetRepoId, organizationId },
+        });
+      }
+
+      if (!repository) {
+        repository = await this.prisma.repository.findFirst({
+          where: { organizationId, isEnabled: true },
+          orderBy: { createdAt: 'asc' },
+        });
+      }
 
       if (!repository) {
         repository = await this.prisma.repository.findFirst({
@@ -402,9 +402,11 @@ export class ReleasesService {
         const noRepoMsg = 'No connected GitHub repository found for this organization.';
         if (dto?.createGitHubRelease) {
           githubReleaseResult = { success: false, error: noRepoMsg };
+          externalFailed = true;
         }
         if (dto?.triggerWorkflow) {
           workflowDispatchResult = { success: false, error: noRepoMsg };
+          externalFailed = true;
         }
       } else {
         const [owner, repo] = repository.fullName.split('/');
@@ -423,9 +425,11 @@ export class ReleasesService {
           const errMsg = 'GitHub integration is not connected or token has expired. Please verify GitHub settings.';
           if (dto?.createGitHubRelease) {
             githubReleaseResult = { success: false, error: errMsg };
+            externalFailed = true;
           }
           if (dto?.triggerWorkflow) {
             workflowDispatchResult = { success: false, error: errMsg };
+            externalFailed = true;
           }
         } else {
           const tagName =
@@ -498,6 +502,7 @@ export class ReleasesService {
                 success: false,
                 error: err.message || 'Failed to create GitHub Release',
               };
+              externalFailed = true;
             }
           }
 
@@ -534,12 +539,41 @@ export class ReleasesService {
                 actionsUrl: `https://github.com/${owner}/${repo}/actions`,
                 error: err.message || `Failed to dispatch workflow "${workflowFileName}". Ensure workflow_dispatch is enabled on ${gitRef}.`,
               };
+              externalFailed = true;
             }
           }
         }
       }
     }
 
+    // Condition shippedAt on verified external deployment success (or pure internal ship)
+    const shouldMarkShipped = !hasExternal || !externalFailed;
+    let finalRelease = release;
+
+    if (shouldMarkShipped) {
+      finalRelease = await this.prisma.release.update({
+        where: { id },
+        data: { shippedAt: new Date() },
+        include: {
+          repository: {
+            select: {
+              id: true,
+              name: true,
+              fullName: true,
+            },
+          },
+          sprintAssociations: {
+            include: {
+              sprint: {
+                include: { team: { select: { name: true } } },
+              },
+            },
+          },
+        },
+      });
+    }
+
+    const releaseResponse = this.formatReleaseResponse(finalRelease);
     return {
       release: releaseResponse,
       githubRelease: githubReleaseResult,
@@ -747,9 +781,8 @@ export class ReleasesService {
     // DQS score: Direct average
     const dqsScore = sprintCount > 0 ? Math.round(totalDQS / sprintCount) : 0;
 
-    // Test pass rate: Placeholder (would come from CI/CD integration)
-    // For now, estimate based on test commits ratio
-    const testPassRate = 80; // Default placeholder
+    // Test pass rate: null when CI test execution telemetry is not collected
+    const testPassRate = null;
 
     // Query latest telemetry analysis if exists
     const latestTelemetry = await this.prisma.releaseTelemetryAnalysis?.findFirst({
@@ -759,10 +792,10 @@ export class ReleasesService {
 
     if (latestTelemetry) {
       const telemetryScore = latestTelemetry.score;
-      // 5-factor weighted score:
-      // Bugs: 25%, Coverage: 20%, DQS: 20%, Test pass: 15%, Telemetry: 20%
+      // 4-factor authentic weighted score (25% each):
+      // Bugs: 25%, Coverage: 25%, DQS: 25%, Telemetry: 25%
       const score = Math.round(
-        (bugScore * 0.25 + coverageScore * 0.20 + dqsScore * 0.20 + testPassRate * 0.15 + telemetryScore * 0.20) * 100,
+        (bugScore * 0.25 + coverageScore * 0.25 + dqsScore * 0.25 + telemetryScore * 0.25) * 100,
       ) / 100;
 
       const isCriticalRegression =
@@ -774,7 +807,7 @@ export class ReleasesService {
         bugScore,
         coverageScore,
         dqsScore,
-        testPassRate,
+        testPassRate: null,
         telemetryScore,
         telemetryVerdict: latestTelemetry.verdict as any,
         telemetryRecommendation: latestTelemetry.recommendation as any,
@@ -783,8 +816,9 @@ export class ReleasesService {
       };
     }
 
-    // 4-factor legacy score if no telemetry yet
-    const score = bugScore * 0.3 + coverageScore * 0.25 + dqsScore * 0.25 + testPassRate * 0.2;
+    // 3-factor authentic score across measured dimensions:
+    // Bugs: 35%, Coverage: 35%, DQS: 30%
+    const score = bugScore * 0.35 + coverageScore * 0.35 + dqsScore * 0.3;
     const roundedScore = Math.round(score * 100) / 100;
 
     return {
@@ -792,7 +826,7 @@ export class ReleasesService {
       bugScore,
       coverageScore,
       dqsScore,
-      testPassRate,
+      testPassRate: null,
       hasTelemetry: false,
       isAtRisk: roundedScore < 70,
     };
@@ -1230,14 +1264,25 @@ export class ReleasesService {
 
       doc.fontSize(10).font('Helvetica').fillColor('#334155');
       doc.text(`Overall Readiness Score: ${readiness.score.toFixed(1)}% ${readiness.isAtRisk ? '(FLAGGED AT-RISK)' : '(SAFE TO DEPLOY)'}`);
-      doc.text(`- Bug Resolution Score: ${readiness.bugScore.toFixed(1)}% (Weight: 25%)`);
-      doc.text(`- Test Coverage Score: ${readiness.coverageScore.toFixed(1)}% (Weight: 20%)`);
-      doc.text(`- Developer Quality (DQS): ${readiness.dqsScore.toFixed(1)}% (Weight: 20%)`);
-      doc.text(`- Test Suite Pass Rate: ${readiness.testPassRate.toFixed(1)}% (Weight: 15%)`);
-      if (readiness.hasTelemetry && readiness.telemetryScore !== undefined) {
-        doc.text(`- Operational Telemetry Stability: ${readiness.telemetryScore.toFixed(1)}% (Weight: 20%)`);
-        doc.text(`- Telemetry Verdict: ${readiness.telemetryVerdict || 'HEALTHY'}`);
-        doc.text(`- Deployment Recommendation: ${readiness.telemetryRecommendation || 'PROCEED'}`);
+      if (readiness.hasTelemetry) {
+        doc.text(`- Bug Resolution Score: ${readiness.bugScore.toFixed(1)}% (Weight: 25%)`);
+        doc.text(`- Test Coverage Score: ${readiness.coverageScore.toFixed(1)}% (Weight: 25%)`);
+        doc.text(`- Developer Quality (DQS): ${readiness.dqsScore.toFixed(1)}% (Weight: 25%)`);
+        if (readiness.testPassRate !== null && readiness.testPassRate !== undefined) {
+          doc.text(`- Test Suite Pass Rate: ${readiness.testPassRate.toFixed(1)}%`);
+        }
+        if (readiness.telemetryScore !== undefined) {
+          doc.text(`- Operational Telemetry Stability: ${readiness.telemetryScore.toFixed(1)}% (Weight: 25%)`);
+          doc.text(`- Telemetry Verdict: ${readiness.telemetryVerdict || 'HEALTHY'}`);
+          doc.text(`- Deployment Recommendation: ${readiness.telemetryRecommendation || 'PROCEED'}`);
+        }
+      } else {
+        doc.text(`- Bug Resolution Score: ${readiness.bugScore.toFixed(1)}% (Weight: 35%)`);
+        doc.text(`- Test Coverage Score: ${readiness.coverageScore.toFixed(1)}% (Weight: 35%)`);
+        doc.text(`- Developer Quality (DQS): ${readiness.dqsScore.toFixed(1)}% (Weight: 30%)`);
+        if (readiness.testPassRate !== null && readiness.testPassRate !== undefined) {
+          doc.text(`- Test Suite Pass Rate: ${readiness.testPassRate.toFixed(1)}%`);
+        }
       }
       doc.moveDown(0.8);
 
