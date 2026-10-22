@@ -81,21 +81,32 @@ export class CoverageService {
       throw new BadRequestException('Duplicate coverage report already exists');
     }
 
-    // Create coverage report record
-    const report = await this.prisma.coverageReport.create({
-      data: {
-        repositoryId,
-        uploadedById,
-        format,
-        status: CoverageStatus.PENDING,
-        originalFilename: file.originalname,
-        filePath: file.path,
-        fileSize: file.size,
-        fileHash,
-        commitSha,
-        branch,
-      },
-    });
+    // Create coverage report record with race-condition deduplication catch
+    let report;
+    try {
+      report = await this.prisma.coverageReport.create({
+        data: {
+          repositoryId,
+          uploadedById,
+          format,
+          status: CoverageStatus.PENDING,
+          originalFilename: file.originalname,
+          filePath: file.path,
+          fileSize: file.size,
+          fileHash,
+          commitSha,
+          branch,
+        },
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2002') {
+        if (file?.path && existsSync(file.path)) {
+          unlinkSync(file.path);
+        }
+        throw new BadRequestException('Duplicate coverage report already exists');
+      }
+      throw error;
+    }
 
     // Enqueue parsing job
     await this.coverageQueue.add(

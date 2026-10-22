@@ -121,6 +121,29 @@ describe('CoverageService', () => {
     );
   });
 
+  it('rejects duplicate coverage report when unique constraint P2002 is thrown', async () => {
+    const file = {
+      path: '/tmp/lcov.info',
+      originalname: 'lcov.info',
+      size: 1024,
+    } as Express.Multer.File;
+
+    jest.mocked(readFileSync).mockImplementation((path, encoding) => {
+      if (encoding === 'utf-8') {
+        return 'SF:src/app.ts\nDA:1,1\nend_of_record';
+      }
+      return Buffer.from('SF:src/app.ts');
+    });
+
+    prisma.repository.findFirst.mockResolvedValue({ id: 'repo-1' });
+    prisma.coverageReport.findFirst.mockResolvedValue(null);
+    prisma.coverageReport.create.mockRejectedValue({ code: 'P2002' });
+
+    await expect(
+      service.uploadCoverage(file, 'repo-1', 'org-1', 'user-1', undefined, 'main'),
+    ).rejects.toThrow(BadRequestException);
+  });
+
   it('rejects invalid commit SHA values', async () => {
     const file = { path: '/tmp/lcov.info', originalname: 'lcov.info', size: 10 } as Express.Multer.File;
 

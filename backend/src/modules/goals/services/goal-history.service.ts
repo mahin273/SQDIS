@@ -99,9 +99,14 @@ export class GoalHistoryService {
       wasAchieved: progress.isAchieved,
     };
 
-    // Create the snapshot in the database
-    await this.prisma.goalSnapshot.create({
-      data: snapshotData,
+    // Store or update the snapshot in the database atomically
+    await this.prisma.goalSnapshot.upsert({
+      where: { goalId },
+      update: {
+        ...snapshotData,
+        snapshotAt: new Date(),
+      },
+      create: snapshotData,
     });
 
     this.logger.log(`Created snapshot for goal ${goalId}`);

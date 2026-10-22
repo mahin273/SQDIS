@@ -730,6 +730,7 @@ model SprintReport {
 
   sprint Sprint @relation(fields: [sprintId], references: [id], onDelete: Cascade)
 
+  @@unique([sprintId])
   @@index([sprintId])
   @@map("sprint_reports")
 }
@@ -1263,6 +1264,7 @@ model GoalSnapshot {
   wasAchieved      Boolean
   snapshotAt       DateTime     @default(now())
 
+  @@unique([goalId])
   @@index([organizationId])
   @@index([ownerId])
   @@index([teamId])
@@ -1358,6 +1360,7 @@ model CoverageReport {
   repository Repository       @relation(fields: [repositoryId], references: [id], onDelete: Cascade)
   modules    CoverageModule[]
 
+  @@unique([repositoryId, fileHash])
   @@index([repositoryId])
   @@index([status])
   @@index([createdAt])

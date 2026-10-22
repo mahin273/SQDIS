@@ -390,20 +390,27 @@ export class SprintsService {
     // Calculate fresh metrics
     const metrics = await this.calculateSprintMetrics(sprint);
 
-    // Store the report
-    const report = await this.prisma.sprintReport.create({
-      data: {
+    // Store the report idempotently via atomic upsert
+    const reportData = {
+      totalCommits: metrics.totalCommits,
+      bugfixCommits: metrics.bugfixCommits,
+      featureCommits: metrics.featureCommits,
+      refactorCommits: metrics.refactorCommits,
+      testCommits: metrics.testCommits,
+      docsCommits: metrics.docsCommits,
+      bugsIntroduced: metrics.bugsIntroduced,
+      bugsFixed: metrics.bugsFixed,
+      avgDQS: metrics.avgDQS,
+      coveragePct: metrics.coveragePct,
+      generatedAt: new Date(),
+    };
+
+    const report = await this.prisma.sprintReport.upsert({
+      where: { sprintId },
+      update: reportData,
+      create: {
         sprintId,
-        totalCommits: metrics.totalCommits,
-        bugfixCommits: metrics.bugfixCommits,
-        featureCommits: metrics.featureCommits,
-        refactorCommits: metrics.refactorCommits,
-        testCommits: metrics.testCommits,
-        docsCommits: metrics.docsCommits,
-        bugsIntroduced: metrics.bugsIntroduced,
-        bugsFixed: metrics.bugsFixed,
-        avgDQS: metrics.avgDQS,
-        coveragePct: metrics.coveragePct,
+        ...reportData,
       },
     });
 
