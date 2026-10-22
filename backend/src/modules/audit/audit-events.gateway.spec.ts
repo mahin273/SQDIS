@@ -73,9 +73,9 @@ describe('AuditEventsGateway Authorization & Revalidation', () => {
 
     expect(prisma.organizationMember.findUnique).toHaveBeenCalledWith({
       where: {
-        userId_organizationId: {
-          userId: 'user-1',
+        organizationId_userId: {
           organizationId: 'org-target',
+          userId: 'user-1',
         },
       },
     });

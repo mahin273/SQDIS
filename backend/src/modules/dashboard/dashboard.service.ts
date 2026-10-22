@@ -339,16 +339,12 @@ export class DashboardService {
           }),
         ]);
 
-        const hasCompletedCoverage =
-          latestCompletedCoverage?.coveragePercentage !== null &&
-          latestCompletedCoverage?.coveragePercentage !== undefined;
-
         return {
           id: repo.id,
           name: repo.name,
           fullName: repo.fullName,
           sqs: Number(sqs.toFixed(1)),
-          coverage: hasCompletedCoverage
+          coverage: latestCompletedCoverage?.coveragePercentage != null
             ? Number(latestCompletedCoverage.coveragePercentage.toFixed(1))
             : null,
           latestUploadStatus: newestReport?.status || null,

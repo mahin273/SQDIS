@@ -126,9 +126,9 @@ export class AuditEventsGateway
       // Re-verify user's active membership and role in the database (fail-closed against stale JWT claims)
       const membership = await this.prisma.organizationMember.findUnique({
         where: {
-          userId_organizationId: {
-            userId: payload.sub,
+          organizationId_userId: {
             organizationId: targetOrgId,
+            userId: payload.sub,
           },
         },
       });
@@ -223,9 +223,9 @@ export class AuditEventsGateway
     // Re-verify active database membership before subscribing
     const membership = await this.prisma.organizationMember.findUnique({
       where: {
-        userId_organizationId: {
-          userId: authSocket.userId,
+        organizationId_userId: {
           organizationId: authSocket.organizationId,
+          userId: authSocket.userId,
         },
       },
     });

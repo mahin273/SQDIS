@@ -598,7 +598,7 @@ export class ScoresService {
   /**
    * Verify entity ownership for score calculation
    */
-  async verifyEntityOwnership(entityId: string, type: ScoreJobType | ScoreType, organizationId: string): Promise<void> {
+  async verifyEntityOwnership(entityId: string, type: ScoreJobType | ScoreType | string, organizationId: string): Promise<void> {
     const isDqs = type === ScoreType.DQS || type === ScoreJobType.DQS;
     if (isDqs) {
       const member = await this.prisma.organizationMember.findFirst({

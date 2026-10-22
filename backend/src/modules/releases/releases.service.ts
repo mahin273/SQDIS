@@ -433,11 +433,11 @@ export class ReleasesService {
           }
         } else {
           const tagName =
-            dto.tagName?.trim() ||
+            dto?.tagName?.trim() ||
             (release.version.startsWith('v') ? release.version : `v${release.version}`);
-          const releaseTitle = dto.releaseName?.trim() || `Release ${tagName}`;
+          const releaseTitle = dto?.releaseName?.trim() || `Release ${tagName}`;
           const releaseBody =
-            dto.releaseNotes?.trim() ||
+            dto?.releaseNotes?.trim() ||
             release.description ||
             `Automated release ${tagName} published via SQDIS Quality Governance.`;
 
