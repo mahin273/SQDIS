@@ -170,11 +170,23 @@ export class CodeIntelligenceService {
             content: `import { mod } from './${base.split('/').pop()}';\ndescribe('test', () => {});`,
           });
         }
-        filesList.push(
-          { path: 'test/e2e.spec.ts', content: `import { other } from './other';` },
-          { path: 'test/sanity.spec.ts', content: `import { other } from './other';` },
-          { path: 'test/performance.spec.ts', content: `import { other } from './other';` },
-        );
+
+        // If repositoryId is provided, pull real repository files from fileASTMetric
+        if (dto.repositoryId) {
+          const repoAstFiles = await this.prisma.fileASTMetric.findMany({
+            where: { repositoryId: dto.repositoryId },
+            select: { filePath: true },
+            take: 50,
+          });
+          for (const rf of repoAstFiles) {
+            if (!filesList.some((f) => f.path === rf.filePath)) {
+              filesList.push({
+                path: rf.filePath,
+                content: `// ${rf.filePath}\nexport function file() {}`,
+              });
+            }
+          }
+        }
       }
 
       const payload = {
@@ -197,14 +209,20 @@ export class CodeIntelligenceService {
       }
 
       const mlResult = await resp.json();
+      const timeSavings = mlResult.time_savings_percentage ?? 0;
+      const totalTests = mlResult.total_tests_in_repo ?? 0;
+      const impactedTests = mlResult.impacted_test_files ?? [];
+      const impactedTestsCount = mlResult.impacted_tests_count ?? impactedTests.length;
+      const estimatedTimeSaved = Math.round((timeSavings / 100) * 180);
+
       return {
         ...mlResult,
-        prunedPercentage: mlResult.time_savings_percentage ?? 75,
-        totalTests: mlResult.total_tests_in_repo ?? 4,
-        impactedTests: mlResult.impacted_test_files ?? [],
-        impactedTestsCount: mlResult.impacted_tests_count ?? 1,
-        estimatedTimeSavedSeconds: Math.round(((mlResult.time_savings_percentage ?? 75) / 100) * 240),
-        riskCategory: (mlResult.impacted_tests_count || 1) > 2 ? 'MODERATE' : 'LOW',
+        prunedPercentage: timeSavings,
+        totalTests,
+        impactedTests,
+        impactedTestsCount,
+        estimatedTimeSavedSeconds: estimatedTimeSaved,
+        riskCategory: impactedTestsCount > 2 ? 'MODERATE' : 'LOW',
       };
     } catch (err) {
       this.logger.error(`Failed in analyzeTestImpact: ${err.message}`);
@@ -747,39 +765,7 @@ export class CodeIntelligenceService {
       };
     });
 
-    if (filesToProcess.length < 3) {
-      const fallbackFiles = [
-        { filePath: 'backend/src/modules/auth/auth.service.ts', loc: 480, cc: 18, cog: 24, churn: 32, debt: 4 },
-        { filePath: 'backend/src/modules/auth/auth.controller.ts', loc: 210, cc: 6, cog: 8, churn: 14, debt: 1 },
-        { filePath: 'backend/src/modules/commits/commits.service.ts', loc: 560, cc: 22, cog: 31, churn: 45, debt: 6 },
-        { filePath: 'backend/src/modules/commits/commits.controller.ts', loc: 190, cc: 5, cog: 6, churn: 12, debt: 0 },
-        { filePath: 'backend/src/modules/code-intelligence/code-intelligence.service.ts', loc: 640, cc: 25, cog: 36, churn: 38, debt: 5 },
-        { filePath: 'backend/src/modules/code-intelligence/services/code-remediation.service.ts', loc: 320, cc: 14, cog: 19, churn: 22, debt: 2 },
-        { filePath: 'backend/src/modules/debt/debt.service.ts', loc: 390, cc: 15, cog: 21, churn: 19, debt: 3 },
-        { filePath: 'backend/src/modules/github/services/pr-quality-gate-bot.service.ts', loc: 520, cc: 20, cog: 28, churn: 41, debt: 4 },
-        { filePath: 'frontend/src/pages/code-intelligence/CodeIntelligencePage.tsx', loc: 720, cc: 16, cog: 25, churn: 35, debt: 3 },
-        { filePath: 'frontend/src/pages/reviews/components/PrQualityGateDrawer.tsx', loc: 410, cc: 12, cog: 16, churn: 28, debt: 2 },
-        { filePath: 'frontend/src/pages/releases/ReleaseDetailPage.tsx', loc: 340, cc: 9, cog: 11, churn: 16, debt: 1 },
-        { filePath: 'frontend/src/services/codeIntelligence.service.ts', loc: 230, cc: 4, cog: 5, churn: 24, debt: 0 },
-        { filePath: 'frontend/src/services/api.ts', loc: 110, cc: 3, cog: 4, churn: 8, debt: 0 },
-        { filePath: 'frontend/src/components/layout/Navbar.tsx', loc: 180, cc: 4, cog: 5, churn: 10, debt: 0 },
-      ];
-
-      filesToProcess = fallbackFiles.map((f) => {
-        const defectProb = f.cc > 18 ? 0.76 : f.cc > 12 ? 0.52 : f.cc > 6 ? 0.28 : 0.08;
-        const rLevel = f.cc > 18 ? 'CRITICAL' : f.cc > 12 ? 'HIGH' : f.cc > 6 ? 'MODERATE' : 'LOW';
-        return {
-          filePath: f.filePath,
-          loc: f.loc,
-          cyclomaticComplexity: f.cc,
-          cognitiveComplexity: f.cog,
-          defectProbability: defectProb,
-          riskLevel: rLevel as 'CRITICAL' | 'HIGH' | 'MODERATE' | 'LOW',
-          debtCount: f.debt,
-          churnCount: f.churn,
-        };
-      });
-    }
+    const isPartialData = filesToProcess.length > 0 && filesToProcess.length < 3;
 
     // Build hierarchical tree
     interface InternalDirNode {
@@ -913,9 +899,9 @@ export class CodeIntelligenceService {
     };
 
     const totalLoc = rootDto.loc;
-    const averageComplexity = Number(
-      (filesToProcess.reduce((acc, f) => acc + f.cyclomaticComplexity, 0) / filesToProcess.length).toFixed(1),
-    );
+    const averageComplexity = filesToProcess.length > 0
+      ? Number((filesToProcess.reduce((acc, f) => acc + f.cyclomaticComplexity, 0) / filesToProcess.length).toFixed(1))
+      : 0;
 
     const repoTotalFiles = fileStats?._count?.id ?? filesToProcess.length;
     const repoAvgComplexity = fileStats?._avg?.cyclomaticComplexity
@@ -942,6 +928,7 @@ export class CodeIntelligenceService {
       root: rootDto,
       quadrantCounts,
       quadrantFiles,
+      isPartialData,
     };
   }
 }
