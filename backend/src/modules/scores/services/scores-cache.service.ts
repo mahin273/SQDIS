@@ -5,12 +5,18 @@ import { CacheService, CACHE_TTL as GLOBAL_CACHE_TTL } from '../../cache';
  * Cache keys for scores
  */
 export const CACHE_KEYS = {
-  DQS_SCORE: (developerId: string) => `dqs:score:${developerId}`,
-  DQS_HISTORY: (developerId: string) => `dqs:history:${developerId}`,
-  DQS_EXPLANATION: (developerId: string) => `dqs:explain:${developerId}`,
-  SQS_SCORE: (projectId: string) => `sqs:score:${projectId}`,
-  SQS_HISTORY: (projectId: string) => `sqs:history:${projectId}`,
-  SQS_RISKS: (projectId: string) => `sqs:risks:${projectId}`,
+  DQS_SCORE: (developerId: string, organizationId?: string) =>
+    organizationId ? `dqs:score:${organizationId}:${developerId}` : `dqs:score:${developerId}`,
+  DQS_HISTORY: (developerId: string, organizationId?: string) =>
+    organizationId ? `dqs:history:${organizationId}:${developerId}` : `dqs:history:${developerId}`,
+  DQS_EXPLANATION: (developerId: string, organizationId?: string) =>
+    organizationId ? `dqs:explain:${organizationId}:${developerId}` : `dqs:explain:${developerId}`,
+  SQS_SCORE: (projectId: string, organizationId?: string) =>
+    organizationId ? `sqs:score:${organizationId}:${projectId}` : `sqs:score:${projectId}`,
+  SQS_HISTORY: (projectId: string, organizationId?: string) =>
+    organizationId ? `sqs:history:${organizationId}:${projectId}` : `sqs:history:${projectId}`,
+  SQS_RISKS: (projectId: string, organizationId?: string) =>
+    organizationId ? `sqs:risks:${organizationId}:${projectId}` : `sqs:risks:${projectId}`,
 };
 
 /**
@@ -87,13 +93,21 @@ export class ScoresCacheService {
    * Invalidate all DQS caches for a developer
    *
    * @param developerId - Developer ID
+   * @param organizationId - Optional organization ID for scoped invalidation
    */
-  async invalidateDQS(developerId: string): Promise<void> {
+  async invalidateDQS(developerId: string, organizationId?: string): Promise<void> {
+    if (organizationId) {
+      await this.delete(CACHE_KEYS.DQS_SCORE(developerId, organizationId));
+      await this.delete(CACHE_KEYS.DQS_HISTORY(developerId, organizationId));
+      await this.delete(CACHE_KEYS.DQS_EXPLANATION(developerId, organizationId));
+      await this.deletePattern(`${CACHE_KEYS.DQS_HISTORY(developerId, organizationId)}:*`);
+    }
     await this.delete(CACHE_KEYS.DQS_SCORE(developerId));
     await this.delete(CACHE_KEYS.DQS_HISTORY(developerId));
     await this.delete(CACHE_KEYS.DQS_EXPLANATION(developerId));
-    // Also invalidate any history queries with this developer
     await this.deletePattern(`${CACHE_KEYS.DQS_HISTORY(developerId)}:*`);
+    await this.deletePattern(`dqs:*:${developerId}`);
+    await this.deletePattern(`dqs:*:${developerId}:*`);
     this.logger.debug(`Invalidated all DQS caches for developer: ${developerId}`);
   }
 
@@ -101,13 +115,21 @@ export class ScoresCacheService {
    * Invalidate all SQS caches for a project
    *
    * @param projectId - Project ID
+   * @param organizationId - Optional organization ID for scoped invalidation
    */
-  async invalidateSQS(projectId: string): Promise<void> {
+  async invalidateSQS(projectId: string, organizationId?: string): Promise<void> {
+    if (organizationId) {
+      await this.delete(CACHE_KEYS.SQS_SCORE(projectId, organizationId));
+      await this.delete(CACHE_KEYS.SQS_HISTORY(projectId, organizationId));
+      await this.delete(CACHE_KEYS.SQS_RISKS(projectId, organizationId));
+      await this.deletePattern(`${CACHE_KEYS.SQS_HISTORY(projectId, organizationId)}:*`);
+    }
     await this.delete(CACHE_KEYS.SQS_SCORE(projectId));
     await this.delete(CACHE_KEYS.SQS_HISTORY(projectId));
     await this.delete(CACHE_KEYS.SQS_RISKS(projectId));
-    // Also invalidate any history queries with this project
     await this.deletePattern(`${CACHE_KEYS.SQS_HISTORY(projectId)}:*`);
+    await this.deletePattern(`sqs:*:${projectId}`);
+    await this.deletePattern(`sqs:*:${projectId}:*`);
     this.logger.debug(`Invalidated all SQS caches for project: ${projectId}`);
   }
 

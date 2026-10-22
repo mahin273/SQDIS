@@ -63,6 +63,7 @@ export function ReviewsPage() {
   const [filterState, setFilterState] = useState<string>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [page, setPage] = useState(1)
+  const [selectedReviewId, setSelectedReviewId] = useState<string | null>(null)
   const [selectedPrGate, setSelectedPrGate] = useState<{
     repositoryId: string;
     prNumber: number;
@@ -132,15 +133,25 @@ export function ReviewsPage() {
   const reviewsListResponse = reviewsQuery.data
   const allReviews: Review[] = reviewsListResponse?.data ?? []
 
-  const primaryRepoId =
+  const activeReview = useMemo(() => {
+    if (selectedReviewId) {
+      const found = allReviews.find((r) => r.id === selectedReviewId)
+      if (found) return found
+    }
+    return allReviews[0] || null
+  }, [allReviews, selectedReviewId])
+
+  const targetRepoId =
+    activeReview?.repositoryId ||
     selectedRepoId ||
-    (connectedRepos.length > 0 ? connectedRepos[0].id : allReviews[0]?.repositoryId || '')
+    (connectedRepos.length > 0 ? connectedRepos[0].id : '')
+  const targetChangedFiles = activeReview?.changedFiles ?? []
 
   const testImpactQuery = useQuery({
-    queryKey: ['pull-request-test-impact', primaryRepoId],
+    queryKey: ['pull-request-test-impact', targetRepoId, activeReview?.id, targetChangedFiles],
     queryFn: () =>
-      codeIntelligenceService.getPullRequestTestImpact(primaryRepoId, ['src/services/auth.service.ts']),
-    enabled: !!primaryRepoId,
+      codeIntelligenceService.getPullRequestTestImpact(targetRepoId, targetChangedFiles),
+    enabled: !!targetRepoId && targetChangedFiles.length > 0,
   })
   const tia = testImpactQuery.data as TestImpactResult | undefined
 
@@ -268,11 +279,41 @@ export function ReviewsPage() {
   const velocityVal =
     totalReviewsCount > 0 ? `${Math.max(1, Math.round(totalReviewsCount / 30))}/day` : '0/day'
 
-  const prunedTestsPct = tia?.prunedPercentage ?? (tia as any)?.time_savings_percentage ?? 75
-  const totalTestsCount = tia?.totalTests ?? (tia as any)?.total_tests_in_repo ?? 4
-  const impactedTestsCount = tia?.impactedTests?.length ?? (tia as any)?.impacted_tests_count ?? 1
-  const pipelineTimeSavedMins = Math.max(1, Math.round((tia?.estimatedTimeSavedSeconds || 180) / 60))
-  const tiaRisk = tia?.riskCategory || 'LOW'
+  const hasMeasuredTia = useMemo(() => {
+    if (tia && typeof tia.prunedPercentage === 'number' && (tia.totalTests ?? 0) > 0) {
+      return true
+    }
+    if (
+      activeReview?.qualityGate &&
+      typeof activeReview.qualityGate.prunedPercentage === 'number' &&
+      (activeReview.qualityGate.impactedTestsCount > 0 || activeReview.qualityGate.prunedPercentage > 0)
+    ) {
+      return true
+    }
+    return false
+  }, [tia, activeReview])
+
+  const prunedTestsPct =
+    tia?.prunedPercentage !== undefined
+      ? Math.round(tia.prunedPercentage)
+      : activeReview?.qualityGate?.prunedPercentage !== undefined
+      ? Math.round(activeReview.qualityGate.prunedPercentage)
+      : null
+
+  const totalTestsCount = tia?.totalTests ?? null
+  const impactedTestsCount =
+    tia?.impactedTests?.length ??
+    activeReview?.qualityGate?.impactedTestsCount ??
+    null
+
+  const pipelineTimeSavedMins =
+    tia?.estimatedTimeSavedSeconds !== undefined
+      ? Math.round(tia.estimatedTimeSavedSeconds / 60)
+      : activeReview?.qualityGate?.estimatedTimeSaved !== undefined
+      ? Math.round(activeReview.qualityGate.estimatedTimeSaved / 60)
+      : null
+
+  const tiaRisk = tia?.riskCategory || activeReview?.qualityGate?.riskLevel || null
 
   const handleRefresh = () => {
     reviewsQuery.refetch()
@@ -436,64 +477,75 @@ export function ReviewsPage() {
       </div>
 
       {/* Smart Test Impact Analysis (TIA) */}
-      {tia && (
-        <Card className="border-blue-200/70 bg-gradient-to-r from-blue-50/50 via-indigo-50/20 to-transparent dark:border-blue-900/50 dark:from-blue-950/20 dark:via-indigo-950/10 dark:to-transparent">
-          <CardContent className="p-5">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="flex items-start gap-3.5">
-                <div className="rounded-xl bg-blue-600 p-2.5 text-white shadow-sm shrink-0">
-                  <Zap className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
-                      Smart Test Impact Analysis (TIA)
-                    </h3>
-                    <Badge
-                      variant="outline"
-                      className="text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30"
-                    >
-                      CI Acceleration
-                    </Badge>
-                  </div>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
-                    Dependency graph analysis flagged {impactedTestsCount} affected test suite
-                    out of {totalTestsCount} total suites. Safe to prune {prunedTestsPct}% of
-                    regression tests, saving ~{pipelineTimeSavedMins}m of CI pipeline execution.
-                  </p>
-                </div>
+      <Card className="border-blue-200/70 bg-gradient-to-r from-blue-50/50 via-indigo-50/20 to-transparent dark:border-blue-900/50 dark:from-blue-950/20 dark:via-indigo-950/10 dark:to-transparent">
+        <CardContent className="p-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div className="flex items-start gap-3.5">
+              <div className="rounded-xl bg-blue-600 p-2.5 text-white shadow-sm shrink-0">
+                <Zap className="h-5 w-5" />
               </div>
-
-              <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 pt-3 md:pt-0 md:pl-6">
-                <div className="text-center">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Pruned Tests
-                  </span>
-                  <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
-                    {prunedTestsPct}%
-                  </p>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-slate-100">
+                    Smart Test Impact Analysis (TIA)
+                  </h3>
+                  <Badge
+                    variant="outline"
+                    className={
+                      hasMeasuredTia
+                        ? 'text-blue-600 border-blue-300 dark:text-blue-400 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-950/30'
+                        : 'text-slate-500 border-slate-300 dark:text-slate-400 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-950/30'
+                    }
+                  >
+                    {hasMeasuredTia ? 'CI Acceleration' : 'Unmeasured'}
+                  </Badge>
+                  {activeReview && (
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-mono">
+                      PR #{activeReview.pullRequestId}
+                    </span>
+                  )}
                 </div>
-                <div className="text-center">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Pipeline Saved
-                  </span>
-                  <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
-                    ~{pipelineTimeSavedMins}m
-                  </p>
-                </div>
-                <div className="text-center">
-                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Impact Risk
-                  </span>
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mt-1">
-                    {tiaRisk}
-                  </p>
-                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-2xl">
+                  {hasMeasuredTia
+                    ? `Dependency graph analysis flagged ${impactedTestsCount ?? 0} affected test suite${
+                        totalTestsCount ? ` out of ${totalTestsCount} total suites` : ''
+                      }. Safe to prune ${prunedTestsPct}% of regression tests, saving ~${
+                        pipelineTimeSavedMins ?? 0
+                      }m of CI pipeline execution.`
+                    : 'No measured test impact analysis for the selected pull request changeset. Select a pull request with analyzed file changes or evaluate Quality Gate to measure test suite impact.'}
+                </p>
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+
+            <div className="flex items-center gap-6 shrink-0 border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 pt-3 md:pt-0 md:pl-6">
+              <div className="text-center">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  Pruned Tests
+                </span>
+                <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {hasMeasuredTia && prunedTestsPct !== null ? `${prunedTestsPct}%` : 'N/A'}
+                </p>
+              </div>
+              <div className="text-center">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  Pipeline Saved
+                </span>
+                <p className="text-xl font-bold text-blue-600 dark:text-blue-400">
+                  {hasMeasuredTia && pipelineTimeSavedMins !== null ? `~${pipelineTimeSavedMins}m` : 'N/A'}
+                </p>
+              </div>
+              <div className="text-center">
+                <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                  Impact Risk
+                </span>
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mt-1">
+                  {hasMeasuredTia && tiaRisk ? tiaRisk : 'UNMEASURED'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Analytics & Top Reviewers Strip */}
       <div className="grid gap-6 grid-cols-1 lg:grid-cols-3">
@@ -716,10 +768,17 @@ export function ReviewsPage() {
                     review.prUrl ||
                     (prNum ? `https://github.com/mahin273/SQDIS/pull/${prNum}` : '')
 
+                  const isSelected = activeReview?.id === review.id
+
                   return (
                     <div
                       key={review.id}
-                      className="flex flex-col sm:flex-row sm:items-center justify-between py-4 gap-4 transition-all rounded-lg hover:bg-slate-50/60 dark:hover:bg-slate-800/40 px-3 -mx-3"
+                      onClick={() => setSelectedReviewId(review.id)}
+                      className={`flex flex-col sm:flex-row sm:items-center justify-between py-4 gap-4 transition-all rounded-lg px-3 -mx-3 cursor-pointer ${
+                        isSelected
+                          ? 'bg-blue-50/70 dark:bg-blue-950/40 ring-1 ring-blue-300 dark:ring-blue-800'
+                          : 'hover:bg-slate-50/60 dark:hover:bg-slate-800/40'
+                      }`}
                     >
                       <div className="flex items-start gap-3.5 min-w-0 flex-1">
                         <div className="mt-1 bg-blue-100/70 dark:bg-blue-900/40 p-2.5 rounded-xl shrink-0 text-blue-600 dark:text-blue-400">

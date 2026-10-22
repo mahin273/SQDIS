@@ -34,7 +34,7 @@ export class DashboardService {
       where: { organizationId },
     });
 
-    // Get average coverage from latest reports
+    // Get average coverage from latest reports using line-weighted aggregation
     const repos = await this.prisma.repository.findMany({
       where: { organizationId, isEnabled: true },
       select: { id: true },
@@ -45,17 +45,39 @@ export class DashboardService {
         return this.prisma.coverageReport.findFirst({
           where: { repositoryId, status: 'COMPLETED' },
           orderBy: { createdAt: 'desc' },
-          select: { coveragePercentage: true },
+          select: {
+            coveragePercentage: true,
+            linesTotal: true,
+            linesCovered: true,
+          },
         });
       })
     );
     const latestCoverages = coverages.filter((c) => c !== null);
 
-    const avgCoverage =
-      latestCoverages.length > 0
-        ? latestCoverages.reduce((sum, r) => sum + (r.coveragePercentage || 0), 0) /
-          latestCoverages.length
-        : 0;
+    let avgCoverage = 0;
+    let coverageCalculationMethod: 'line_weighted' | 'unweighted_average' | 'none' = 'none';
+
+    if (latestCoverages.length > 0) {
+      const totalLines = latestCoverages.reduce((sum, r) => sum + (r.linesTotal || 0), 0);
+      const coveredLines = latestCoverages.reduce((sum, r) => sum + (r.linesCovered || 0), 0);
+
+      if (totalLines > 0) {
+        avgCoverage = (coveredLines / totalLines) * 100;
+        coverageCalculationMethod = 'line_weighted';
+      } else {
+        // Fallback to unweighted repository average if line counts are not available
+        const validPercentages = latestCoverages
+          .map((r) => r.coveragePercentage)
+          .filter((p): p is number => typeof p === 'number' && !isNaN(p));
+
+        avgCoverage =
+          validPercentages.length > 0
+            ? validPercentages.reduce((sum, p) => sum + p, 0) / validPercentages.length
+            : 0;
+        coverageCalculationMethod = 'unweighted_average';
+      }
+    }
 
     // Get organization-wide SQS (combining repositories and standalone projects)
     const projects = await this.prisma.project.findMany({
@@ -159,6 +181,7 @@ export class DashboardService {
       totalCommits,
       bugFixCommits,
       avgCoverage: Number(avgCoverage.toFixed(1)),
+      coverageCalculationMethod,
       avgSQS: Number(avgSQS.toFixed(1)),
       riskyModulesCount,
     };

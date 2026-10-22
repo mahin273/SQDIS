@@ -95,7 +95,11 @@ describe('ScoresService', () => {
     jest.clearAllMocks();
   });
 
-  it('returns cached DQS scores without hitting the database', async () => {
+  it('verifies developer membership before returning cached DQS score', async () => {
+    prisma.user.findFirst.mockResolvedValue({
+      id: 'user-1',
+      memberships: [{ role: 'DEVELOPER' }],
+    });
     const cached = {
       developerId: 'user-1',
       score: 90,
@@ -107,10 +111,32 @@ describe('ScoresService', () => {
     cacheService.get.mockResolvedValue(cached);
 
     await expect(service.getDQS('user-1', 'org-1')).resolves.toEqual(cached);
-    expect(prisma.user.findFirst).not.toHaveBeenCalled();
+    expect(prisma.user.findFirst).toHaveBeenCalledWith({
+      where: {
+        id: 'user-1',
+        memberships: {
+          some: { organizationId: 'org-1' },
+        },
+      },
+      include: {
+        memberships: {
+          where: { organizationId: 'org-1' },
+          select: { role: true },
+        },
+      },
+    });
+    expect(cacheService.get).toHaveBeenCalledWith('dqs:score:org-1:user-1');
   });
 
-  it('returns the latest DQS score from the database and caches it', async () => {
+  it('rejects DQS request before reading cache if developer does not belong to organization', async () => {
+    prisma.user.findFirst.mockResolvedValue(null);
+    cacheService.get.mockResolvedValue({ score: 95 });
+
+    await expect(service.getDQS('foreign-user', 'org-1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(cacheService.get).not.toHaveBeenCalled();
+  });
+
+  it('returns the latest DQS score from the database and caches it with organization scope', async () => {
     cacheService.get.mockResolvedValue(null);
     prisma.user.findFirst.mockResolvedValue({
       id: 'user-1',
@@ -123,7 +149,11 @@ describe('ScoresService', () => {
       score: 82.5,
       modelVersion: 'v1',
     });
-    expect(cacheService.set).toHaveBeenCalled();
+    expect(cacheService.set).toHaveBeenCalledWith(
+      'dqs:score:org-1:user-1',
+      expect.any(Object),
+      expect.any(Number),
+    );
   });
 
   it('throws when the developer is not in the organization', async () => {
@@ -133,7 +163,8 @@ describe('ScoresService', () => {
     await expect(service.getDQS('missing', 'org-1')).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('returns cached SQS scores without hitting the database', async () => {
+  it('verifies project membership before returning cached SQS score', async () => {
+    prisma.repository.findFirst.mockResolvedValue({ id: 'project-1', organizationId: 'org-1' });
     const cached = {
       projectId: 'project-1',
       score: 78,
@@ -145,7 +176,19 @@ describe('ScoresService', () => {
     cacheService.get.mockResolvedValue(cached);
 
     await expect(service.getSQS('project-1', 'org-1')).resolves.toEqual(cached);
-    expect(prisma.repository.findFirst).not.toHaveBeenCalled();
+    expect(prisma.repository.findFirst).toHaveBeenCalledWith({
+      where: { id: 'project-1', organizationId: 'org-1' },
+    });
+    expect(cacheService.get).toHaveBeenCalledWith('sqs:score:org-1:project-1');
+  });
+
+  it('rejects SQS request before reading cache if project does not belong to organization', async () => {
+    prisma.repository.findFirst.mockResolvedValue(null);
+    prisma.project.findFirst.mockResolvedValue(null);
+    cacheService.get.mockResolvedValue({ score: 90 });
+
+    await expect(service.getSQS('foreign-proj', 'org-1')).rejects.toBeInstanceOf(NotFoundException);
+    expect(cacheService.get).not.toHaveBeenCalled();
   });
 
   it('returns SQS history for a project', async () => {
