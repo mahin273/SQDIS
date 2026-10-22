@@ -262,8 +262,8 @@ export class CodeIntelligenceService {
    * and persist the audit snapshot.
    */
   async calculateTeamBusFactor(teamId: string, organizationId?: string) {
-    const team = await this.prisma.team.findUnique({
-      where: { id: teamId },
+    const team = await this.prisma.team.findFirst({
+      where: organizationId ? { id: teamId, organizationId } : { id: teamId },
       include: {
         memberships: {
           include: {
@@ -436,11 +436,44 @@ export class CodeIntelligenceService {
   }
 
   /**
+   * Helper to verify repository belongs to the active organization
+   */
+  async verifyRepositoryAccess(repositoryId: string, organizationId?: string) {
+    if (!organizationId) {
+      return;
+    }
+    const repository = await this.prisma.repository.findFirst({
+      where: { id: repositoryId, organizationId },
+    });
+    if (!repository) {
+      throw new NotFoundException(`Repository ${repositoryId} not found in organization`);
+    }
+    return repository;
+  }
+
+  /**
    * Retrieve historical Bus Factor snapshots.
    */
-  async getBusFactorSnapshots(teamId?: string, limit = 10) {
+  async getBusFactorSnapshots(teamId?: string, limit = 10, organizationId?: string) {
+    if (teamId && organizationId) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId, organizationId },
+      });
+      if (!team) {
+        throw new NotFoundException(`Team with ID ${teamId} not found in organization`);
+      }
+    }
+
+    const where: any = {};
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
+    if (teamId) {
+      where.teamId = teamId;
+    }
+
     return this.prisma.teamBusFactorSnapshot.findMany({
-      where: teamId ? { teamId } : {},
+      where,
       orderBy: { createdAt: 'desc' },
       take: limit,
     });
@@ -449,7 +482,8 @@ export class CodeIntelligenceService {
   /**
    * Retrieve repository code intelligence telemetry summary stats (true database totals).
    */
-  async getRepositoryStats(repositoryId: string) {
+  async getRepositoryStats(repositoryId: string, organizationId?: string) {
+    await this.verifyRepositoryAccess(repositoryId, organizationId);
     const [
       analyzedFiles,
       criticalHotspots,
@@ -493,7 +527,8 @@ export class CodeIntelligenceService {
   /**
    * Retrieve complexity and defect hotspots for a repository.
    */
-  async getRepositoryHotspots(repositoryId: string, limit = 20) {
+  async getRepositoryHotspots(repositoryId: string, limit = 20, organizationId?: string) {
+    await this.verifyRepositoryAccess(repositoryId, organizationId);
     const fileMetrics = await this.prisma.fileASTMetric.findMany({
       where: { repositoryId },
       orderBy: { cyclomaticComplexity: 'desc' },
@@ -535,7 +570,8 @@ export class CodeIntelligenceService {
   /**
    * Retrieve recent commits with their Kamei JIT defect risk predictions.
    */
-  async getRepositoryCommitsRisk(repositoryId: string, limit = 20) {
+  async getRepositoryCommitsRisk(repositoryId: string, limit = 20, organizationId?: string) {
+    await this.verifyRepositoryAccess(repositoryId, organizationId);
     const predictions = await this.prisma.defectPrediction.findMany({
       where: { repositoryId, benchmark: 'Kamei JIT' },
       orderBy: { createdAt: 'desc' },
@@ -581,7 +617,8 @@ export class CodeIntelligenceService {
   /**
    * Execute Test Impact Analysis (TIA) for PR modified files against repository DAG.
    */
-  async getPullRequestTestImpact(repositoryId: string, changedFiles: string[]) {
+  async getPullRequestTestImpact(repositoryId: string, changedFiles: string[], organizationId?: string) {
+    await this.verifyRepositoryAccess(repositoryId, organizationId);
     return this.analyzeTestImpact({
       repositoryId,
       changedFiles: changedFiles || [],
@@ -595,7 +632,9 @@ export class CodeIntelligenceService {
     repositoryId: string,
     sizeBy: 'loc' | 'churn' = 'loc',
     colorBy: 'complexity' | 'defectRisk' | 'debtCount' = 'complexity',
+    organizationId?: string,
   ): Promise<RepositoryTreemapResponseDto> {
+    await this.verifyRepositoryAccess(repositoryId, organizationId);
     const [fileMetrics, openDebt, defectPredictions, fileStats, repoHotspotsCount, commitLines] =
       await Promise.all([
         this.prisma.fileASTMetric.findMany({

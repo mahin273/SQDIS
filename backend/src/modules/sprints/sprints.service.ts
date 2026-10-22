@@ -1402,9 +1402,20 @@ export class SprintsService {
   }
 
   /**
-   * Delete a sprint goal
+   * Delete a sprint goal with organization boundary verification
    */
-  async deleteGoal(goalId: string) {
+  async deleteGoal(goalId: string, organizationId?: string) {
+    if (organizationId) {
+      const goal = await this.prisma.sprintGoal.findFirst({
+        where: {
+          id: goalId,
+          sprint: { organizationId },
+        },
+      });
+      if (!goal) {
+        throw new NotFoundException(`Sprint goal ${goalId} not found in this organization`);
+      }
+    }
     return this.prisma.sprintGoal.delete({ where: { id: goalId } });
   }
 
@@ -1529,9 +1540,20 @@ export class SprintsService {
   }
 
   /**
-   * Delete a carry-over item
+   * Delete a carry-over item with organization boundary verification
    */
-  async deleteCarryOver(carryOverId: string) {
+  async deleteCarryOver(carryOverId: string, organizationId?: string) {
+    if (organizationId) {
+      const carryOver = await this.prisma.sprintCarryOver.findFirst({
+        where: {
+          id: carryOverId,
+          fromSprint: { organizationId },
+        },
+      });
+      if (!carryOver) {
+        throw new NotFoundException(`Sprint carry-over ${carryOverId} not found in this organization`);
+      }
+    }
     return this.prisma.sprintCarryOver.delete({ where: { id: carryOverId } });
   }
 }

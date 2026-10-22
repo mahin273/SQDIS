@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../../../prisma';
 import { GoalStatus, MetricType, ComparisonOp } from '@prisma/client';
@@ -178,6 +178,15 @@ export class GoalHistoryService {
     teamId?: string,
     periodMonths: number = 12,
   ): Promise<AchievementRate[]> {
+    if (teamId) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId, organizationId },
+      });
+      if (!team) {
+        throw new NotFoundException(`Team with ID ${teamId} not found in this organization`);
+      }
+    }
+
     const results: AchievementRate[] = [];
     const now = new Date();
 
@@ -328,7 +337,15 @@ export class GoalHistoryService {
 
     const where: any = { organizationId };
 
-    if (teamId) where.teamId = teamId;
+    if (teamId) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId, organizationId },
+      });
+      if (!team) {
+        throw new NotFoundException(`Team with ID ${teamId} not found in this organization`);
+      }
+      where.teamId = teamId;
+    }
     if (ownerId) where.ownerId = ownerId;
     if (metricType) where.metricType = metricType;
     if (wasAchieved !== undefined) where.wasAchieved = wasAchieved;
@@ -388,7 +405,15 @@ export class GoalHistoryService {
 
     // Get snapshots for the period
     const where: any = { organizationId };
-    if (teamId) where.teamId = teamId;
+    if (teamId) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: teamId, organizationId },
+      });
+      if (!team) {
+        throw new NotFoundException(`Team with ID ${teamId} not found in this organization`);
+      }
+      where.teamId = teamId;
+    }
     if (startDate || endDate) {
       where.snapshotAt = {};
       if (startDate) where.snapshotAt.gte = startDate;

@@ -723,14 +723,18 @@ export class ReviewsService {
   }
 
   /**
-   * Find a review by ID
+   * Find a review by ID with optional organization boundary scoping
    */
-  async findById(id: string): Promise<Review | null> {
-    return this.prisma.review.findUnique({
-      where: { id },
+  async findById(id: string, organizationId?: string): Promise<Review | null> {
+    const where: any = { id };
+    if (organizationId) {
+      where.repository = { organizationId };
+    }
+    return this.prisma.review.findFirst({
+      where,
       include: {
         reviewer: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        repository: { select: { id: true, name: true, fullName: true } },
+        repository: { select: { id: true, name: true, fullName: true, organizationId: true } },
         comments: {
           orderBy: { createdAt: 'asc' },
           include: {

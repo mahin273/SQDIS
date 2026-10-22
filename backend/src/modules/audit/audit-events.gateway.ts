@@ -13,6 +13,7 @@ import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { OnEvent } from '@nestjs/event-emitter';
 import { JwtPayload } from '../auth/types/jwt-payload.types';
+import { PrismaService } from '../../prisma/prisma.service';
 
 /**
  * Authenticated socket with user context for audit events
@@ -75,7 +76,10 @@ export class AuditEventsGateway
   private readonly logger = new Logger(AuditEventsGateway.name);
   private readonly connectedClients: Map<string, AuthenticatedAuditSocket> = new Map();
 
-  constructor(private readonly jwtService: JwtService) {}
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
+  ) {}
 
   /**
    * Called after gateway initialization
@@ -85,7 +89,7 @@ export class AuditEventsGateway
   }
 
   /**
-   * Handle new client connection with JWT authentication
+   * Handle new client connection with JWT authentication and database membership verification
    */
   async handleConnection(client: Socket) {
     try {
@@ -103,26 +107,51 @@ export class AuditEventsGateway
 
       const payload = this.jwtService.verify<JwtPayload>(token);
 
-      // Verify user has ADMIN or OWNER role (required for audit log access)
-      if (payload.role !== 'ADMIN' && payload.role !== 'OWNER') {
+      // Resolve targeted organization: prefer handshake auth/query, fallback to JWT payload
+      const targetOrgId =
+        (client.handshake.auth?.organizationId as string) ||
+        (client.handshake.query?.organizationId as string) ||
+        payload.organizationId;
+
+      if (!targetOrgId) {
+        this.logger.warn(`Connection rejected: No organizationId found (${client.id})`);
+        client.emit('error', {
+          message: 'Organization ID is required',
+          code: 'ORGANIZATION_REQUIRED',
+        });
+        client.disconnect();
+        return;
+      }
+
+      // Re-verify user's active membership and role in the database (fail-closed against stale JWT claims)
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          userId_organizationId: {
+            userId: payload.sub,
+            organizationId: targetOrgId,
+          },
+        },
+      });
+
+      if (!membership || (membership.role !== 'ADMIN' && membership.role !== 'OWNER')) {
         this.logger.warn(
-          `Connection rejected: Insufficient permissions (${client.id}, role: ${payload.role})`,
+          `Connection rejected: User ${payload.sub} lacks active ADMIN or OWNER role in org ${targetOrgId} (${client.id})`,
         );
         client.emit('error', {
-          message: 'Insufficient permissions. Required role: ADMIN or OWNER',
+          message: 'Insufficient permissions. Active ADMIN or OWNER role required in the target organization',
           code: 'INSUFFICIENT_PERMISSIONS',
         });
         client.disconnect();
         return;
       }
 
-      // Create authenticated socket context
+      // Create authenticated socket context with verified membership
       const authSocket: AuthenticatedAuditSocket = {
         id: client.id,
         userId: payload.sub,
         email: payload.email,
-        organizationId: payload.organizationId || '',
-        role: payload.role,
+        organizationId: targetOrgId,
+        role: membership.role,
         subscribedToAuditEvents: true,
       };
 
@@ -130,19 +159,17 @@ export class AuditEventsGateway
       this.connectedClients.set(client.id, authSocket);
 
       // Auto-join organization room for immediate event streaming
-      if (payload.organizationId) {
-        const roomName = `audit:${payload.organizationId}`;
-        client.join(roomName);
-      }
+      const roomName = `audit:${targetOrgId}`;
+      client.join(roomName);
 
       this.logger.log(
-        `Client connected to audit events: ${client.id} (User: ${payload.email}, Org: ${payload.organizationId})`,
+        `Client connected to audit events: ${client.id} (User: ${payload.email}, Org: ${targetOrgId}, Role: ${membership.role})`,
       );
 
       // Send connection success
       client.emit('connected', {
         message: 'Connected to audit events stream',
-        organizationId: payload.organizationId,
+        organizationId: targetOrgId,
       });
     } catch (error) {
       this.logger.warn(
@@ -182,7 +209,7 @@ export class AuditEventsGateway
    * Events are automatically filtered by the client's organization.
    */
   @SubscribeMessage('subscribe')
-  handleSubscribe(@ConnectedSocket() client: Socket) {
+  async handleSubscribe(@ConnectedSocket() client: Socket) {
     const authSocket = this.connectedClients.get(client.id);
 
     if (!authSocket) {
@@ -193,8 +220,28 @@ export class AuditEventsGateway
       return;
     }
 
-    // Mark as subscribed
+    // Re-verify active database membership before subscribing
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        userId_organizationId: {
+          userId: authSocket.userId,
+          organizationId: authSocket.organizationId,
+        },
+      },
+    });
+
+    if (!membership || (membership.role !== 'ADMIN' && membership.role !== 'OWNER')) {
+      client.emit('error', {
+        message: 'Insufficient permissions in the target organization',
+        code: 'INSUFFICIENT_PERMISSIONS',
+      });
+      client.disconnect();
+      return;
+    }
+
+    // Mark as subscribed and update role
     authSocket.subscribedToAuditEvents = true;
+    authSocket.role = membership.role;
 
     // Join organization-specific room for efficient broadcasting
     const roomName = `audit:${authSocket.organizationId}`;

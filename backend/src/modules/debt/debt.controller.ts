@@ -149,12 +149,13 @@ export class DebtController {
   async resolve(
     @Param('id') id: string,
     @GetUser('id') userId: string,
+    @GetOrganization() organizationId: string,
   ) {
-    const existing = await this.debtService.findById(id);
+    const existing = await this.debtService.findById(id, organizationId);
     if (!existing) {
       throw new NotFoundException(`Debt item with ID ${id} not found`);
     }
-    return await this.debtService.resolve(id, userId);
+    return await this.debtService.resolve(id, userId, undefined, organizationId);
   }
 
   /**
@@ -168,8 +169,11 @@ export class DebtController {
   @ApiResponse({ status: 200, description: 'Debt item details with related data' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Debt item not found' })
-  async findById(@Param('id') id: string) {
-    const debtItem = await this.debtService.findById(id);
+  async findById(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+  ) {
+    const debtItem = await this.debtService.findById(id, organizationId);
     if (!debtItem) {
       throw new NotFoundException(`Debt item with ID ${id} not found`);
     }

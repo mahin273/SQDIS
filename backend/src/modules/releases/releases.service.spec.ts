@@ -60,7 +60,19 @@ describe('ReleasesService', () => {
       expect(result.version).toBe('v1.0.0');
     });
 
+    it('should throw NotFoundException if repository does not belong to organization', async () => {
+      prisma.repository.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.create(
+          { version: 'v1.0.0', targetDate: '2026-12-01', repositoryId: 'repo-foreign' },
+          'org-123',
+        ),
+      ).rejects.toThrow(NotFoundException);
+    });
+
     it('should check uniqueness by repositoryId when repositoryId is provided', async () => {
+      prisma.repository.findFirst.mockResolvedValue({ id: 'repo-456', organizationId: 'org-123' } as any);
       prisma.release.findFirst.mockResolvedValue(null);
       prisma.release.create.mockResolvedValue({ ...mockRelease, repositoryId: 'repo-456' } as any);
 
@@ -69,6 +81,9 @@ describe('ReleasesService', () => {
         'org-123',
       );
 
+      expect(prisma.repository.findFirst).toHaveBeenCalledWith({
+        where: { id: 'repo-456', organizationId: 'org-123' },
+      });
       expect(prisma.release.findFirst).toHaveBeenCalledWith({
         where: {
           repositoryId: 'repo-456',

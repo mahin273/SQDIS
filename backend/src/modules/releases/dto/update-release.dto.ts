@@ -46,4 +46,12 @@ export class UpdateReleaseDto {
   @IsString()
   @IsOptional()
   status?: string;
+
+  @ApiPropertyOptional({
+    description: 'Associated repository ID',
+    example: '123e4567-e89b-12d3-a456-426614174000',
+  })
+  @IsString()
+  @IsOptional()
+  repositoryId?: string;
 }

@@ -44,6 +44,14 @@ export class AlertsController {
     private readonly thresholdConfigService: ThresholdConfigService,
   ) {}
 
+  private getOrgId(req: any): string {
+    return (
+      req.organizationId ||
+      req.headers?.['x-organization-id'] ||
+      req.user?.organizationId
+    );
+  }
+
   /**
    * Get all alerts with pagination and filters
    * GET /api/alerts
@@ -53,7 +61,7 @@ export class AlertsController {
   @ApiResponse({ status: 200, description: 'Paginated list of alerts with severity breakdown' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findAll(@Request() req: any, @Query() filters: AlertFiltersDto) {
-    return await this.alertsService.findAll(req.user.organizationId, filters);
+    return await this.alertsService.findAll(this.getOrgId(req), filters);
   }
 
   /**
@@ -92,7 +100,7 @@ export class AlertsController {
   @ApiResponse({ status: 200, description: 'List of threshold configurations per alert type' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getAllThresholdConfigs(@Request() req: any) {
-    return this.thresholdConfigService.getAllConfigs(req.user.organizationId);
+    return this.thresholdConfigService.getAllConfigs(this.getOrgId(req));
   }
 
   /**
@@ -105,7 +113,7 @@ export class AlertsController {
   @ApiResponse({ status: 200, description: 'Threshold configuration for the alert type' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getThresholdConfig(@Request() req: any, @Param('alertType') alertType: AlertType) {
-    return this.thresholdConfigService.getConfig(req.user.organizationId, alertType);
+    return this.thresholdConfigService.getConfig(this.getOrgId(req), alertType);
   }
 
   /**
@@ -113,7 +121,7 @@ export class AlertsController {
    * POST /api/alerts/thresholds
    */
   @Post('thresholds')
-  @UseGuards(JwtAuthGuard, RolesGuard, OrganizationGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.OWNER)
   @AuditLog({
     action: 'CREATE',
@@ -128,7 +136,7 @@ export class AlertsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions (requires ADMIN or OWNER)' })
   async upsertThresholdConfig(@Request() req: any, @Body() dto: CreateAlertThresholdConfigDto) {
-    return this.thresholdConfigService.upsertConfig(req.user.organizationId, dto, req.user.id);
+    return this.thresholdConfigService.upsertConfig(this.getOrgId(req), dto, req.user.id);
   }
 
   /**
@@ -136,7 +144,7 @@ export class AlertsController {
    * PATCH /api/alerts/thresholds/:alertType
    */
   @Patch('thresholds/:alertType')
-  @UseGuards(JwtAuthGuard, RolesGuard, OrganizationGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.OWNER)
   @AuditLog({
     action: 'UPDATE',
@@ -158,7 +166,7 @@ export class AlertsController {
     @Body() dto: UpdateAlertThresholdConfigDto,
   ) {
     return this.thresholdConfigService.updateConfig(
-      req.user.organizationId,
+      this.getOrgId(req),
       alertType,
       dto,
       req.user.id,
@@ -170,7 +178,7 @@ export class AlertsController {
    * DELETE /api/alerts/thresholds
    */
   @Delete('thresholds')
-  @UseGuards(JwtAuthGuard, RolesGuard, OrganizationGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.OWNER)
   @AuditLog({
     action: 'DELETE',
@@ -183,7 +191,7 @@ export class AlertsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions (requires ADMIN or OWNER)' })
   async resetAllThresholdConfigs(@Request() req: any) {
-    return this.thresholdConfigService.resetConfig(req.user.organizationId);
+    return this.thresholdConfigService.resetConfig(this.getOrgId(req));
   }
 
   /**
@@ -191,7 +199,7 @@ export class AlertsController {
    * DELETE /api/alerts/thresholds/:alertType
    */
   @Delete('thresholds/:alertType')
-  @UseGuards(JwtAuthGuard, RolesGuard, OrganizationGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
   @Roles(Role.ADMIN, Role.OWNER)
   @AuditLog({
     action: 'DELETE',
@@ -206,7 +214,7 @@ export class AlertsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 403, description: 'Insufficient permissions (requires ADMIN or OWNER)' })
   async resetThresholdConfig(@Request() req: any, @Param('alertType') alertType: AlertType) {
-    return this.thresholdConfigService.resetConfig(req.user.organizationId, alertType);
+    return this.thresholdConfigService.resetConfig(this.getOrgId(req), alertType);
   }
 
   // ==================== ALERT ENDPOINTS ====================
@@ -222,7 +230,7 @@ export class AlertsController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   @ApiResponse({ status: 404, description: 'Alert not found' })
   async findById(@Request() req: any, @Param('id') id: string) {
-    const alert = await this.alertsService.findById(id, req.user.organizationId);
+    const alert = await this.alertsService.findById(id, this.getOrgId(req));
     if (!alert) {
       throw new NotFoundException(`Alert with ID ${id} not found`);
     }
@@ -245,7 +253,7 @@ export class AlertsController {
     @Param('id') id: string,
     @Body() dto: AcknowledgeAlertDto,
   ) {
-    return await this.alertsService.acknowledge(id, req.user.id, req.user.organizationId);
+    return await this.alertsService.acknowledge(id, req.user.id, this.getOrgId(req));
   }
 
   /**
@@ -263,7 +271,7 @@ export class AlertsController {
     return await this.alertsService.resolve(
       id,
       req.user.id,
-      req.user.organizationId,
+      this.getOrgId(req),
       dto.resolutionNotes,
     );
   }

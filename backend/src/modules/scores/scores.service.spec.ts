@@ -25,6 +25,8 @@ describe('ScoresService', () => {
     dQSScore: Record<string, jest.Mock>;
     repository: Record<string, jest.Mock>;
     sQSScore: Record<string, jest.Mock>;
+    organizationMember: Record<string, jest.Mock>;
+    project: Record<string, jest.Mock>;
   };
   let cacheService: {
     get: jest.Mock;
@@ -57,6 +59,12 @@ describe('ScoresService', () => {
       sQSScore: {
         findFirst: jest.fn(),
         findMany: jest.fn(),
+      },
+      organizationMember: {
+        findFirst: jest.fn(),
+      },
+      project: {
+        findFirst: jest.fn(),
       },
     };
     cacheService = {
@@ -179,5 +187,49 @@ describe('ScoresService', () => {
         removeOnFail: 100,
       }),
     );
+  });
+
+  describe('triggerRecalculation', () => {
+    it('throws NotFoundException when DQS developer is not found in organization', async () => {
+      prisma.organizationMember.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.triggerRecalculation('foreign-dev', 'dqs' as any, 'org-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(prisma.organizationMember.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'foreign-dev', organizationId: 'org-1' },
+      });
+      expect(scoreQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('throws NotFoundException when SQS project or repo is not found in organization', async () => {
+      prisma.project.findFirst.mockResolvedValue(null);
+      prisma.repository.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.triggerRecalculation('foreign-entity', 'sqs' as any, 'org-1'),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(scoreQueue.add).not.toHaveBeenCalled();
+    });
+
+    it('enqueues DQS recalculation when developer belongs to organization', async () => {
+      prisma.organizationMember.findFirst.mockResolvedValue({ id: 'mem-1', userId: 'dev-1', organizationId: 'org-1' });
+
+      const result = await service.triggerRecalculation('dev-1', 'dqs' as any, 'org-1');
+
+      expect(result.jobId).toBe('job-1');
+      expect(scoreQueue.add).toHaveBeenCalledWith(
+        ScoreJobType.DQS,
+        expect.objectContaining({
+          entityId: 'dev-1',
+          type: ScoreJobType.DQS,
+          organizationId: 'org-1',
+          triggeredBy: 'manual',
+        }),
+        expect.any(Object),
+      );
+    });
   });
 });

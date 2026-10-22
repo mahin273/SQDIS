@@ -460,6 +460,26 @@ export class GoalsService {
       }
     }
 
+    // Validate team exists in organization if provided
+    if (dto.teamId) {
+      const team = await this.prisma.team.findFirst({
+        where: { id: dto.teamId, organizationId },
+      });
+      if (!team) {
+        throw new NotFoundException(`Team with ID ${dto.teamId} not found`);
+      }
+    }
+
+    // Validate project exists in organization if provided
+    if (dto.projectId) {
+      const project = await this.prisma.project.findFirst({
+        where: { id: dto.projectId, organizationId },
+      });
+      if (!project) {
+        throw new NotFoundException(`Project with ID ${dto.projectId} not found`);
+      }
+    }
+
     const updatedGoal = await this.prisma.goal.update({
       where: { id },
       data: {

@@ -100,11 +100,15 @@ export class NotificationsService {
   }
 
   /**
-   * Get a single notification by ID
+   * Get a single notification by ID with organization scoping
    */
-  async findOne(id: string, userId: string) {
+  async findOne(id: string, userId: string, organizationId?: string) {
+    const where: any = { id, userId };
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
     const notification = await this.prisma.notification.findFirst({
-      where: { id, userId },
+      where,
     });
 
     if (!notification) {
@@ -115,11 +119,15 @@ export class NotificationsService {
   }
 
   /**
-   * Mark a notification as read
+   * Mark a notification as read with organization scoping
    */
-  async markAsRead(id: string, userId: string) {
+  async markAsRead(id: string, userId: string, organizationId?: string) {
+    const where: any = { id, userId };
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
     const notification = await this.prisma.notification.findFirst({
-      where: { id, userId },
+      where,
     });
 
     if (!notification) {
@@ -175,11 +183,15 @@ export class NotificationsService {
   }
 
   /**
-   * Delete a notification
+   * Delete a notification with organization scoping
    */
-  async delete(id: string, userId: string) {
+  async delete(id: string, userId: string, organizationId?: string) {
+    const where: any = { id, userId };
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
     const notification = await this.prisma.notification.findFirst({
-      where: { id, userId },
+      where,
     });
 
     if (!notification) {

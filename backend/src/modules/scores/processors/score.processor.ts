@@ -35,6 +35,7 @@ export class ScoreProcessor extends WorkerHost {
     );
 
     try {
+      await this.scoresService.verifyEntityOwnership(entityId, type, organizationId);
       let result;
 
       if (type === ScoreJobType.DQS) {

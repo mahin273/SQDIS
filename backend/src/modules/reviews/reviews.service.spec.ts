@@ -174,13 +174,28 @@ describe('ReviewsService', () => {
 
   describe('findById', () => {
     it('returns review details by ID', async () => {
-      prisma.review.findUnique.mockResolvedValue(mockReview);
+      prisma.review.findFirst.mockResolvedValue(mockReview);
 
       const result = await service.findById('review-1');
       expect(result).toEqual(mockReview);
-      expect(prisma.review.findUnique).toHaveBeenCalledWith(
+      expect(prisma.review.findFirst).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'review-1' },
+        }),
+      );
+    });
+
+    it('scopes query to repository organization when organizationId is provided', async () => {
+      prisma.review.findFirst.mockResolvedValue(mockReview);
+
+      const result = await service.findById('review-1', 'org-123');
+      expect(result).toEqual(mockReview);
+      expect(prisma.review.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'review-1',
+            repository: { organizationId: 'org-123' },
+          },
         }),
       );
     });

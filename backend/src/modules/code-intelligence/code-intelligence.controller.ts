@@ -10,7 +10,7 @@ import {
   DefaultValuePipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
-import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard.js';
+import { JwtAuthGuard, OrganizationGuard } from '../auth/guards/index.js';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator.js';
 import { CodeIntelligenceService } from './code-intelligence.service.js';
 import { CodeRemediationService } from './services/code-remediation.service.js';
@@ -28,7 +28,7 @@ import {
 @ApiTags('Code Intelligence')
 @ApiBearerAuth()
 @Controller('code-intelligence')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard)
 export class CodeIntelligenceController {
   constructor(
     private readonly codeIntelligenceService: CodeIntelligenceService,
@@ -45,7 +45,7 @@ export class CodeIntelligenceController {
   @ApiOperation({ summary: 'Predict module defect risk using Tree-sitter AST and NASA MDP model' })
   async predictAstDefect(
     @Body() dto: AstDefectDto,
-    @GetOrganization() organizationId?: string,
+    @GetOrganization() organizationId: string,
   ) {
     return this.codeIntelligenceService.predictAstDefect(dto, organizationId);
   }
@@ -54,7 +54,7 @@ export class CodeIntelligenceController {
   @ApiOperation({ summary: 'Predict commit/PR defect risk using Kamei JIT model' })
   async predictCommitRisk(
     @Body() dto: CommitRiskDto,
-    @GetOrganization() organizationId?: string,
+    @GetOrganization() organizationId: string,
   ) {
     return this.codeIntelligenceService.predictCommitRisk(dto, organizationId);
   }
@@ -75,7 +75,7 @@ export class CodeIntelligenceController {
   @ApiOperation({ summary: 'Calculate live Bus Factor and knowledge silos for a team' })
   async getTeamBusFactor(
     @Param('teamId') teamId: string,
-    @GetOrganization() organizationId?: string,
+    @GetOrganization() organizationId: string,
   ) {
     return this.codeIntelligenceService.calculateTeamBusFactor(teamId, organizationId);
   }
@@ -83,7 +83,7 @@ export class CodeIntelligenceController {
   @Get('history')
   @ApiOperation({ summary: 'Retrieve historical defect predictions' })
   async getDefectHistory(
-    @GetOrganization() organizationId?: string,
+    @GetOrganization() organizationId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
   ) {
     return this.codeIntelligenceService.getDefectHistory(organizationId, limit);
@@ -92,55 +92,64 @@ export class CodeIntelligenceController {
   @Get('bus-factor-snapshots')
   @ApiOperation({ summary: 'Retrieve historical team Bus Factor audit snapshots' })
   async getBusFactorSnapshots(
+    @GetOrganization() organizationId: string,
     @Query('teamId') teamId?: string,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
   ) {
-    return this.codeIntelligenceService.getBusFactorSnapshots(teamId, limit);
+    return this.codeIntelligenceService.getBusFactorSnapshots(teamId, limit, organizationId);
   }
 
   @Get('repositories/:repositoryId/stats')
   @ApiOperation({ summary: 'Retrieve repository code intelligence telemetry summary stats' })
-  async getRepositoryStats(@Param('repositoryId') repositoryId: string) {
-    return this.codeIntelligenceService.getRepositoryStats(repositoryId);
+  async getRepositoryStats(
+    @Param('repositoryId') repositoryId: string,
+    @GetOrganization() organizationId: string,
+  ) {
+    return this.codeIntelligenceService.getRepositoryStats(repositoryId, organizationId);
   }
 
   @Get('repositories/:repositoryId/hotspots')
   @ApiOperation({ summary: 'Retrieve top complexity & defect hotspots for a repository' })
   async getRepositoryHotspots(
     @Param('repositoryId') repositoryId: string,
+    @GetOrganization() organizationId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
-    return this.codeIntelligenceService.getRepositoryHotspots(repositoryId, limit);
+    return this.codeIntelligenceService.getRepositoryHotspots(repositoryId, limit, organizationId);
   }
 
   @Get('repositories/:repositoryId/commits-risk')
   @ApiOperation({ summary: 'Retrieve recent commits with JIT defect risk predictions' })
   async getRepositoryCommitsRisk(
     @Param('repositoryId') repositoryId: string,
+    @GetOrganization() organizationId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
   ) {
-    return this.codeIntelligenceService.getRepositoryCommitsRisk(repositoryId, limit);
+    return this.codeIntelligenceService.getRepositoryCommitsRisk(repositoryId, limit, organizationId);
   }
 
   @Post('repositories/:repositoryId/test-impact')
   @ApiOperation({ summary: 'Analyze test impact for a pull request changed files list' })
   async getPullRequestTestImpact(
     @Param('repositoryId') repositoryId: string,
+    @GetOrganization() organizationId: string,
     @Body('changedFiles') changedFiles: string[],
   ) {
-    return this.codeIntelligenceService.getPullRequestTestImpact(repositoryId, changedFiles);
+    return this.codeIntelligenceService.getPullRequestTestImpact(repositoryId, changedFiles, organizationId);
   }
 
   @Get('repositories/:repositoryId/treemap')
   @ApiOperation({ summary: 'Retrieve hierarchical architectural treemap and churn vs complexity hotspot matrix' })
   async getRepositoryTreemap(
     @Param('repositoryId') repositoryId: string,
+    @GetOrganization() organizationId: string,
     @Query() query: TreemapQueryDto,
   ): Promise<RepositoryTreemapResponseDto> {
     return this.codeIntelligenceService.getRepositoryTreemap(
       repositoryId,
       query.sizeBy,
       query.colorBy,
+      organizationId,
     );
   }
 }

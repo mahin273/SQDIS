@@ -28,6 +28,7 @@ describe('DebtService', () => {
         findMany: jest.fn(),
         count: jest.fn(),
         findUnique: jest.fn(),
+        findFirst: jest.fn(),
         create: jest.fn(),
         update: jest.fn(),
       },
@@ -151,5 +152,31 @@ describe('DebtService', () => {
     prisma.debtItem.findMany.mockResolvedValue([]);
 
     await expect(service.getAverageTimeToResolution('org-1')).resolves.toBeNull();
+  });
+
+  describe('tenant scoping on findById and resolve', () => {
+    it('scopes findById to organization repository', async () => {
+      prisma.debtItem.findFirst.mockResolvedValue(debtItem);
+
+      const result = await service.findById('debt-1', 'org-1');
+
+      expect(prisma.debtItem.findFirst).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: {
+            id: 'debt-1',
+            repository: { organizationId: 'org-1' },
+          },
+        }),
+      );
+      expect(result).toEqual(debtItem);
+    });
+
+    it('throws NotFoundException on resolve when item is outside organization', async () => {
+      prisma.debtItem.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.resolve('debt-1', 'user-1', undefined, 'org-foreign'),
+      ).rejects.toThrow();
+    });
   });
 });

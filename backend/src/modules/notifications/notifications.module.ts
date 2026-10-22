@@ -6,6 +6,7 @@ import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
 import { PrismaModule } from '../../prisma';
 import { AuthModule } from '../auth/auth.module';
+import { OrganizationsModule } from '../organizations/organizations.module';
 import { EmailService, EmailQueueService, EmailProcessor } from './email';
 import { EMAIL_QUEUE } from '../../config/bullmq.config';
 
@@ -18,6 +19,7 @@ import { EMAIL_QUEUE } from '../../config/bullmq.config';
     ConfigModule,
     EventEmitterModule.forRoot(),
     forwardRef(() => AuthModule),
+    forwardRef(() => OrganizationsModule),
     BullModule.registerQueue({
       name: EMAIL_QUEUE,
       defaultJobOptions: {

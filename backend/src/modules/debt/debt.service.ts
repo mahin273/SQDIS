@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
 import { DebtItem, DebtMarker, Prisma } from '@prisma/client';
 import {
@@ -83,14 +83,18 @@ export class DebtService {
   }
 
   /**
-   * Find a debt item by ID
+   * Find a debt item by ID with optional organization boundary scoping
    */
-  async findById(id: string): Promise<DebtItem | null> {
-    return this.prisma.debtItem.findUnique({
-      where: { id },
+  async findById(id: string, organizationId?: string): Promise<DebtItem | null> {
+    const where: any = { id };
+    if (organizationId) {
+      where.repository = { organizationId };
+    }
+    return this.prisma.debtItem.findFirst({
+      where,
       include: {
         author: { select: { id: true, name: true, email: true, avatarUrl: true } },
-        repository: { select: { id: true, name: true, fullName: true } },
+        repository: { select: { id: true, name: true, fullName: true, organizationId: true } },
         resolver: { select: { id: true, name: true, email: true, avatarUrl: true } },
         introducedCommit: { select: { id: true, sha: true, message: true } },
         resolvedCommit: { select: { id: true, sha: true, message: true } },
@@ -131,7 +135,19 @@ export class DebtService {
    * @param commitId - The commit ID that resolved the debt
    * @returns The updated debt item with resolution details
    */
-  async resolve(debtId: string, resolverId: string, commitId?: string): Promise<DebtItem> {
+  async resolve(
+    debtId: string,
+    resolverId: string,
+    commitId?: string,
+    organizationId?: string,
+  ): Promise<DebtItem> {
+    if (organizationId) {
+      const existing = await this.findById(debtId, organizationId);
+      if (!existing) {
+        throw new NotFoundException(`Debt item with ID ${debtId} not found in this organization`);
+      }
+    }
+
     const resolvedAt = new Date();
 
     const debtItem = await this.prisma.debtItem.update({

@@ -50,7 +50,7 @@ export class SprintAutoGenerationService {
   /**
    * Find sprints that have ended but don't have a final report
    */
-  private async findEndedSprintsWithoutReports(): Promise<
+  private async findEndedSprintsWithoutReports(organizationId?: string): Promise<
     Array<{
       id: string;
       name: string;
@@ -65,13 +65,19 @@ export class SprintAutoGenerationService {
     // 1. End date has passed
     // 2. Sprint is still active (not deleted)
     // 3. No report exists with generatedAt after the sprint end date
-    const endedSprints = await this.prisma.sprint.findMany({
-      where: {
-        isActive: true,
-        endDate: {
-          lt: now,
-        },
+    const where: any = {
+      isActive: true,
+      endDate: {
+        lt: now,
       },
+    };
+
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
+
+    const endedSprints = await this.prisma.sprint.findMany({
+      where,
       select: {
         id: true,
         name: true,
@@ -213,8 +219,8 @@ export class SprintAutoGenerationService {
   /**
    * Manually trigger sprint end check (for testing)
    */
-  async triggerSprintEndCheck(): Promise<{ processed: number }> {
-    const endedSprints = await this.findEndedSprintsWithoutReports();
+  async triggerSprintEndCheck(organizationId?: string): Promise<{ processed: number }> {
+    const endedSprints = await this.findEndedSprintsWithoutReports(organizationId);
 
     for (const sprint of endedSprints) {
       await this.processEndedSprint(sprint);

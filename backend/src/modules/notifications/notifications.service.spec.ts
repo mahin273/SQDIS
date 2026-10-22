@@ -166,4 +166,40 @@ describe('NotificationsService', () => {
       }),
     });
   });
+
+  describe('tenant scoping on detail lookups and mutations', () => {
+    it('scopes findOne to organizationId when provided', async () => {
+      prisma.notification.findFirst.mockResolvedValue(notification);
+
+      const result = await service.findOne('notification-1', 'user-1', 'org-1');
+
+      expect(prisma.notification.findFirst).toHaveBeenCalledWith({
+        where: { id: 'notification-1', userId: 'user-1', organizationId: 'org-1' },
+      });
+      expect(result).toEqual(notification);
+    });
+
+    it('scopes markAsRead to organizationId when provided', async () => {
+      prisma.notification.findFirst.mockResolvedValue(notification);
+      prisma.notification.update.mockResolvedValue({ ...notification, isRead: true });
+
+      await service.markAsRead('notification-1', 'user-1', 'org-1');
+
+      expect(prisma.notification.findFirst).toHaveBeenCalledWith({
+        where: { id: 'notification-1', userId: 'user-1', organizationId: 'org-1' },
+      });
+    });
+
+    it('scopes delete to organizationId when provided', async () => {
+      prisma.notification.findFirst.mockResolvedValue(notification);
+      prisma.notification.delete.mockResolvedValue(notification);
+
+      await service.delete('notification-1', 'user-1', 'org-1');
+
+      expect(prisma.notification.findFirst).toHaveBeenCalledWith({
+        where: { id: 'notification-1', userId: 'user-1', organizationId: 'org-1' },
+      });
+      expect(prisma.notification.delete).toHaveBeenCalledWith({ where: { id: 'notification-1' } });
+    });
+  });
 });
