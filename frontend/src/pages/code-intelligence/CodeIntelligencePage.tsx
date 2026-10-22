@@ -64,13 +64,13 @@ export const CodeIntelligencePage: React.FC = () => {
   // =========================================================================
   // MODE 1: LIVE REPOSITORY EXPLORER STATE & QUERIES
   // =========================================================================
-  // Centralized active repository state
+  // Centralized active repository state (Code intelligence requires a single repository)
   const {
     activeRepoId,
     activeRepo,
     repositories: repos,
     setActiveRepoId,
-  } = useActiveRepository();
+  } = useActiveRepository({ requireSelection: true });
 
   const [activeLiveTab, setActiveLiveTab] = useState<'hotspots' | 'commits' | 'tia' | 'bus-factor'>('hotspots');
   const [hotspotSearch, setHotspotSearch] = useState('');

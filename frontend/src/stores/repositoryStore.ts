@@ -29,21 +29,23 @@ export const useRepositoryStore = create<RepositoryState>()(
       error: null,
 
       setActiveRepositoryId: (id: string | null) => {
-        set({ activeRepositoryId: id })
+        set({ activeRepositoryId: id || null })
       },
 
       setRepositories: (repos: Repository[]) => {
         const currentActive = get().activeRepositoryId
-        const activeExists = repos.some((r) => r.id === currentActive)
-        
+        // If active ID is null or empty, preserve it as All Repositories selection.
+        // If an explicit repository ID was selected, verify it still exists in the refreshed list.
+        const nextActiveId =
+          !currentActive
+            ? null
+            : repos.some((r) => r.id === currentActive)
+              ? currentActive
+              : null
+
         set({
           repositories: repos,
-          // If active ID is missing or not in new repo list, auto-select first available repo
-          activeRepositoryId: activeExists
-            ? currentActive
-            : repos.length > 0
-              ? repos[0].id
-              : null,
+          activeRepositoryId: nextActiveId,
         })
       },
 
@@ -52,15 +54,16 @@ export const useRepositoryStore = create<RepositoryState>()(
         try {
           const repos = await repositoriesService.getConnected()
           const currentActive = get().activeRepositoryId
-          const activeExists = repos.some((r: Repository) => r.id === currentActive)
+          const nextActiveId =
+            !currentActive
+              ? null
+              : repos.some((r: Repository) => r.id === currentActive)
+                ? currentActive
+                : null
 
           set({
             repositories: repos,
-            activeRepositoryId: activeExists
-              ? currentActive
-              : repos.length > 0
-                ? repos[0].id
-                : null,
+            activeRepositoryId: nextActiveId,
             isLoading: false,
           })
           return repos
