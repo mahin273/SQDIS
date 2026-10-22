@@ -59,6 +59,24 @@ describe('ReleasesService', () => {
       expect(prisma.release.create).toHaveBeenCalled();
       expect(result.version).toBe('v1.0.0');
     });
+
+    it('should check uniqueness by repositoryId when repositoryId is provided', async () => {
+      prisma.release.findFirst.mockResolvedValue(null);
+      prisma.release.create.mockResolvedValue({ ...mockRelease, repositoryId: 'repo-456' } as any);
+
+      await service.create(
+        { version: 'v1.0.0', targetDate: '2026-12-01', repositoryId: 'repo-456' },
+        'org-123',
+      );
+
+      expect(prisma.release.findFirst).toHaveBeenCalledWith({
+        where: {
+          repositoryId: 'repo-456',
+          version: 'v1.0.0',
+          isActive: true,
+        },
+      });
+    });
   });
 
   describe('findAll', () => {
