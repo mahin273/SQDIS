@@ -1,5 +1,5 @@
 import { useState, useRef, useMemo } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueries, useQueryClient } from '@tanstack/react-query'
 import {
   ShieldCheck,
   Upload,
@@ -32,6 +32,7 @@ import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { queryKeys } from '@/lib/queryClient'
 import { formatBytes, formatDate, formatNumber } from '@/lib/utils'
 import { QueryState, formatScore } from '../pageUtils'
+import { getCoverageHealth } from './coverageHealth'
 import type { CoverageReport, CoverageModule } from '@/types'
 import { useTheme } from '@/context/ThemeContext'
 import {
@@ -76,7 +77,7 @@ export function CoveragePage() {
   const [sortBy, setSortBy] = useState<'lowest' | 'highest' | 'lines' | 'path'>('lowest')
   const [copiedSha, setCopiedSha] = useState<string | null>(null)
 
-  // Coverage Reports Query
+  // Coverage Reports Query with dynamic polling while uploads are in-flight
   const coverageQuery = useQuery({
     queryKey: queryKeys.coverage.all({
       repositoryId: selectedRepoId || undefined,
@@ -89,6 +90,29 @@ export function CoveragePage() {
         page: 1,
         limit: 50,
       }),
+    refetchInterval: (query) => {
+      const data = query.state.data
+      const list: CoverageReport[] = Array.isArray(data) ? data : data?.reports ?? []
+      const hasInFlight = list.some((r) => r.status === 'PENDING' || r.status === 'PROCESSING')
+      return hasInFlight ? 2500 : false
+    },
+  })
+
+  // In Portfolio mode (All Repositories), fetch latest completed report per repository
+  // to ensure historical repositories beyond page 1 are accurately represented
+  const repoLatestQueries = useQueries({
+    queries: repositories.map((repo) => ({
+      queryKey: ['coverage', 'latest', repo.id],
+      queryFn: async () => {
+        try {
+          return await coverageService.getLatest(repo.id)
+        } catch {
+          return null
+        }
+      },
+      staleTime: 60 * 1000,
+      enabled: !selectedRepoId && repositories.length > 0,
+    })),
   })
 
   // Coverage Trends Query
@@ -177,15 +201,56 @@ export function CoveragePage() {
   const completed = reports.filter((report) => report.status === 'COMPLETED')
   const latestReport = completed[0] ?? reports[0] ?? null
 
-  // Map of latest report per repository for organization-level grid
-  const latestReportByRepo = useMemo(() => {
+  // Map of latest COMPLETED report per repository (triangulating per-repo latest query with reports list)
+  const completedReportByRepo = useMemo(() => {
     const map = new Map<string, CoverageReport>()
+
+    // First, populate from dedicated per-repo latest queries
+    repositories.forEach((repo, idx) => {
+      const queryResult = repoLatestQueries[idx]?.data
+      if (queryResult && queryResult.status === 'COMPLETED') {
+        map.set(repo.id, queryResult)
+      }
+    })
+
+    // Second, supplement with completed reports from recent list
     for (const report of reports) {
-      if (report.repositoryId && !map.has(report.repositoryId)) {
+      if (report.repositoryId && report.status === 'COMPLETED' && !map.has(report.repositoryId)) {
         map.set(report.repositoryId, report)
       }
     }
     return map
+  }, [repositories, repoLatestQueries, reports])
+
+  // Map of active in-flight uploads (PENDING or PROCESSING) per repository
+  const activeUploadByRepo = useMemo(() => {
+    const map = new Map<string, CoverageReport>()
+    for (const report of reports) {
+      if (
+        report.repositoryId &&
+        (report.status === 'PENDING' || report.status === 'PROCESSING') &&
+        !map.has(report.repositoryId)
+      ) {
+        map.set(report.repositoryId, report)
+      }
+    }
+    return map
+  }, [reports])
+
+  // Map of latest failed uploads per repository
+  const failedUploadByRepo = useMemo(() => {
+    const map = new Map<string, CoverageReport>()
+    for (const report of reports) {
+      if (report.repositoryId && report.status === 'FAILED' && !map.has(report.repositoryId)) {
+        map.set(report.repositoryId, report)
+      }
+    }
+    return map
+  }, [reports])
+
+  // Whether any uploads are currently processing
+  const hasInFlightUploads = useMemo(() => {
+    return reports.some((r) => r.status === 'PENDING' || r.status === 'PROCESSING')
   }, [reports])
 
   const averageCoverage =
@@ -198,6 +263,15 @@ export function CoveragePage() {
   const activeLinesCovered = latestReport?.linesCovered ?? 0
   const activeLinesTotal = latestReport?.linesTotal ?? 0
   const activeDelta = latestReport?.coverageDelta ?? 0
+
+  // Grounded health state for the single repository KPI strip
+  const singleRepoHealth = useMemo(() => {
+    return getCoverageHealth(
+      latestReport?.status,
+      activeCoveragePct,
+      activeLinesTotal
+    )
+  }, [latestReport?.status, activeCoveragePct, activeLinesTotal])
 
   // Modules from latest report or viewing report
   const allModules: CoverageModule[] = useMemo(() => {
@@ -342,6 +416,15 @@ export function CoveragePage() {
                 >
                   Live CI Telemetry
                 </Badge>
+                {hasInFlightUploads && (
+                  <Badge
+                    variant="outline"
+                    className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 border-blue-300 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-950/30 flex items-center gap-1.5"
+                  >
+                    <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+                    <span>Processing Ingestions</span>
+                  </Badge>
+                )}
               </div>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400">
                 Track line execution ratios, regression health, and codebase test movement across builds.
@@ -424,9 +507,16 @@ export function CoveragePage() {
 
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2">
             {repositories.map((repo) => {
-              const repoReport = latestReportByRepo.get(repo.id)
-              const hasReport = !!repoReport && repoReport.status === 'COMPLETED'
-              const pct = repoReport?.coveragePercentage ?? 0
+              const completedReport = completedReportByRepo.get(repo.id)
+              const activeUpload = activeUploadByRepo.get(repo.id)
+              const failedUpload = failedUploadByRepo.get(repo.id)
+              const hasCompletedReport = !!completedReport
+              const pct = completedReport?.coveragePercentage ?? 0
+              const cardHealth = getCoverageHealth(
+                completedReport?.status,
+                completedReport?.coveragePercentage,
+                completedReport?.linesTotal
+              )
 
               return (
                 <Card
@@ -447,18 +537,26 @@ export function CoveragePage() {
                         </p>
                       </div>
                     </div>
-                    {hasReport ? (
+                    {hasCompletedReport ? (
                       <Badge
                         variant="outline"
-                        className={`text-xs font-semibold ${
-                          pct >= 80
-                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                            : pct >= 50
-                            ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                            : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
-                        }`}
+                        className={`text-xs font-semibold ${cardHealth.variantClass}`}
                       >
-                        {pct >= 80 ? 'Healthy' : pct >= 50 ? 'Moderate' : 'At Risk'}
+                        {cardHealth.label}
+                      </Badge>
+                    ) : activeUpload ? (
+                      <Badge
+                        variant="outline"
+                        className="text-xs font-semibold bg-blue-50 text-blue-700 dark:bg-blue-950/50 dark:text-blue-300 border border-blue-200 dark:border-blue-800"
+                      >
+                        Processing
+                      </Badge>
+                    ) : failedUpload ? (
+                      <Badge
+                        variant="outline"
+                        className="text-xs font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800"
+                      >
+                        Upload Failed
                       </Badge>
                     ) : (
                       <Badge variant="secondary" className="text-[11px] font-medium text-slate-500">
@@ -467,25 +565,45 @@ export function CoveragePage() {
                     )}
                   </CardHeader>
                   <CardContent className="space-y-4 pt-1">
-                    {hasReport ? (
+                    {/* In-flight or failed upload notices */}
+                    {activeUpload && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900/60 text-xs text-blue-700 dark:text-blue-300">
+                        <RefreshCw className="h-3 w-3 animate-spin shrink-0" />
+                        <span className="truncate">Processing build {activeUpload.commitSha ? activeUpload.commitSha.slice(0, 7) : 'latest'}...</span>
+                      </div>
+                    )}
+                    {failedUpload && !activeUpload && hasCompletedReport && (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50/80 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-xs text-amber-700 dark:text-amber-300">
+                        <AlertCircle className="h-3 w-3 shrink-0" />
+                        <span className="truncate">Recent build failed processing ({failedUpload.commitSha ? failedUpload.commitSha.slice(0, 7) : 'latest'})</span>
+                      </div>
+                    )}
+
+                    {hasCompletedReport ? (
                       <>
                         <div className="flex items-baseline justify-between">
                           <div>
                             <span className="text-3xl font-extrabold text-slate-900 dark:text-slate-100 font-mono">
-                              {formatScore(pct)}%
+                              {cardHealth.isMeasured ? `${formatScore(pct)}%` : '--%'}
                             </span>
                             <span className="text-xs text-slate-500 ml-2 font-medium">line coverage</span>
                           </div>
                           <div className="text-right text-xs text-slate-500 dark:text-slate-400 font-mono">
-                            <span>{formatNumber(repoReport.linesCovered ?? 0)}</span> /{' '}
-                            <span>{formatNumber(repoReport.linesTotal ?? 0)} lines</span>
+                            <span>{formatNumber(completedReport.linesCovered ?? 0)}</span> /{' '}
+                            <span>{formatNumber(completedReport.linesTotal ?? 0)} lines</span>
                           </div>
                         </div>
 
                         <div className="h-2 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all duration-500 ${
-                              pct >= 80 ? 'bg-emerald-500' : pct >= 50 ? 'bg-amber-500' : 'bg-rose-500'
+                              !cardHealth.isMeasured
+                                ? 'bg-slate-300 dark:bg-slate-700'
+                                : pct >= 80
+                                ? 'bg-emerald-500'
+                                : pct >= 50
+                                ? 'bg-amber-500'
+                                : 'bg-rose-500'
                             }`}
                             style={{ width: `${Math.min(100, Math.max(1, pct))}%` }}
                           />
@@ -493,8 +611,8 @@ export function CoveragePage() {
 
                         <div className="flex items-center justify-between pt-1 text-xs text-slate-500 dark:text-slate-400">
                           <span className="truncate max-w-[200px]">
-                            Build {repoReport.commitSha ? repoReport.commitSha.slice(0, 7) : 'latest'} &bull;{' '}
-                            {repoReport.createdAt ? formatDate(repoReport.createdAt) : 'Recent'}
+                            Build {completedReport.commitSha ? completedReport.commitSha.slice(0, 7) : 'latest'} &bull;{' '}
+                            {completedReport.createdAt ? formatDate(completedReport.createdAt) : 'Recent'}
                           </span>
                           <Button
                             variant="outline"
@@ -511,20 +629,23 @@ export function CoveragePage() {
                       <div className="py-3.5 px-3.5 rounded-xl bg-slate-50 dark:bg-slate-800/40 border border-dashed border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                         <div className="space-y-0.5">
                           <p className="text-xs font-semibold text-slate-700 dark:text-slate-300">
-                            No coverage ingested yet
+                            {activeUpload ? 'Processing initial coverage report' : 'No coverage ingested yet'}
                           </p>
                           <p className="text-[11px] text-slate-400">
-                            Upload LCOV, XML, or JSON reports to track test health
+                            {activeUpload
+                              ? 'Report parsing and AST indexing underway'
+                              : 'Upload LCOV, XML, or JSON reports to track test health'}
                           </p>
                         </div>
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => handleOpenUpload(repo.id)}
-                          className="h-7 text-xs gap-1 shrink-0 rounded-lg text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                          disabled={!!activeUpload}
+                          className="h-7 text-xs gap-1 shrink-0 rounded-lg text-indigo-600 dark:text-indigo-400 border-indigo-200 dark:border-indigo-800 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 disabled:opacity-50"
                         >
                           <Upload className="h-3 w-3" />
-                          <span>Upload Report</span>
+                          <span>{activeUpload ? 'Uploading...' : 'Upload Report'}</span>
                         </Button>
                       </div>
                     )}
@@ -593,22 +714,20 @@ export function CoveragePage() {
               </p>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-bold text-slate-900 dark:text-slate-100">
-                  {formatScore(activeCoveragePct)}%
+                  {singleRepoHealth.isMeasured ? `${formatScore(activeCoveragePct)}%` : '--%'}
                 </span>
                 <span
-                  className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                    activeCoveragePct >= 80
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                      : activeCoveragePct >= 50
-                      ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/50 dark:text-amber-300 border border-amber-200 dark:border-amber-800'
-                      : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300 border border-rose-200 dark:border-rose-800'
-                  }`}
+                  className={`inline-flex items-center text-[11px] font-semibold px-2 py-0.5 rounded-full ${singleRepoHealth.variantClass}`}
                 >
-                  {activeCoveragePct >= 80 ? 'Healthy' : activeCoveragePct >= 50 ? 'Moderate' : 'At Risk'}
+                  {singleRepoHealth.label}
                 </span>
               </div>
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                Target benchmark: 80.0%
+                {singleRepoHealth.isMeasured
+                  ? 'Target benchmark: 80.0%'
+                  : singleRepoHealth.label === 'Processing'
+                    ? 'Coverage report is being processed'
+                    : 'No instrumentable lines detected in report'}
               </p>
             </div>
             <div className="rounded-xl bg-emerald-50 dark:bg-emerald-950/60 p-3 text-emerald-600 dark:text-emerald-400 border border-emerald-100 dark:border-emerald-900/40">
@@ -635,7 +754,9 @@ export function CoveragePage() {
               <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                 {activeLinesTotal > 0
                   ? `${formatScore((activeLinesCovered / activeLinesTotal) * 100)}% execution rate`
-                  : 'Total lines tracked'}
+                  : singleRepoHealth.label === 'Processing'
+                    ? 'Processing lines...'
+                    : 'No lines tracked'}
               </p>
             </div>
             <div className="rounded-xl bg-blue-50 dark:bg-blue-950/60 p-3 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-900/40">
