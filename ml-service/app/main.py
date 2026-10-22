@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Response, APIRouter
+from fastapi import FastAPI, Response, APIRouter, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 from app.config import get_settings
+from app.auth import verify_service_api_key
 from app.routers import health, classification, anomaly, sentiment, sqs, dqs, code_quality, telemetry, defect, test_impact, knowledge_silo
 
 # Load settings once at startup
@@ -11,7 +12,7 @@ settings = get_settings()
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="SQDIS ML Service — Developer Quality Score & Project Health API",
+    description="SQDIS ML Service - Developer Quality Score & Project Health API",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -26,20 +27,25 @@ app.add_middleware(
 )
 
 # Register all routers
+# Public health router (for container healthcheck and uptime monitoring)
 app.include_router(health.router)
-app.include_router(classification.router)
-app.include_router(anomaly.router)
-app.include_router(sentiment.router)
-app.include_router(sqs.router)
-app.include_router(dqs.router)
-app.include_router(code_quality.router)
-app.include_router(telemetry.router)
-app.include_router(defect.router)
-app.include_router(test_impact.router)
-app.include_router(knowledge_silo.router)
+
+# Authenticated routers (require valid X-Service-Key or Authorization Bearer)
+service_auth_deps = [Depends(verify_service_api_key)]
+
+app.include_router(classification.router, dependencies=service_auth_deps)
+app.include_router(anomaly.router, dependencies=service_auth_deps)
+app.include_router(sentiment.router, dependencies=service_auth_deps)
+app.include_router(sqs.router, dependencies=service_auth_deps)
+app.include_router(dqs.router, dependencies=service_auth_deps)
+app.include_router(code_quality.router, dependencies=service_auth_deps)
+app.include_router(telemetry.router, dependencies=service_auth_deps)
+app.include_router(defect.router, dependencies=service_auth_deps)
+app.include_router(test_impact.router, dependencies=service_auth_deps)
+app.include_router(knowledge_silo.router, dependencies=service_auth_deps)
 
 # V1 Route Aliases for backwards compatibility and benchmark testing
-v1_router = APIRouter(prefix="/api/v1", tags=["API v1 Compatibility"])
+v1_router = APIRouter(prefix="/api/v1", tags=["API v1 Compatibility"], dependencies=service_auth_deps)
 v1_router.add_api_route("/dqs/predict", dqs.predict_dqs, methods=["POST"])
 v1_router.add_api_route("/dqs/explain", dqs.explain_dqs, methods=["POST"])
 v1_router.add_api_route("/dqs/model-info", dqs.get_dqs_model_info, methods=["GET"])

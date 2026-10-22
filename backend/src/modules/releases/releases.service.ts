@@ -41,6 +41,7 @@ import PDFDocument from 'pdfkit';
 export class ReleasesService {
   private readonly logger = new Logger(ReleasesService.name);
   private readonly mlServiceUrl: string;
+  private readonly mlServiceSecret: string;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -50,6 +51,9 @@ export class ReleasesService {
     this.mlServiceUrl =
       this.configService?.get<string>('ML_SERVICE_URL', 'http://ml-service:8000') ||
       'http://ml-service:8000';
+    this.mlServiceSecret =
+      this.configService?.get<string>('ML_SERVICE_SECRET', 'sqdis-ml-internal-secret-token') ||
+      'sqdis-ml-internal-secret-token';
   }
 
   /**
@@ -838,7 +842,10 @@ export class ReleasesService {
     try {
       const resp = await fetch(`${this.mlServiceUrl}/api/ml/telemetry/canary-analysis`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Service-Key': this.mlServiceSecret,
+        },
         body: JSON.stringify(payload),
       });
 

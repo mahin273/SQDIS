@@ -1,11 +1,13 @@
-/**eslint-disable */
-import { Module, OnModuleInit } from '@nestjs/common';
+import { Module, OnModuleInit, forwardRef } from '@nestjs/common';
 import { BullModule, InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { createBullBoard } from '@bull-board/api';
 import { BullMQAdapter } from '@bull-board/api/bullMQAdapter';
 import { ExpressAdapter } from '@bull-board/express';
 import { HttpAdapterHost } from '@nestjs/core';
+import { ConfigModule } from '@nestjs/config';
+import { AuthModule } from '../auth/auth.module';
+import { BullBoardAuthMiddleware } from './bull-board-auth.middleware';
 import {
   SCORE_QUEUE,
   COMMIT_QUEUE,
@@ -23,11 +25,16 @@ import {
       { name: REVIEW_COMMENT_QUEUE },
       { name: REPORT_QUEUE },
     ),
+    ConfigModule,
+    forwardRef(() => AuthModule),
   ],
+  providers: [BullBoardAuthMiddleware],
+  exports: [BullBoardAuthMiddleware],
 })
 export class BullBoardConfigModule implements OnModuleInit {
   constructor(
     private readonly httpAdapterHost: HttpAdapterHost,
+    private readonly authMiddleware: BullBoardAuthMiddleware,
     @InjectQueue(SCORE_QUEUE) private readonly scoreQueue: Queue,
     @InjectQueue(COMMIT_QUEUE) private readonly commitQueue: Queue,
     @InjectQueue(REVIEW_QUEUE) private readonly reviewQueue: Queue,
@@ -50,7 +57,16 @@ export class BullBoardConfigModule implements OnModuleInit {
       serverAdapter,
     });
 
-    const app = this.httpAdapterHost.httpAdapter.getInstance();
-    app.use('/api/queues', serverAdapter.getRouter());
+    const httpAdapter = this.httpAdapterHost?.httpAdapter;
+    if (httpAdapter) {
+      const app = httpAdapter.getInstance();
+      if (app && typeof app.use === 'function') {
+        app.use(
+          '/api/queues',
+          (req: any, res: any, next: any) => this.authMiddleware.use(req, res, next),
+          serverAdapter.getRouter(),
+        );
+      }
+    }
   }
 }

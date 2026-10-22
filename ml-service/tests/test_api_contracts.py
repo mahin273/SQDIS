@@ -5,13 +5,14 @@ import pytest
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.config import get_settings
 from app.schemas.code_quality import CodeAnalysisResult, ComplexityResult
 from app.schemas.dqs import DQSExplainResult, DQSPredictionResult, SHAPValue
 from app.schemas.sentiment import SentimentAnalysisResult, SentimentScore
 from app.schemas.sqs import SQSPredictionResult
 
 
-client = TestClient(app)
+client = TestClient(app, headers={"X-Service-Key": get_settings().ml_service_secret})
 
 
 @pytest.fixture(autouse=True)

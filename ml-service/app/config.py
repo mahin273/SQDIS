@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     # CORS Settings
     cors_origins: str = "http://localhost:3000,http://localhost:5173"
 
+    # Service-to-Service Security
+    ml_service_secret: str = "sqdis-ml-internal-secret-token"
+
     # Logging
     log_level: str = "INFO"
 

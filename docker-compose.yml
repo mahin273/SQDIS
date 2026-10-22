@@ -44,9 +44,10 @@ services:
     container_name: sqdis-ml-service
     restart: always
     ports:
-      - "8000:8000"
+      - "127.0.0.1:8000:8000"
     environment:
       - CORS_ORIGINS=http://localhost:3000,http://localhost:5173,http://localhost:80
+      - ML_SERVICE_SECRET=${ML_SERVICE_SECRET:-sqdis-ml-internal-secret-token}
     env_file:
       - .env
     healthcheck:
@@ -72,6 +73,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - ML_SERVICE_URL=http://ml-service:8000
+      - ML_SERVICE_SECRET=${ML_SERVICE_SECRET:-sqdis-ml-internal-secret-token}
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:3000/api > /dev/null || exit 1"]
       interval: 10s
