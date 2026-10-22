@@ -35,7 +35,15 @@ describe('EncryptionService', () => {
     delete process.env.JWT_SECRET;
     service = new EncryptionService();
 
-    expect(() => service.encrypt('test')).toThrow('ENCRYPTION_KEY or JWT_SECRET must be set');
+    expect(() => service.encrypt('test')).toThrow('ENCRYPTION_KEY must be configured as a dedicated environment variable');
+  });
+
+  it('throws when only JWT_SECRET is configured without ENCRYPTION_KEY', () => {
+    delete process.env.ENCRYPTION_KEY;
+    process.env.JWT_SECRET = 'super-secret-jwt-key';
+    service = new EncryptionService();
+
+    expect(() => service.encrypt('test')).toThrow('ENCRYPTION_KEY must be configured as a dedicated environment variable');
   });
 
   it('generates a base64-encoded 256-bit key', () => {
