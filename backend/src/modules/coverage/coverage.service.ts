@@ -62,7 +62,10 @@ export class CoverageService {
     this.logger.debug(`Detected coverage format: ${format}`);
 
     // Compute SHA-256 hash of file
-    const fileContent = readFileSync(file.path);
+    const fileContent =
+      file.path && existsSync(file.path)
+        ? readFileSync(file.path)
+        : file.buffer || Buffer.from('');
     const fileHash = createHash('sha256').update(fileContent).digest('hex');
 
     // Check for duplicate upload
@@ -75,7 +78,7 @@ export class CoverageService {
 
     if (existingReport) {
       // Clean up uploaded file
-      if (existsSync(file.path)) {
+      if (file.path && existsSync(file.path)) {
         unlinkSync(file.path);
       }
       throw new BadRequestException('Duplicate coverage report already exists');
@@ -516,7 +519,12 @@ export class CoverageService {
    */
   private detectFormat(file: Express.Multer.File): CoverageFormat {
     const filename = file.originalname.toLowerCase();
-    const content = readFileSync(file.path, 'utf-8').slice(0, 2000); // Read first 2000 chars
+    const content =
+      file.path && existsSync(file.path)
+        ? readFileSync(file.path, 'utf-8').slice(0, 2000)
+        : file.buffer
+          ? file.buffer.toString('utf-8').slice(0, 2000)
+          : '';
 
     // Check for JaCoCo XML format (check before Cobertura as both are XML)
     if (content.includes('<report') && content.includes('<counter type=')) {
