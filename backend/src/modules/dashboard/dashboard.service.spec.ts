@@ -236,6 +236,31 @@ describe('DashboardService', () => {
       expect(topRepos[0].sqs).toBe(88);
       expect(topRepos[0].coverage).toBe(82);
     });
+
+    it('isolates in-progress/failed reports and preserves completed baseline coverage', async () => {
+      prisma.repository.findMany.mockResolvedValue([
+        {
+          id: 'repo-1',
+          name: 'auth-service',
+          fullName: 'acme/auth-service',
+          _count: { commits: 150 },
+        },
+      ]);
+      prisma.sQSScore.findFirst.mockResolvedValue({ score: 90 });
+      prisma.coverageReport.findFirst
+        .mockResolvedValueOnce({ coveragePercentage: 85 })
+        .mockResolvedValueOnce({ status: 'PENDING', createdAt: new Date() });
+
+      const topRepos = await service.getTopRepositories('org-1', 5);
+
+      expect(topRepos[0].coverage).toBe(85);
+      expect(topRepos[0].latestUploadStatus).toBe('PENDING');
+      expect(prisma.coverageReport.findFirst).toHaveBeenCalledWith({
+        where: { repositoryId: 'repo-1', status: 'COMPLETED' },
+        orderBy: { createdAt: 'desc' },
+        select: { coveragePercentage: true },
+      });
+    });
   });
 
   describe('getRecentActivity', () => {

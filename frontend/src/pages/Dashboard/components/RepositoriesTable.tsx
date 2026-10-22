@@ -55,7 +55,6 @@ export default function RepositoriesTable() {
             <tbody>
               {repositories.map((r) => {
                 const tone = scoreTone(r.sqs || 0)
-                const cov = r.coverage ?? 0
                 return (
                   <tr
                     key={r.id}
@@ -77,7 +76,26 @@ export default function RepositoriesTable() {
                       </div>
                     </td>
                     <td className="py-3 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
-                      {cov > 0 ? `${cov.toFixed(1)}%` : 'N/A'}
+                      <div className="flex items-center justify-end gap-1.5">
+                        <span>
+                          {r.coverage !== null && r.coverage !== undefined && r.coverage > 0
+                            ? `${r.coverage.toFixed(1)}%`
+                            : 'N/A'}
+                        </span>
+                        {r.latestUploadStatus && r.latestUploadStatus !== 'COMPLETED' && (
+                          <span
+                            className={`text-[10px] px-1.5 py-0.5 rounded font-normal ${
+                              r.latestUploadStatus === 'PROCESSING' || r.latestUploadStatus === 'PENDING'
+                                ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300'
+                                : 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-300'
+                            }`}
+                          >
+                            {r.latestUploadStatus === 'PROCESSING' || r.latestUploadStatus === 'PENDING'
+                              ? 'Syncing'
+                              : 'Failed'}
+                          </span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3 text-right text-sm font-medium text-slate-700 dark:text-slate-300">
                       {formatNumber(r.commitCount ?? r.commits ?? 0)}

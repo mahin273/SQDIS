@@ -326,18 +326,32 @@ export class DashboardService {
           }
         }
 
-        const latestCoverage = await this.prisma.coverageReport.findFirst({
-          where: { repositoryId: repo.id },
-          orderBy: { createdAt: 'desc' },
-          select: { coveragePercentage: true },
-        });
+        const [latestCompletedCoverage, newestReport] = await Promise.all([
+          this.prisma.coverageReport.findFirst({
+            where: { repositoryId: repo.id, status: 'COMPLETED' },
+            orderBy: { createdAt: 'desc' },
+            select: { coveragePercentage: true },
+          }),
+          this.prisma.coverageReport.findFirst({
+            where: { repositoryId: repo.id },
+            orderBy: { createdAt: 'desc' },
+            select: { status: true, createdAt: true },
+          }),
+        ]);
+
+        const hasCompletedCoverage =
+          latestCompletedCoverage?.coveragePercentage !== null &&
+          latestCompletedCoverage?.coveragePercentage !== undefined;
 
         return {
           id: repo.id,
           name: repo.name,
           fullName: repo.fullName,
           sqs: Number(sqs.toFixed(1)),
-          coverage: Number((latestCoverage?.coveragePercentage || 0).toFixed(1)),
+          coverage: hasCompletedCoverage
+            ? Number(latestCompletedCoverage.coveragePercentage.toFixed(1))
+            : null,
+          latestUploadStatus: newestReport?.status || null,
           commits: repo._count.commits,
           commitCount: repo._count.commits,
         };
