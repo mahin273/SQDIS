@@ -1,6 +1,6 @@
 import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { Dropdown, DropdownItem, DropdownDivider } from '@/components/ui/dropdown'
-import { GitBranch, Check, ChevronDown, Plus, ExternalLink } from 'lucide-react'
+import { GitBranch, Check, ChevronDown, Plus, ExternalLink, Layers } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { Badge } from '@/components/ui/badge'
 
@@ -33,7 +33,7 @@ export function RepositorySelector() {
     )
   }
 
-  const displayName = activeRepo?.fullName || activeRepo?.name || 'Select Repository'
+  const displayName = activeRepo?.fullName || activeRepo?.name || 'All Repositories'
 
   return (
     <Dropdown
@@ -59,6 +59,37 @@ export function RepositorySelector() {
       </div>
 
       <div className="max-h-64 overflow-y-auto">
+        <DropdownItem
+          onClick={() => setActiveRepoId('')}
+          className={!activeRepoId ? 'bg-emerald-50/70 dark:bg-emerald-950/30 font-medium' : ''}
+        >
+          <div className="flex items-center justify-between w-full min-w-0 gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Layers
+                className={`h-3.5 w-3.5 shrink-0 ${
+                  !activeRepoId
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-slate-400'
+                }`}
+              />
+              <div className="min-w-0">
+                <p className="truncate text-xs text-slate-900 dark:text-slate-100 font-medium">
+                  All Repositories
+                </p>
+                <p className="text-[10px] text-slate-400 truncate">
+                  Portfolio overview across all projects
+                </p>
+              </div>
+            </div>
+
+            {!activeRepoId && (
+              <Check className="h-4 w-4 text-emerald-600 dark:text-emerald-400 shrink-0 ml-1" />
+            )}
+          </div>
+        </DropdownItem>
+
+        <DropdownDivider />
+
         {repositories.map((repo) => {
           const isSelected = repo.id === activeRepoId
           return (
