@@ -35,7 +35,7 @@ import {
   CoverageTrendFiltersDto,
   CoverageTrendResponseDto,
 } from './dto';
-import { MAX_COVERAGE_FILE_SIZE } from './constants';
+import { MAX_COVERAGE_FILE_SIZE, COVERAGE_UPLOAD_CONFIG } from './constants';
 
 /**
  * Controller for coverage report endpoints
@@ -75,7 +75,7 @@ export class CoverageController {
 - Coverage delta calculation compared to previous report
 - Branch-aware delta calculation
 
-**File Size Limit:** 50MB
+**File Size Limit:** 100MB
 
 **Authentication:** Requires valid JWT token. User must belong to the organization that owns the repository.`,
   })
@@ -184,15 +184,15 @@ export class CoverageController {
   })
   @ApiResponse({
     status: 413,
-    description: 'Payload too large - File exceeds 50MB limit',
+    description: 'Payload too large - File exceeds 100MB limit',
     schema: {
       example: {
         statusCode: 413,
-        message: 'File size exceeds maximum allowed size of 52428800 bytes',
+        message: 'File size exceeds maximum allowed size of 104857600 bytes',
       },
     },
   })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(FileInterceptor('file', COVERAGE_UPLOAD_CONFIG))
   async uploadCoverage(
     @UploadedFile(
       new ParseFilePipe({
