@@ -211,4 +211,53 @@ describe('CoverageService', () => {
       ],
     });
   });
+
+  it('returns the latest N completed reports in chronological order for coverage trends', async () => {
+    const reportNewest = {
+      id: 'report-3',
+      coveragePercentage: 92,
+      coverageDelta: 2,
+      commitSha: 'sha-3',
+      branch: 'main',
+      createdAt: new Date('2026-03-01T00:00:00.000Z'),
+    };
+    const reportMiddle = {
+      id: 'report-2',
+      coveragePercentage: 90,
+      coverageDelta: 5,
+      commitSha: 'sha-2',
+      branch: 'main',
+      createdAt: new Date('2026-02-01T00:00:00.000Z'),
+    };
+    const reportOlder = {
+      id: 'report-1',
+      coveragePercentage: 85,
+      coverageDelta: null,
+      commitSha: 'sha-1',
+      branch: 'main',
+      createdAt: new Date('2026-01-01T00:00:00.000Z'),
+    };
+
+    prisma.coverageReport.findMany.mockResolvedValue([reportNewest, reportMiddle, reportOlder]);
+
+    const result = await service.getCoverageTrends('repo-1', 'org-1', { limit: 3 });
+
+    expect(prisma.coverageReport.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          repositoryId: 'repo-1',
+          status: CoverageStatus.COMPLETED,
+        }),
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+      }),
+    );
+
+    expect(result.reports).toHaveLength(3);
+    expect(result.reports[0].id).toBe('report-1');
+    expect(result.reports[1].id).toBe('report-2');
+    expect(result.reports[2].id).toBe('report-3');
+    expect(result.statistics.min).toBe(85);
+    expect(result.statistics.max).toBe(92);
+  });
 });

@@ -225,7 +225,8 @@ export interface TopRepository {
   name: string;
   fullName?: string;
   sqs: number;
-  coverage?: number;
+  coverage?: number | null;
+  latestUploadStatus?: 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED' | null;
   commitCount: number;
   commits?: number;
   lastActivity?: string;

@@ -436,8 +436,8 @@ export class CoverageService {
       }
     }
 
-    // Query reports ordered by createdAt ascending
-    const reports = await this.prisma.coverageReport.findMany({
+    // Query latest reports ordered by createdAt descending to capture newest window
+    const reportsDesc = await this.prisma.coverageReport.findMany({
       where,
       select: {
         id: true,
@@ -447,9 +447,12 @@ export class CoverageService {
         branch: true,
         createdAt: true,
       },
-      orderBy: { createdAt: 'asc' },
+      orderBy: { createdAt: 'desc' },
       take: filters.limit || 100,
     });
+
+    // Reverse to chronological order (oldest to newest within latest window) for chart display
+    const reports = reportsDesc.reverse();
 
     // Calculate trend statistics
     const coverageValues = reports
