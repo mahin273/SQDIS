@@ -158,11 +158,19 @@ export class AuthService {
       throw new UnauthorizedException('Refresh token has been revoked');
     }
 
-    // Revoke the old refresh token (rotation)
-    await this.prisma.refreshToken.update({
-      where: { id: refreshToken.id },
+    // Atomically claim and revoke the old refresh token (rotation)
+    const claimResult = await this.prisma.refreshToken.updateMany({
+      where: {
+        id: refreshToken.id,
+        revokedAt: null,
+        expiresAt: { gte: new Date() },
+      },
       data: { revokedAt: new Date() },
     });
+
+    if (claimResult.count !== 1) {
+      throw new UnauthorizedException('Refresh token has already been rotated or expired');
+    }
 
     // Generate new tokens
     return this.generateAuthResponse(refreshToken.user);
@@ -720,24 +728,34 @@ export class AuthService {
       // Hash the new password
       const passwordHash = await hashPassword(newPassword);
 
-      // Update password, mark token as used, and revoke refresh tokens atomically
-      await this.prisma.$transaction([
-        this.prisma.user.update({
+      // Update password, mark token as used, and revoke refresh tokens atomically via conditional claim
+      await this.prisma.$transaction(async (tx) => {
+        const claimResult = await tx.passwordResetToken.updateMany({
+          where: {
+            id: resetToken.id,
+            usedAt: null,
+            expiresAt: { gte: new Date() },
+          },
+          data: { usedAt: new Date() },
+        });
+
+        if (claimResult.count !== 1) {
+          throw new BadRequestException('This reset token has already been used or has expired');
+        }
+
+        await tx.user.update({
           where: { id: resetToken.userId },
           data: { passwordHash },
-        }),
-        this.prisma.passwordResetToken.update({
-          where: { id: resetToken.id },
-          data: { usedAt: new Date() },
-        }),
-        this.prisma.refreshToken.updateMany({
+        });
+
+        await tx.refreshToken.updateMany({
           where: {
             userId: resetToken.userId,
             revokedAt: null,
           },
           data: { revokedAt: new Date() },
-        }),
-      ]);
+        });
+      });
 
       // Log successful password reset
 

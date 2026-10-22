@@ -77,7 +77,12 @@ describe('AuthService', () => {
         findUnique: jest.fn(),
         create: jest.fn(),
       },
-      $transaction: jest.fn((operations) => Promise.all(operations)),
+      $transaction: jest.fn(async (input) => {
+        if (typeof input === 'function') {
+          return input(prisma);
+        }
+        return Promise.all(input);
+      }),
     };
     jwtService = { sign: jest.fn(() => 'access-token') };
     configService = { get: jest.fn(() => 'https://app.example.com') };
@@ -238,6 +243,8 @@ describe('AuthService', () => {
       user,
     });
 
+    prisma.refreshToken.updateMany.mockResolvedValue({ count: 1 });
+
     await expect(service.refreshToken('old-refresh')).resolves.toMatchObject({
       accessToken: 'access-token',
       user: { id: user.id },
@@ -248,8 +255,12 @@ describe('AuthService', () => {
       },
       include: { user: true },
     });
-    expect(prisma.refreshToken.update).toHaveBeenCalledWith({
-      where: { id: 'refresh-1' },
+    expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'refresh-1',
+        revokedAt: null,
+        expiresAt: { gte: expect.any(Date) },
+      },
       data: { revokedAt: expect.any(Date) },
     });
 
@@ -268,6 +279,17 @@ describe('AuthService', () => {
       user,
     });
     await expect(service.refreshToken('revoked')).rejects.toBeInstanceOf(UnauthorizedException);
+
+    prisma.refreshToken.findUnique.mockResolvedValueOnce({
+      id: 'refresh-4',
+      expiresAt: new Date(Date.now() + 60_000),
+      revokedAt: null,
+      user,
+    });
+    prisma.refreshToken.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(service.refreshToken('concurrent-race')).rejects.toThrow(
+      'Refresh token has already been rotated or expired',
+    );
   });
 
   it('switches organization only when the user belongs to the requested organization', async () => {
@@ -375,7 +397,7 @@ describe('AuthService', () => {
       user,
     });
     prisma.user.update.mockResolvedValue(user);
-    prisma.passwordResetToken.update.mockResolvedValue({});
+    prisma.passwordResetToken.updateMany.mockResolvedValue({ count: 1 });
     prisma.refreshToken.updateMany.mockResolvedValue({ count: 2 });
 
     await expect(service.resetPassword('valid-token', 'new-password', '127.0.0.1')).resolves.toEqual({
@@ -387,8 +409,12 @@ describe('AuthService', () => {
       where: { id: user.id },
       data: { passwordHash: 'hashed-password' },
     });
-    expect(prisma.passwordResetToken.update).toHaveBeenCalledWith({
-      where: { id: 'reset-1' },
+    expect(prisma.passwordResetToken.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'reset-1',
+        usedAt: null,
+        expiresAt: { gte: expect.any(Date) },
+      },
       data: { usedAt: expect.any(Date) },
     });
     expect(prisma.refreshToken.updateMany).toHaveBeenCalledWith({
@@ -398,11 +424,19 @@ describe('AuthService', () => {
       },
       data: { revokedAt: expect.any(Date) },
     });
-    expect(prisma.$transaction).toHaveBeenCalledWith([
-      expect.any(Promise),
-      expect.any(Promise),
-      expect.any(Promise),
-    ]);
+    expect(prisma.$transaction).toHaveBeenCalledWith(expect.any(Function));
+
+    prisma.passwordResetToken.findUnique.mockResolvedValueOnce({
+      id: 'reset-race',
+      userId: user.id,
+      usedAt: null,
+      expiresAt: new Date(Date.now() + 60_000),
+      user,
+    });
+    prisma.passwordResetToken.updateMany.mockResolvedValueOnce({ count: 0 });
+    await expect(service.resetPassword('concurrent-race-token', 'new-password')).rejects.toThrow(
+      'This reset token has already been used or has expired',
+    );
     expect(auditLoggerService.logPasswordResetSuccess).toHaveBeenCalledWith(user.id, '127.0.0.1');
   });
 

@@ -17,9 +17,11 @@ export class EncryptionService {
    * In production, this should always come from environment variables
    */
   private getEncryptionKey(): Buffer {
-    const secret = process.env.ENCRYPTION_KEY || process.env.JWT_SECRET;
+    const secret = process.env.ENCRYPTION_KEY;
     if (!secret) {
-      throw new Error('ENCRYPTION_KEY or JWT_SECRET must be set');
+      throw new Error(
+        'ENCRYPTION_KEY must be configured as a dedicated environment variable for encrypting credentials at rest. Reusing JWT_SECRET is disabled for security.',
+      );
     }
     // Use scrypt to derive a proper 256-bit key from the secret
     const salt = 'sqdis-encryption-salt'; // Fixed salt for deterministic key derivation
