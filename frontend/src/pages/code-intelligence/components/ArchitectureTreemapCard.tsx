@@ -109,7 +109,7 @@ function executeWorkflow(payload: any, options?: any) {
                 </Badge>
                 {data && (
                   <Badge variant="outline" className="text-[11px] font-normal border-slate-200 dark:border-slate-700 bg-slate-100/70 dark:bg-slate-800/70 text-slate-600 dark:text-slate-300">
-                    Visualizing Top {data.visualizedFiles || data.totalFiles} Architectural Files
+                    {data.isPartialData ? 'Partial Analysis' : `Visualizing Top ${data.visualizedFiles || data.totalFiles} Architectural Files`}
                   </Badge>
                 )}
               </div>
@@ -248,7 +248,7 @@ function executeWorkflow(payload: any, options?: any) {
             <RefreshCw className="w-8 h-8 animate-spin text-blue-500 mb-2" />
             <span>Synthesizing repository architectural treemap...</span>
           </div>
-        ) : !data ? (
+        ) : !data || data.totalFiles === 0 ? (
           <div className="w-full h-[460px] flex flex-col items-center justify-center text-slate-400 text-xs">
             <FileCode className="w-8 h-8 text-slate-500 mb-2" />
             <span>No architectural telemetry available for this repository.</span>

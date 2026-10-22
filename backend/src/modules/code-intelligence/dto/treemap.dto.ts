@@ -122,4 +122,7 @@ export class RepositoryTreemapResponseDto {
 
   @ApiProperty({ type: () => [QuadrantFileInfo] })
   quadrantFiles: QuadrantFileInfo[];
+
+  @ApiPropertyOptional({ example: false })
+  isPartialData?: boolean;
 }

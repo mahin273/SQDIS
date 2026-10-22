@@ -133,19 +133,124 @@ describe('CodeIntelligenceService', () => {
       expect(result.quadrantCounts).toHaveProperty('healthy');
     });
 
-    it('should fallback to synthetic realistic architecture tree when repository has no files', async () => {
+    it('should return clean empty state without synthetic mock files when repository has no files', async () => {
       (prisma.fileASTMetric.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.debtItem.findMany as jest.Mock).mockResolvedValue([]);
       (prisma.defectPrediction.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.fileASTMetric.aggregate as jest.Mock).mockResolvedValue({
+        _count: { id: 0 },
+        _avg: { cyclomaticComplexity: 0 },
+      });
+      (prisma.fileASTMetric.count as jest.Mock).mockResolvedValue(0);
+      (prisma.commit.aggregate as jest.Mock).mockResolvedValue({
+        _sum: { linesAdded: 0, linesDeleted: 0 },
+      });
 
       const result = await service.getRepositoryTreemap('empty-repo');
 
       expect(result).toBeDefined();
       expect(result.repositoryId).toBe('empty-repo');
-      expect(result.totalFiles).toBeGreaterThanOrEqual(10);
+      expect(result.totalFiles).toBe(0);
+      expect(result.totalLoc).toBe(0);
+      expect(result.averageComplexity).toBe(0);
       expect(result.root.type).toBe('directory');
-      expect(result.root.children!.length).toBeGreaterThan(0);
-      expect(result.quadrantFiles.length).toBeGreaterThanOrEqual(10);
+      expect(result.root.children).toEqual([]);
+      expect(result.quadrantFiles).toEqual([]);
+      expect(result.quadrantCounts.dangerZone).toBe(0);
+      expect(result.isPartialData).toBe(false);
+    });
+
+    it('should preserve authentic partial analysis state when repository has fewer than 3 files without injecting fake files', async () => {
+      const mockMetrics = [
+        {
+          id: 'm-1',
+          repositoryId: 'repo-sparse',
+          filePath: 'src/main.ts',
+          cyclomaticComplexity: 4,
+          cognitiveComplexity: 5,
+          maintainabilityIndex: 88,
+          updatedAt: new Date(),
+        },
+      ];
+
+      (prisma.fileASTMetric.findMany as jest.Mock).mockResolvedValue(mockMetrics);
+      (prisma.debtItem.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.defectPrediction.findMany as jest.Mock).mockResolvedValue([]);
+      (prisma.fileASTMetric.aggregate as jest.Mock).mockResolvedValue({
+        _count: { id: 1 },
+        _avg: { cyclomaticComplexity: 4.0 },
+      });
+      (prisma.fileASTMetric.count as jest.Mock).mockResolvedValue(0);
+      (prisma.commit.aggregate as jest.Mock).mockResolvedValue({
+        _sum: { linesAdded: 50, linesDeleted: 5 },
+      });
+      (prisma.fileChange.findMany as jest.Mock).mockResolvedValue([]);
+
+      const result = await service.getRepositoryTreemap('repo-sparse');
+
+      expect(result.totalFiles).toBe(1);
+      expect(result.isPartialData).toBe(true);
+      expect(result.root.children).toHaveLength(1);
+      expect(result.quadrantFiles).toHaveLength(1);
+      expect(result.quadrantFiles[0].filePath).toBe('src/main.ts');
+    });
+  });
+
+  describe('analyzeTestImpact', () => {
+    it('should execute TIA without injecting synthetic E2E tests or 75% fallback defaults', async () => {
+      (prisma.fileASTMetric.findMany as jest.Mock).mockResolvedValue([
+        { filePath: 'src/modules/auth/auth.service.ts' },
+      ]);
+
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          impacted_test_files: ['src/modules/auth/auth.service.spec.ts'],
+          impacted_tests_count: 1,
+          time_savings_percentage: 50,
+          total_tests_in_repo: 2,
+        }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await service.analyzeTestImpact({
+        repositoryId: 'repo-1',
+        changedFiles: ['src/modules/auth/auth.service.ts'],
+      });
+
+      expect(mockFetch).toHaveBeenCalled();
+      const calledPayload = JSON.parse(mockFetch.mock.calls[0][1].body);
+
+      // Verify no fake test/e2e.spec.ts injected
+      expect(calledPayload.files.some((f: any) => f.path === 'test/e2e.spec.ts')).toBe(false);
+      expect(calledPayload.files.some((f: any) => f.path === 'test/sanity.spec.ts')).toBe(false);
+
+      expect(result.prunedPercentage).toBe(50);
+      expect(result.totalTests).toBe(2);
+      expect(result.impactedTestsCount).toBe(1);
+      expect(result.estimatedTimeSavedSeconds).toBe(90);
+    });
+
+    it('should return 0 time savings and 0 total tests when ML service returns zero or unmeasured values', async () => {
+      (prisma.fileASTMetric.findMany as jest.Mock).mockResolvedValue([]);
+
+      const mockFetch = jest.fn().mockResolvedValue({
+        ok: true,
+        json: jest.fn().mockResolvedValue({
+          impacted_test_files: [],
+          impacted_tests_count: 0,
+        }),
+      });
+      global.fetch = mockFetch;
+
+      const result = await service.analyzeTestImpact({
+        changedFiles: ['src/unknown.ts'],
+      });
+
+      expect(result.prunedPercentage).toBe(0);
+      expect(result.totalTests).toBe(0);
+      expect(result.impactedTestsCount).toBe(0);
+      expect(result.estimatedTimeSavedSeconds).toBe(0);
     });
   });
 

@@ -933,6 +933,7 @@ export interface RepositoryTreemapResponse {
     healthy: number;
   };
   quadrantFiles: QuadrantFileInfo[];
+  isPartialData?: boolean;
 }
 
 export interface TreemapQuery {
