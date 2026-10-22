@@ -549,8 +549,11 @@ export class SprintsController {
   @ApiOperation({ summary: 'Delete a sprint goal' })
   @ApiParam({ name: 'goalId', description: 'Goal ID' })
   @ApiResponse({ status: 204, description: 'Goal deleted successfully' })
-  async deleteGoal(@Param('goalId') goalId: string) {
-    return this.sprintsService.deleteGoal(goalId);
+  async deleteGoal(
+    @Param('goalId') goalId: string,
+    @GetOrganization() organizationId: string,
+  ) {
+    return this.sprintsService.deleteGoal(goalId, organizationId);
   }
 
   // ==================== RETROSPECTIVES ====================
@@ -628,7 +631,10 @@ export class SprintsController {
   @ApiOperation({ summary: 'Delete a carry-over item' })
   @ApiParam({ name: 'carryOverId', description: 'Carry-over ID' })
   @ApiResponse({ status: 204, description: 'Carry-over deleted successfully' })
-  async deleteCarryOver(@Param('carryOverId') carryOverId: string) {
-    return this.sprintsService.deleteCarryOver(carryOverId);
+  async deleteCarryOver(
+    @Param('carryOverId') carryOverId: string,
+    @GetOrganization() organizationId: string,
+  ) {
+    return this.sprintsService.deleteCarryOver(carryOverId, organizationId);
   }
 }

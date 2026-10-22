@@ -12,9 +12,11 @@ import {
 import { OnboardingService } from './onboarding.service';
 import { ProgressTrackingService } from './services/progress-tracking.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
+import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import {
   CreateOnboardingDto,
   ExtendOnboardingDto,
@@ -28,7 +30,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery }
 @ApiTags('Onboarding')
 @ApiBearerAuth()
 @Controller('onboarding')
-@UseGuards(JwtAuthGuard, RolesGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
 export class OnboardingController {
   constructor(
     private readonly onboardingService: OnboardingService,
@@ -39,8 +41,8 @@ export class OnboardingController {
   @Roles('ADMIN', 'OWNER', 'TEAM_LEAD')
   @ApiOperation({ summary: 'Create a new onboarding process' })
   @ApiResponse({ status: 201, description: 'Onboarding process created successfully.' })
-  async create(@GetUser() user: any, @Body() dto: CreateOnboardingDto) {
-    return this.onboardingService.create(user.organizationId, dto);
+  async create(@GetOrganization() organizationId: string, @Body() dto: CreateOnboardingDto) {
+    return this.onboardingService.create(organizationId, dto);
   }
 
   @Get()
@@ -49,32 +51,32 @@ export class OnboardingController {
   @ApiQuery({ name: 'mentorId', required: false })
   @ApiResponse({ status: 200, description: 'Onboardings list retrieved successfully.' })
   async findAll(
-    @GetUser() user: any,
+    @GetOrganization() organizationId: string,
     @Query('status') status?: OnboardingStatus,
     @Query('mentorId') mentorId?: string,
   ) {
-    return this.onboardingService.findAll(user.organizationId, { status, mentorId });
+    return this.onboardingService.findAll(organizationId, { status, mentorId });
   }
 
   @Get('dashboard/stats')
   @ApiOperation({ summary: 'Get milestone tracking statistics for dashboard' })
   @ApiResponse({ status: 200, description: 'Dashboard stats retrieved.' })
-  async getMilestoneTrackingStats(@GetUser() user: any) {
-    return this.progressTrackingService.getDashboardStats(user.organizationId);
+  async getMilestoneTrackingStats(@GetOrganization() organizationId: string) {
+    return this.progressTrackingService.getDashboardStats(organizationId);
   }
 
   @Get('dashboard/at-risk')
   @ApiOperation({ summary: 'Get list of developers at risk during onboarding' })
   @ApiResponse({ status: 200, description: 'At-risk developers list retrieved.' })
-  async getAtRiskDevelopers(@GetUser() user: any) {
-    return this.progressTrackingService.getAtRiskDevelopers(user.organizationId);
+  async getAtRiskDevelopers(@GetOrganization() organizationId: string) {
+    return this.progressTrackingService.getAtRiskDevelopers(organizationId);
   }
 
   @Get('stats')
   @ApiOperation({ summary: 'Get general onboarding dashboard stats' })
   @ApiResponse({ status: 200, description: 'Stats retrieved.' })
-  async getDashboardStats(@GetUser() user: any) {
-    return this.onboardingService.getDashboardStats(user.organizationId);
+  async getDashboardStats(@GetOrganization() organizationId: string) {
+    return this.onboardingService.getDashboardStats(organizationId);
   }
 
   @Get('velocity')
@@ -84,7 +86,7 @@ export class OnboardingController {
   @ApiQuery({ name: 'endDate', required: false })
   @ApiResponse({ status: 200, description: 'Velocity comparison stats retrieved.' })
   async getVelocityComparison(
-    @GetUser() user: any,
+    @GetOrganization() organizationId: string,
     @Query('teamId') teamId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
@@ -94,38 +96,44 @@ export class OnboardingController {
     if (startDate) filters.startDate = new Date(startDate);
     if (endDate) filters.endDate = new Date(endDate);
 
-    return this.onboardingService.getVelocityComparison(user.organizationId, filters);
+    return this.onboardingService.getVelocityComparison(organizationId, filters);
   }
 
   @Get('velocity/:userId')
   @ApiOperation({ summary: 'Get onboarding velocity metrics for an individual developer' })
   @ApiParam({ name: 'userId', description: 'Developer User ID' })
   @ApiResponse({ status: 200, description: 'Developer velocity stats retrieved.' })
-  async getDeveloperVelocity(@GetUser() user: any, @Param('userId') userId: string) {
-    return this.onboardingService.getDeveloperVelocity(user.organizationId, userId);
+  async getDeveloperVelocity(
+    @GetOrganization() organizationId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.onboardingService.getDeveloperVelocity(organizationId, userId);
   }
 
   @Get('templates')
   @ApiOperation({ summary: 'Get onboarding checklists templates' })
   @ApiResponse({ status: 200, description: 'Templates list retrieved.' })
-  async getTemplates(@GetUser() user: any) {
-    return this.onboardingService.getTemplates(user.organizationId);
+  async getTemplates(@GetOrganization() organizationId: string) {
+    return this.onboardingService.getTemplates(organizationId);
   }
 
   @Post('templates')
   @Roles('ADMIN', 'OWNER', 'TEAM_LEAD')
   @ApiOperation({ summary: 'Create a new onboarding checklist template' })
   @ApiResponse({ status: 201, description: 'Checklist template created successfully.' })
-  async createTemplate(@GetUser() user: any, @Body() dto: CreateTemplateDto) {
-    return this.onboardingService.createTemplate(user.organizationId, dto);
+  async createTemplate(@GetOrganization() organizationId: string, @Body() dto: CreateTemplateDto) {
+    return this.onboardingService.createTemplate(organizationId, dto);
   }
 
   @Get('templates/:id')
   @ApiOperation({ summary: 'Get onboarding template details by ID' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template details retrieved.' })
-  async getTemplate(@Param('id') id: string) {
-    return this.onboardingService.getTemplate(id);
+  async getTemplate(
+    @GetOrganization() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    return this.onboardingService.getTemplate(id, organizationId);
   }
 
   @Patch('templates/:id')
@@ -133,8 +141,12 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Update template details by ID' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template updated successfully.' })
-  async updateTemplate(@Param('id') id: string, @Body() dto: UpdateTemplateDto) {
-    return this.onboardingService.updateTemplate(id, dto);
+  async updateTemplate(
+    @GetOrganization() organizationId: string,
+    @Param('id') id: string,
+    @Body() dto: UpdateTemplateDto,
+  ) {
+    return this.onboardingService.updateTemplate(id, dto, organizationId);
   }
 
   @Delete('templates/:id')
@@ -142,8 +154,11 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Delete a template by ID' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template successfully deleted.' })
-  async deleteTemplate(@Param('id') id: string) {
-    return this.onboardingService.deleteTemplate(id);
+  async deleteTemplate(
+    @GetOrganization() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    return this.onboardingService.deleteTemplate(id, organizationId);
   }
 
   /**
@@ -154,8 +169,11 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Get individual developer progress metrics' })
   @ApiParam({ name: 'userId', description: 'Developer User ID' })
   @ApiResponse({ status: 200, description: 'Developer progress data retrieved.' })
-  async getDeveloperProgress(@GetUser() user: any, @Param('userId') userId: string) {
-    return this.progressTrackingService.getDeveloperProgress(userId, user.organizationId);
+  async getDeveloperProgress(
+    @GetOrganization() organizationId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.progressTrackingService.getDeveloperProgress(userId, organizationId);
   }
 
   /**
@@ -166,8 +184,11 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Get individual milestone timeline' })
   @ApiParam({ name: 'userId', description: 'Developer User ID' })
   @ApiResponse({ status: 200, description: 'Milestone timeline entries retrieved.' })
-  async getMilestoneTimeline(@GetUser() user: any, @Param('userId') userId: string) {
-    return this.progressTrackingService.getMilestoneTimeline(userId);
+  async getMilestoneTimeline(
+    @GetOrganization() organizationId: string,
+    @Param('userId') userId: string,
+  ) {
+    return this.progressTrackingService.getMilestoneTimeline(userId, organizationId);
   }
 
   /**
@@ -177,8 +198,8 @@ export class OnboardingController {
   @Get('mentors/available')
   @ApiOperation({ summary: 'Get list of available mentors for assignment' })
   @ApiResponse({ status: 200, description: 'Available mentors list retrieved.' })
-  async getAvailableMentors(@GetUser() user: any) {
-    return this.onboardingService.getAvailableMentors(user.organizationId);
+  async getAvailableMentors(@GetOrganization() organizationId: string) {
+    return this.onboardingService.getAvailableMentors(organizationId);
   }
 
   /**
@@ -189,16 +210,22 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Get capacity status for a mentor' })
   @ApiParam({ name: 'mentorId', description: 'Mentor User ID' })
   @ApiResponse({ status: 200, description: 'Mentor capacity information retrieved.' })
-  async getMentorCapacity(@GetUser() user: any, @Param('mentorId') mentorId: string) {
-    return this.progressTrackingService.getMentorCapacity(mentorId);
+  async getMentorCapacity(
+    @GetOrganization() organizationId: string,
+    @Param('mentorId') mentorId: string,
+  ) {
+    return this.progressTrackingService.getMentorCapacity(mentorId, organizationId);
   }
 
   @Get(':id')
   @ApiOperation({ summary: 'Get onboarding process details by ID' })
   @ApiParam({ name: 'id', description: 'Onboarding ID' })
   @ApiResponse({ status: 200, description: 'Onboarding details retrieved.' })
-  async findById(@Param('id') id: string) {
-    return this.onboardingService.findById(id);
+  async findById(
+    @GetOrganization() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    return this.onboardingService.findById(id, organizationId);
   }
 
   @Patch(':id/mentor')
@@ -206,8 +233,12 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Assign a mentor to an onboarding process' })
   @ApiParam({ name: 'id', description: 'Onboarding ID' })
   @ApiResponse({ status: 200, description: 'Mentor successfully assigned.' })
-  async assignMentor(@Param('id') id: string, @Body('mentorId') mentorId: string) {
-    return this.onboardingService.assignMentor(id, mentorId);
+  async assignMentor(
+    @GetOrganization() organizationId: string,
+    @Param('id') id: string,
+    @Body('mentorId') mentorId: string,
+  ) {
+    return this.onboardingService.assignMentor(id, mentorId, organizationId);
   }
 
   @Patch(':id/extend')
@@ -215,8 +246,12 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Extend onboarding duration' })
   @ApiParam({ name: 'id', description: 'Onboarding ID' })
   @ApiResponse({ status: 200, description: 'Onboarding extended successfully.' })
-  async extend(@Param('id') id: string, @Body() dto: ExtendOnboardingDto) {
-    return this.onboardingService.extend(id, dto);
+  async extend(
+    @GetOrganization() organizationId: string,
+    @Param('id') id: string,
+    @Body() dto: ExtendOnboardingDto,
+  ) {
+    return this.onboardingService.extend(id, dto, organizationId);
   }
 
   @Patch(':id/complete')
@@ -224,16 +259,22 @@ export class OnboardingController {
   @ApiOperation({ summary: 'Mark onboarding process as complete' })
   @ApiParam({ name: 'id', description: 'Onboarding ID' })
   @ApiResponse({ status: 200, description: 'Onboarding marked as complete.' })
-  async complete(@Param('id') id: string) {
-    return this.onboardingService.complete(id);
+  async complete(
+    @GetOrganization() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    return this.onboardingService.complete(id, organizationId);
   }
 
   @Get(':id/checklist')
   @ApiOperation({ summary: 'Get onboarding checklist items status' })
   @ApiParam({ name: 'id', description: 'Onboarding ID' })
   @ApiResponse({ status: 200, description: 'Checklist items status list retrieved.' })
-  async getChecklist(@Param('id') id: string) {
-    return this.onboardingService.getChecklist(id);
+  async getChecklist(
+    @GetOrganization() organizationId: string,
+    @Param('id') id: string,
+  ) {
+    return this.onboardingService.getChecklist(id, organizationId);
   }
 
   @Patch(':id/checklist/:itemId')
@@ -242,10 +283,11 @@ export class OnboardingController {
   @ApiParam({ name: 'itemId', description: 'Checklist Item ID' })
   @ApiResponse({ status: 200, description: 'Checklist item updated successfully.' })
   async updateChecklistItem(
+    @GetOrganization() organizationId: string,
     @Param('id') id: string,
     @Param('itemId') itemId: string,
     @Body() dto: UpdateChecklistItemDto,
   ) {
-    return this.onboardingService.updateChecklistItem(id, itemId, dto);
+    return this.onboardingService.updateChecklistItem(id, itemId, dto, organizationId);
   }
 }

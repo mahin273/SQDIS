@@ -8,6 +8,7 @@ import { ProgressTrackingService } from './services/progress-tracking.service';
 import { MilestoneDetectionService } from './services/milestone-detection.service';
 import { MilestoneNotificationHandler } from './services/milestone-notification.handler';
 import { AuthModule } from '../auth/auth.module';
+import { OrganizationsModule } from '../organizations/organizations.module';
 
 /**
  * Onboarding module for developer onboarding management
@@ -18,6 +19,7 @@ import { AuthModule } from '../auth/auth.module';
     NotificationsModule,
     EventEmitterModule.forRoot(),
     forwardRef(() => AuthModule),
+    forwardRef(() => OrganizationsModule),
   ],
   controllers: [OnboardingController],
   providers: [

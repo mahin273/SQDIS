@@ -175,9 +175,18 @@ export class OnboardingService {
     return Promise.all(onboardings.map((o) => this.enrichOnboarding(o)));
   }
 
-  async findById(id: string) {
-    const onboarding = await this.prisma.onboarding.findUnique({
-      where: { id },
+  async findById(id: string, organizationId?: string) {
+    const where: any = { id };
+    if (organizationId) {
+      where.user = {
+        organizationMembers: {
+          some: { organizationId },
+        },
+      };
+    }
+
+    const onboarding = await this.prisma.onboarding.findFirst({
+      where,
       include: {
         user: {
           select: {
@@ -365,22 +374,22 @@ export class OnboardingService {
     };
   }
 
-  async assignMentor(id: string, mentorId: string) {
-    const onboarding = await this.prisma.onboarding.findUnique({
-      where: { id },
-      include: {
-        user: { select: { id: true, name: true, email: true } },
-      },
-    });
-
-    if (!onboarding) {
-      throw new NotFoundException('Onboarding not found');
-    }
+  async assignMentor(id: string, mentorId: string, organizationId?: string) {
+    const onboarding = await this.findById(id, organizationId);
 
     // Verify mentor exists
     const mentor = await this.prisma.user.findUnique({ where: { id: mentorId } });
     if (!mentor) {
       throw new NotFoundException('Mentor not found');
+    }
+
+    if (organizationId) {
+      const mentorMember = await this.prisma.organizationMember.findFirst({
+        where: { userId: mentorId, organizationId },
+      });
+      if (!mentorMember) {
+        throw new NotFoundException('Mentor not found in organization');
+      }
     }
 
     await this.prisma.onboarding.update({
@@ -550,12 +559,8 @@ export class OnboardingService {
     });
   }
 
-  async extend(id: string, dto: ExtendOnboardingDto) {
-    const onboarding = await this.prisma.onboarding.findUnique({ where: { id } });
-
-    if (!onboarding) {
-      throw new NotFoundException('Onboarding not found');
-    }
+  async extend(id: string, dto: ExtendOnboardingDto, organizationId?: string) {
+    const onboarding = await this.findById(id, organizationId);
 
     if (onboarding.status !== OnboardingStatus.ACTIVE) {
       throw new BadRequestException('Can only extend active onboardings');
@@ -572,22 +577,18 @@ export class OnboardingService {
       },
     });
 
-    return this.findById(id);
+    return this.findById(id, organizationId);
   }
 
-  async complete(id: string) {
-    const onboarding = await this.prisma.onboarding.findUnique({ where: { id } });
-
-    if (!onboarding) {
-      throw new NotFoundException('Onboarding not found');
-    }
+  async complete(id: string, organizationId?: string) {
+    await this.findById(id, organizationId);
 
     await this.prisma.onboarding.update({
       where: { id },
       data: { status: OnboardingStatus.COMPLETED },
     });
 
-    return this.findById(id);
+    return this.findById(id, organizationId);
   }
 
   // Milestone tracking
@@ -745,7 +746,11 @@ export class OnboardingService {
   }
 
   // Checklist management
-  async getChecklist(onboardingId: string) {
+  async getChecklist(onboardingId: string, organizationId?: string) {
+    if (organizationId) {
+      await this.findById(onboardingId, organizationId);
+    }
+
     const items = await this.prisma.onboardingChecklistItem.findMany({
       where: { onboardingId },
       orderBy: { order: 'asc' },
@@ -754,7 +759,16 @@ export class OnboardingService {
     return items;
   }
 
-  async updateChecklistItem(onboardingId: string, itemId: string, dto: UpdateChecklistItemDto) {
+  async updateChecklistItem(
+    onboardingId: string,
+    itemId: string,
+    dto: UpdateChecklistItemDto,
+    organizationId?: string,
+  ) {
+    if (organizationId) {
+      await this.findById(onboardingId, organizationId);
+    }
+
     const item = await this.prisma.onboardingChecklistItem.findFirst({
       where: { id: itemId, onboardingId },
     });
@@ -783,9 +797,14 @@ export class OnboardingService {
     });
   }
 
-  async getTemplate(id: string) {
-    const template = await this.prisma.onboardingTemplate.findUnique({
-      where: { id },
+  async getTemplate(id: string, organizationId?: string) {
+    const where: any = { id };
+    if (organizationId) {
+      where.organizationId = organizationId;
+    }
+
+    const template = await this.prisma.onboardingTemplate.findFirst({
+      where,
     });
 
     if (!template) {
@@ -805,14 +824,8 @@ export class OnboardingService {
     });
   }
 
-  async updateTemplate(id: string, dto: UpdateTemplateDto) {
-    const template = await this.prisma.onboardingTemplate.findUnique({
-      where: { id },
-    });
-
-    if (!template) {
-      throw new NotFoundException('Template not found');
-    }
+  async updateTemplate(id: string, dto: UpdateTemplateDto, organizationId?: string) {
+    await this.getTemplate(id, organizationId);
 
     return this.prisma.onboardingTemplate.update({
       where: { id },
@@ -823,14 +836,8 @@ export class OnboardingService {
     });
   }
 
-  async deleteTemplate(id: string) {
-    const template = await this.prisma.onboardingTemplate.findUnique({
-      where: { id },
-    });
-
-    if (!template) {
-      throw new NotFoundException('Template not found');
-    }
+  async deleteTemplate(id: string, organizationId?: string) {
+    await this.getTemplate(id, organizationId);
 
     await this.prisma.onboardingTemplate.delete({ where: { id } });
     return { deleted: true };

@@ -38,6 +38,14 @@ describe('SprintsService', () => {
         create: jest.fn(),
         update: jest.fn(),
       },
+      sprintGoal: {
+        findFirst: jest.fn(),
+        delete: jest.fn(),
+      },
+      sprintCarryOver: {
+        findFirst: jest.fn(),
+        delete: jest.fn(),
+      },
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -164,5 +172,53 @@ describe('SprintsService', () => {
         new Date('2026-02-15T00:00:00.000Z'),
       ),
     ).resolves.toBe(false);
+  });
+
+  describe('child entity deletion tenant scoping', () => {
+    it('deletes sprint goal when parent sprint belongs to caller organization', async () => {
+      prisma.sprintGoal.findFirst.mockResolvedValue({ id: 'goal-1', sprintId: 'sprint-1' });
+      prisma.sprintGoal.delete.mockResolvedValue({ id: 'goal-1' });
+
+      await service.deleteGoal('goal-1', 'org-1');
+
+      expect(prisma.sprintGoal.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'goal-1',
+          sprint: { organizationId: 'org-1' },
+        },
+      });
+      expect(prisma.sprintGoal.delete).toHaveBeenCalledWith({ where: { id: 'goal-1' } });
+    });
+
+    it('throws NotFoundException when sprint goal is not in caller organization', async () => {
+      prisma.sprintGoal.findFirst.mockResolvedValue(null);
+
+      await expect(service.deleteGoal('goal-foreign', 'org-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it('deletes sprint carry-over when source sprint belongs to caller organization', async () => {
+      prisma.sprintCarryOver.findFirst.mockResolvedValue({ id: 'carry-1', fromSprintId: 'sprint-1' });
+      prisma.sprintCarryOver.delete.mockResolvedValue({ id: 'carry-1' });
+
+      await service.deleteCarryOver('carry-1', 'org-1');
+
+      expect(prisma.sprintCarryOver.findFirst).toHaveBeenCalledWith({
+        where: {
+          id: 'carry-1',
+          fromSprint: { organizationId: 'org-1' },
+        },
+      });
+      expect(prisma.sprintCarryOver.delete).toHaveBeenCalledWith({ where: { id: 'carry-1' } });
+    });
+
+    it('throws NotFoundException when carry-over is not in caller organization', async () => {
+      prisma.sprintCarryOver.findFirst.mockResolvedValue(null);
+
+      await expect(service.deleteCarryOver('carry-foreign', 'org-1')).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
   });
 });

@@ -218,8 +218,17 @@ export class ProgressTrackingService {
    * Returns milestones ordered by achievement timestamp with timing information
    *
    */
-  async getMilestoneTimeline(userId: string): Promise<MilestoneTimelineEntryDto[]> {
+  async getMilestoneTimeline(userId: string, organizationId?: string): Promise<MilestoneTimelineEntryDto[]> {
     this.logger.debug(`Getting milestone timeline for user ${userId}`);
+
+    if (organizationId) {
+      const member = await this.prisma.organizationMember.findFirst({
+        where: { userId, organizationId },
+      });
+      if (!member) {
+        throw new NotFoundException(`Developer ${userId} not found in this organization`);
+      }
+    }
 
     const onboarding = await this.prisma.onboarding.findUnique({
       where: { userId },
@@ -336,8 +345,17 @@ export class ProgressTrackingService {
    * Get capacity information for a specific mentor
    *
    */
-  async getMentorCapacity(mentorId: string): Promise<MentorCapacityDto> {
+  async getMentorCapacity(mentorId: string, organizationId?: string): Promise<MentorCapacityDto> {
     this.logger.debug(`Getting mentor capacity for mentor ${mentorId}`);
+
+    if (organizationId) {
+      const member = await this.prisma.organizationMember.findFirst({
+        where: { userId: mentorId, organizationId },
+      });
+      if (!member) {
+        throw new NotFoundException(`Mentor ${mentorId} not found in this organization`);
+      }
+    }
 
     const mentor = await this.prisma.user.findUnique({
       where: { id: mentorId },

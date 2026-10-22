@@ -261,8 +261,11 @@ export class ReviewsController {
   @ApiOperation({ summary: 'Get review details by ID' })
   @ApiParam({ name: 'id', description: 'Review ID' })
   @ApiResponse({ status: 200, description: 'Review details retrieved.' })
-  async findById(@Param('id') id: string) {
-    const review = await this.reviewsService.findById(id);
+  async findById(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+  ) {
+    const review = await this.reviewsService.findById(id, organizationId);
     if (!review) {
       throw new NotFoundException('Review not found');
     }
