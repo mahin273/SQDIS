@@ -596,6 +596,33 @@ export class ScoresService {
   }
 
   /**
+   * Verify entity ownership for score calculation
+   */
+  async verifyEntityOwnership(entityId: string, type: ScoreJobType | ScoreType, organizationId: string): Promise<void> {
+    const isDqs = type === ScoreType.DQS || type === ScoreJobType.DQS;
+    if (isDqs) {
+      const member = await this.prisma.organizationMember.findFirst({
+        where: { userId: entityId, organizationId },
+      });
+      if (!member) {
+        throw new NotFoundException(`Developer ${entityId} not found in organization ${organizationId}`);
+      }
+    } else {
+      const project = await this.prisma.project.findFirst({
+        where: { id: entityId, organizationId },
+      });
+      if (!project) {
+        const repo = await this.prisma.repository.findFirst({
+          where: { id: entityId, organizationId },
+        });
+        if (!repo) {
+          throw new NotFoundException(`Project or repository ${entityId} not found in organization ${organizationId}`);
+        }
+      }
+    }
+  }
+
+  /**
    * Trigger score recalculation via queue
    *
    * @param entityId - Developer or Project ID
@@ -604,6 +631,8 @@ export class ScoresService {
    * @returns Job enqueue result
    */
   async triggerRecalculation(entityId: string, type: ScoreType, organizationId: string) {
+    await this.verifyEntityOwnership(entityId, type, organizationId);
+
     const jobType = type === ScoreType.DQS ? ScoreJobType.DQS : ScoreJobType.SQS;
 
     const job = await this.enqueueScoreCalculation({

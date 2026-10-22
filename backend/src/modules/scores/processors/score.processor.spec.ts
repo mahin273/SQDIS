@@ -13,12 +13,14 @@ describe('ScoreProcessor', () => {
   let scoresService: {
     calculateDQS: jest.Mock;
     calculateSQS: jest.Mock;
+    verifyEntityOwnership: jest.Mock;
   };
 
   beforeEach(async () => {
     scoresService = {
       calculateDQS: jest.fn(),
       calculateSQS: jest.fn(),
+      verifyEntityOwnership: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -93,6 +95,27 @@ describe('ScoreProcessor', () => {
         success: true,
       }),
     );
+  });
+
+  it('fails job if entity does not belong to organization', async () => {
+    scoresService.verifyEntityOwnership.mockRejectedValue(
+      new Error('Developer dev-999 not found in organization org-1'),
+    );
+
+    const job = {
+      id: 'job-unauth',
+      data: {
+        entityId: 'dev-999',
+        type: ScoreJobType.DQS,
+        organizationId: 'org-1',
+      },
+    } as Job<ScoreJobData>;
+
+    const result = await processor.process(job);
+
+    expect(scoresService.verifyEntityOwnership).toHaveBeenCalledWith('dev-999', ScoreJobType.DQS, 'org-1');
+    expect(result.success).toBe(false);
+    expect(result.message).toContain('not found in organization');
   });
 
   it('handles calculation failures gracefully without throwing unhandled exceptions', async () => {

@@ -366,6 +366,19 @@ export class ReportsService {
         }
         break;
       }
+
+      case ReportScope.REPOSITORY: {
+        if (!dto.repositoryId) {
+          throw new BadRequestException('Repository ID is required for repository scope reports');
+        }
+        const repository = await this.prisma.repository.findFirst({
+          where: { id: dto.repositoryId, organizationId },
+        });
+        if (!repository) {
+          throw new NotFoundException('Repository not found in organization');
+        }
+        break;
+      }
     }
   }
 

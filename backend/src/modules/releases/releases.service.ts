@@ -56,6 +56,15 @@ export class ReleasesService {
    * Create a new release
    */
   async create(dto: CreateReleaseDto, organizationId: string) {
+    if (dto.repositoryId) {
+      const repository = await this.prisma.repository.findFirst({
+        where: { id: dto.repositoryId, organizationId },
+      });
+      if (!repository) {
+        throw new NotFoundException(`Repository not found in organization`);
+      }
+    }
+
     // Check for duplicate version in the repository or organization
     const existingRelease = await this.prisma.release.findFirst({
       where: dto.repositoryId
@@ -217,6 +226,20 @@ export class ReleasesService {
     }
 
     const updateData: any = {};
+
+    if (dto.repositoryId !== undefined) {
+      if (dto.repositoryId !== null && dto.repositoryId !== '') {
+        const repository = await this.prisma.repository.findFirst({
+          where: { id: dto.repositoryId, organizationId: release.organizationId },
+        });
+        if (!repository) {
+          throw new NotFoundException(`Repository not found in organization`);
+        }
+        updateData.repositoryId = dto.repositoryId;
+      } else {
+        updateData.repositoryId = null;
+      }
+    }
 
     if (dto.version !== undefined) {
       // Check for duplicate version in repository or organization

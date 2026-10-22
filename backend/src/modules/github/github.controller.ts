@@ -50,6 +50,7 @@ import { EvaluatePrQualityGateDto } from './dto/evaluate-pr-quality-gate.dto';
 import { UpdateQualityGatePolicyDto } from './dto/update-quality-gate-policy.dto';
 import { PrQualityGateBotService } from './services/pr-quality-gate-bot.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Public } from '../auth/decorators/public.decorator';
@@ -626,7 +627,7 @@ export class GitHubController {
    * Only OWNER and ADMIN roles can trigger backfill
    */
   @Post('repositories/:id/backfill')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
   @ApiBearerAuth()
   @Roles(Role.OWNER, Role.ADMIN)
   @ApiOperation({ summary: 'Trigger backfill for repository commits' })
@@ -648,12 +649,17 @@ export class GitHubController {
     status: 404,
     description: 'Repository not found',
   })
-  async triggerBackfill(@Param('id') repoId: string, @Query('days') days?: string) {
+  async triggerBackfill(
+    @Param('id') repoId: string,
+    @GetOrganization('id') organizationId: string | undefined,
+    @Query('days') days?: string,
+  ) {
+    const orgId = this.validateOrganizationContext(organizationId);
     const daysNum = days !== undefined ? parseInt(days, 10) : 365;
 
     const repository = await this.githubService.getRepository(repoId);
-    if (!repository) {
-      throw new NotFoundException(`Repository ${repoId} not found`);
+    if (!repository || repository.organizationId !== orgId) {
+      throw new NotFoundException(`Repository ${repoId} not found in organization`);
     }
 
     // Run backfill asynchronously in the background to avoid blocking the HTTP handler
@@ -678,8 +684,9 @@ export class GitHubController {
    * Get backfill status for a repository
    */
   @Get('repositories/:id/backfill/status')
-  @UseGuards(JwtAuthGuard, RolesGuard)
+  @UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
   @ApiBearerAuth()
+  @Roles(Role.OWNER, Role.ADMIN, Role.MEMBER)
   @ApiOperation({ summary: 'Get backfill status for repository' })
   @ApiParam({ name: 'id', description: 'Repository ID' })
   @ApiResponse({
@@ -694,7 +701,15 @@ export class GitHubController {
     status: 404,
     description: 'Repository not found',
   })
-  async getBackfillStatus(@Param('id') repoId: string) {
+  async getBackfillStatus(
+    @Param('id') repoId: string,
+    @GetOrganization('id') organizationId: string | undefined,
+  ) {
+    const orgId = this.validateOrganizationContext(organizationId);
+    const repository = await this.githubService.getRepository(repoId);
+    if (!repository || repository.organizationId !== orgId) {
+      throw new NotFoundException(`Repository ${repoId} not found in organization`);
+    }
     return this.backfillService.getBackfillStatus(repoId);
   }
 

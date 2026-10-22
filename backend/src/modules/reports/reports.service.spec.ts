@@ -152,6 +152,61 @@ describe('ReportsService', () => {
         ),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
+
+    it('rejects repository scope reports if repositoryId is missing', async () => {
+      await expect(
+        service.createReport(
+          {
+            type: ReportType.EXECUTIVE_SUMMARY,
+            scope: ReportScope.REPOSITORY,
+            startDate: '2026-01-01',
+            endDate: '2026-01-31',
+          },
+          'org-1',
+          'user-1',
+        ),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects repository scope reports if repository does not belong to organization', async () => {
+      prisma.repository.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.createReport(
+          {
+            type: ReportType.EXECUTIVE_SUMMARY,
+            scope: ReportScope.REPOSITORY,
+            repositoryId: 'repo-foreign',
+            startDate: '2026-01-01',
+            endDate: '2026-01-31',
+          },
+          'org-1',
+          'user-1',
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('creates repository scope reports when repository belongs to organization', async () => {
+      prisma.repository.findFirst.mockResolvedValue({ id: 'repo-1', organizationId: 'org-1' });
+      prisma.report.create.mockResolvedValue({ ...mockReport, scope: ReportScope.REPOSITORY, repositoryId: 'repo-1' });
+
+      const result = await service.createReport(
+        {
+          type: ReportType.EXECUTIVE_SUMMARY,
+          scope: ReportScope.REPOSITORY,
+          repositoryId: 'repo-1',
+          startDate: '2026-01-01',
+          endDate: '2026-01-31',
+        },
+        'org-1',
+        'user-1',
+      );
+
+      expect(prisma.repository.findFirst).toHaveBeenCalledWith({
+        where: { id: 'repo-1', organizationId: 'org-1' },
+      });
+      expect(result.id).toBe('report-1');
+    });
   });
 
   describe('findAll', () => {

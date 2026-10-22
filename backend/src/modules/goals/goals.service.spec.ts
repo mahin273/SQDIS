@@ -193,4 +193,44 @@ describe('GoalsService', () => {
     });
     expect(prisma.goal.delete).toHaveBeenCalledWith({ where: { id: 'goal-1' } });
   });
+
+  describe('update', () => {
+    it('throws NotFoundException when updating with foreign teamId', async () => {
+      prisma.goal.findFirst.mockResolvedValue(goal);
+      prisma.team.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.update('goal-1', 'org-1', { teamId: 'foreign-team' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('throws NotFoundException when updating with foreign projectId', async () => {
+      prisma.goal.findFirst.mockResolvedValue(goal);
+      prisma.project.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.update('goal-1', 'org-1', { projectId: 'foreign-project' }),
+      ).rejects.toBeInstanceOf(NotFoundException);
+    });
+
+    it('updates goal successfully when team and project belong to organization', async () => {
+      prisma.goal.findFirst.mockResolvedValue(goal);
+      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', organizationId: 'org-1' });
+      prisma.project.findFirst.mockResolvedValue({ id: 'proj-1', organizationId: 'org-1' });
+      prisma.goal.update.mockResolvedValue({ ...goal, teamId: 'team-1', projectId: 'proj-1' });
+
+      const updated = await service.update('goal-1', 'org-1', {
+        teamId: 'team-1',
+        projectId: 'proj-1',
+      });
+
+      expect(prisma.team.findFirst).toHaveBeenCalledWith({
+        where: { id: 'team-1', organizationId: 'org-1' },
+      });
+      expect(prisma.project.findFirst).toHaveBeenCalledWith({
+        where: { id: 'proj-1', organizationId: 'org-1' },
+      });
+      expect(updated.id).toBe('goal-1');
+    });
+  });
 });

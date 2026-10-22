@@ -200,7 +200,7 @@ export class SprintsController {
       Role.ADMIN,
     ]);
 
-    const result = await this.sprintAutoGenerationService.triggerSprintEndCheck();
+    const result = await this.sprintAutoGenerationService.triggerSprintEndCheck(organizationId);
     const count =
       typeof result === 'object' && result !== null && 'processed' in result
         ? (result as any).processed
