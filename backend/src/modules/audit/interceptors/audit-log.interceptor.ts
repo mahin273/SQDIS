@@ -64,8 +64,11 @@ export class AuditLogInterceptor implements NestInterceptor {
       return next.handle();
     }
 
-    // Extract organizationId (required for audit logging)
-    const organizationId = user.organizationId;
+    // Extract organizationId (prefer validated active tenant from OrganizationGuard, fallback to header or user context)
+    const organizationId =
+      (request as any).organizationId ||
+      (request.headers?.['x-organization-id'] as string) ||
+      user.organizationId;
     if (!organizationId) {
       this.logger.warn(
         `Skipping audit log for ${config.action} ${config.resourceType}: No organizationId`,

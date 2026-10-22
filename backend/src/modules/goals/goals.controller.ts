@@ -46,8 +46,8 @@ export class GoalsController {
 
   private getOrgId(req: any): string {
     return (
-      req.headers?.['x-organization-id'] ||
       req.organizationId ||
+      req.headers?.['x-organization-id'] ||
       req.user?.organizationId
     );
   }
@@ -173,7 +173,7 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get historical goal snapshots' })
   @ApiResponse({ status: 200, description: 'Snapshots list retrieved.' })
   async getSnapshots(@Request() req: any, @Query() filters: GoalHistoryFiltersDto) {
-    return this.historyService.getGoalHistory(req.user.organizationId, {
+    return this.historyService.getGoalHistory(this.getOrgId(req), {
       teamId: filters.teamId,
       ownerId: filters.ownerId,
       metricType: filters.metricType,
@@ -199,7 +199,7 @@ export class GoalsController {
     @Query('periodMonths') periodMonths?: number,
   ) {
     return this.historyService.calculateAchievementRateOverTime(
-      req.user.organizationId,
+      this.getOrgId(req),
       teamId,
       periodMonths || 12,
     );
@@ -219,7 +219,7 @@ export class GoalsController {
     @Query('endDate') endDate?: string,
   ) {
     return this.historyService.calculateTeamAchievementPercentages(
-      req.user.organizationId,
+      this.getOrgId(req),
       startDate ? new Date(startDate) : undefined,
       endDate ? new Date(endDate) : undefined,
     );
@@ -242,7 +242,7 @@ export class GoalsController {
     @Query('endDate') endDate?: string,
     @Query('includeTeamComparison') includeTeamComparison?: string,
   ) {
-    return this.historyService.getGoalHistoryForReports(req.user.organizationId, {
+    return this.historyService.getGoalHistoryForReports(this.getOrgId(req), {
       teamId,
       startDate: startDate ? new Date(startDate) : undefined,
       endDate: endDate ? new Date(endDate) : undefined,
@@ -259,7 +259,7 @@ export class GoalsController {
   @ApiResponse({ status: 201, description: 'Snapshot successfully created.' })
   async snapshotGoal(@Request() req: any, @Param('id') id: string) {
     // Verify goal belongs to organization
-    await this.goalsService.findById(id, req.user.organizationId);
+    await this.goalsService.findById(id, this.getOrgId(req));
     return this.historyService.snapshotGoal(id);
   }
 
