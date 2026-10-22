@@ -98,7 +98,7 @@ export class ReportsService {
    */
   async findAll(organizationId: string, filters: ReportFiltersDto): Promise<ReportListResponseDto> {
     const page = filters.page || 1;
-    const limit = filters.limit || 20;
+    const limit = filters.limit || filters.pageSize || 20;
     const skip = (page - 1) * limit;
 
     const where: any = {

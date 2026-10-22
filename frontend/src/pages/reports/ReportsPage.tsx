@@ -111,10 +111,12 @@ export function ReportsPage() {
     [repositories]
   )
 
+  const activeRepoFilterId = repositoryFilter !== 'ALL' ? repositoryFilter : undefined
+
   // Query reports with auto-polling when any report is processing or pending
   const reportsQuery = useQuery({
-    queryKey: queryKeys.reports.all(),
-    queryFn: () => reportsService.getAll(),
+    queryKey: queryKeys.reports.all({ repositoryId: activeRepoFilterId }),
+    queryFn: () => reportsService.getAll({ repositoryId: activeRepoFilterId, limit: 100 }),
     refetchInterval: (query) => {
       const data = query.state.data
       const hasInProgress = data?.reports?.some(
@@ -147,7 +149,7 @@ export function ReportsPage() {
   const createMutation = useMutation({
     mutationFn: (payload: any) => reportsService.create(payload, newReportFormat),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
       setIsGenerateSheetOpen(false)
       setSheetError(null)
       setNewReportTitle('')
@@ -166,7 +168,7 @@ export function ReportsPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => reportsService.delete(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
       setReportToDelete(null)
       setIsDetailDrawerOpen(false)
       setSelectedReportForDrawer(null)
@@ -183,7 +185,7 @@ export function ReportsPage() {
   const retryMutation = useMutation({
     mutationFn: (id: string) => reportsService.retry(id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.reports.all() })
+      queryClient.invalidateQueries({ queryKey: ['reports'] })
       toast.info('Report retry triggered')
     },
     onError: (err: any) => {
@@ -264,7 +266,7 @@ export function ReportsPage() {
 
       return true
     })
-  }, [reportsList, scopeFilter, formatFilter, statusFilter, searchQuery])
+  }, [reportsList, scopeFilter, formatFilter, repositoryFilter, statusFilter, searchQuery])
 
   // Handle browser file download
   const handleDownload = async (report: Report) => {

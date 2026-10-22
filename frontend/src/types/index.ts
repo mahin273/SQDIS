@@ -1857,6 +1857,7 @@ export interface CreateReportRequest {
 export interface ReportFilters {
   page?: number;
   pageSize?: number;
+  limit?: number;
   type?: ReportType;
   category?: ReportCategory;
   scope?: ReportScope;

@@ -31,6 +31,7 @@ import { queryKeys } from '@/lib/queryClient'
 import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { QueryState } from '../pageUtils'
 import { PrQualityGateBadge, PrQualityGateDrawer } from './components'
+import { resolvePullRequestUrl, resolveRepositoryDisplayName } from './reviewUrlUtils'
 import type { Review, ReviewState, ReviewStateFilter, ReviewActivityTrendPoint, ReviewLeaderboardEntry } from '@/types'
 import type { TestImpactResult } from '@/services'
 import { useTheme } from '@/context/ThemeContext'
@@ -760,13 +761,10 @@ export function ReviewsPage() {
                   const prNum = review.pullRequestId || review.prNumber
                   const authorName = review.author?.name || 'Developer'
                   const authorAvatar = review.author?.avatarUrl
-                  const repoName =
-                    review.repository?.fullName || review.repository?.name || 'SQDIS'
+                  const repoName = resolveRepositoryDisplayName(review)
                   const commentCount = review.commentCount ?? review._count?.comments ?? 0
                   const repoId = review.repositoryId || review.repository?.id || ''
-                  const prUrl =
-                    review.prUrl ||
-                    (prNum ? `https://github.com/mahin273/SQDIS/pull/${prNum}` : '')
+                  const prUrl = resolvePullRequestUrl(review)
 
                   const isSelected = activeReview?.id === review.id
 
