@@ -48,11 +48,11 @@ export class ReadinessScoreDto {
   })
   dqsScore!: number;
 
-  @ApiProperty({
-    description: 'Test pass rate component (20% weight)',
-    example: 65,
+  @ApiPropertyOptional({
+    description: 'Test pass rate component (if CI execution telemetry exists)',
+    example: 85,
   })
-  testPassRate!: number;
+  testPassRate?: number | null;
 
   @ApiProperty({
     description: 'Whether readiness is below 70% threshold',
