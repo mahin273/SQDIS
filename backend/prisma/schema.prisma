@@ -209,6 +209,7 @@ model Repository {
   fileASTMetrics      FileASTMetric[]
   qualityGatePolicy   QualityGatePolicy?
   releases            Release[]
+  reports             Report[]
 
   @@unique([organizationId, githubId])
   @@map("repositories")
@@ -757,7 +758,7 @@ model Release {
   sprintAssociations ReleaseSprintAssociation[]
   telemetryAnalyses  ReleaseTelemetryAnalysis[]
 
-  @@unique([organizationId, version])
+  @@unique([repositoryId, version])
   @@index([organizationId])
   @@index([repositoryId])
   @@map("releases")
@@ -1294,6 +1295,8 @@ model Report {
   errorMessage   String?
   createdAt      DateTime     @default(now())
   completedAt    DateTime?
+
+  repository     Repository?  @relation(fields: [repositoryId], references: [id], onDelete: SetNull)
 
   @@index([organizationId])
   @@index([createdById])
