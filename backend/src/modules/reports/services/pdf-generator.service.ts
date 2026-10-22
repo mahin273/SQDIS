@@ -15,15 +15,15 @@ export interface PdfReportData {
   developers: DeveloperMetrics[];
   summary: ReportSummary;
   sqs?: {
-    score: number;
+    score: number | null;
     grade: string;
     riskyModulesCount: number;
-  };
+  } | null;
   coverage?: {
-    percentage: number;
+    percentage: number | null;
     linesTotal: number;
     linesCovered: number;
-  };
+  } | null;
   technicalDebt?: {
     totalItems: number;
     unresolvedItems: number;
@@ -37,7 +37,7 @@ export interface PdfReportData {
     totalPrs: number;
     mergedPrs: number;
     totalReviews: number;
-    avgTurnaroundHours: number;
+    avgTurnaroundHours: number | null;
   };
 }
 
@@ -60,7 +60,7 @@ export interface DeveloperMetrics {
 export interface ReportSummary {
   totalCommits: number;
   totalDevelopers: number;
-  avgDQS: number;
+  avgDQS: number | null;
   totalBugfixes: number;
   totalFeatures: number;
   totalRefactors?: number;
@@ -274,11 +274,12 @@ export class PdfGeneratorService {
       .text('Executive Assessment & Governance Findings', startX + 14, startY + 8);
 
     // Narrative
-    const sqsGrade = data.sqs ? `${data.sqs.score.toFixed(1)}/100 (${data.sqs.grade})` : '78.5/100 (B)';
-    const coveragePct = data.coverage ? `${data.coverage.percentage.toFixed(1)}%` : '76.4%';
-    const debtCount = data.technicalDebt ? data.technicalDebt.unresolvedItems : 14;
+    const sqsGrade = data.sqs && data.sqs.score !== null ? `${data.sqs.score.toFixed(1)}/100 (${data.sqs.grade})` : 'N/A';
+    const coveragePct = data.coverage && data.coverage.percentage !== null ? `${data.coverage.percentage.toFixed(1)}%` : 'N/A';
+    const debtCount = data.technicalDebt ? data.technicalDebt.unresolvedItems : 0;
+    const avgDqsText = data.summary.avgDQS !== null && data.summary.avgDQS !== undefined ? `${data.summary.avgDQS.toFixed(1)}/100` : 'N/A';
 
-    const narrative = `This executive audit analyzes engineering integrity for ${data.organizationName}. Over the reporting window, ${data.summary.totalDevelopers} active contributors completed ${data.summary.totalCommits} commits across connected codebases. Overall System Quality Score (SQS) is rated at ${sqsGrade} with test coverage at ${coveragePct}. ${debtCount} architectural debt items were identified, while developers achieved a mean DQS benchmark of ${data.summary.avgDQS.toFixed(1)}/100.`;
+    const narrative = `This executive audit analyzes engineering integrity for ${data.organizationName}. Over the reporting window, ${data.summary.totalDevelopers} active contributors completed ${data.summary.totalCommits} commits across connected codebases. Overall System Quality Score (SQS) is rated at ${sqsGrade} with test coverage at ${coveragePct}. ${debtCount} architectural debt items were identified, while developers achieved a mean DQS benchmark of ${avgDqsText}.`;
 
     doc
       .fontSize(8)
@@ -303,17 +304,22 @@ export class PdfGeneratorService {
     const cardWidth = (contentWidth - cardGap * 2) / 3;
     const cardHeight = 46;
 
-    const sqsVal = data.sqs ? `${data.sqs.score.toFixed(1)}` : '78.5';
-    const sqsSub = data.sqs ? `Grade ${data.sqs.grade} • ${data.sqs.riskyModulesCount} risky modules` : 'Grade B • Controlled';
+    const sqsVal = data.sqs && data.sqs.score !== null ? `${data.sqs.score.toFixed(1)}` : 'N/A';
+    const sqsSub = data.sqs && data.sqs.score !== null ? `Grade ${data.sqs.grade} • ${data.sqs.riskyModulesCount} risky modules` : 'No score recorded';
 
-    const coverageVal = data.coverage ? `${data.coverage.percentage.toFixed(1)}%` : '76.4%';
-    const coverageSub = data.coverage ? `${this.formatNumber(data.coverage.linesCovered)} covered lines` : '9.5K lines tested';
+    const coverageVal = data.coverage && data.coverage.percentage !== null ? `${data.coverage.percentage.toFixed(1)}%` : 'N/A';
+    const coverageSub = data.coverage && data.coverage.percentage !== null ? `${this.formatNumber(data.coverage.linesCovered)} covered lines` : 'Not instrumented';
 
-    const debtVal = data.technicalDebt ? `${data.technicalDebt.unresolvedItems}` : '14';
-    const debtSub = data.technicalDebt ? `${data.technicalDebt.totalItems} total markers logged` : 'Hotspots monitored';
+    const debtVal = data.technicalDebt ? `${data.technicalDebt.unresolvedItems}` : '0';
+    const debtSub = data.technicalDebt ? `${data.technicalDebt.totalItems} total markers logged` : 'No markers found';
 
-    const turnaroundVal = data.reviewsAndPrs ? `${data.reviewsAndPrs.avgTurnaroundHours}h` : '4.2h';
-    const turnaroundSub = data.reviewsAndPrs ? `${data.reviewsAndPrs.totalReviews} reviews completed` : 'Standard turnaround';
+    const turnaroundVal =
+      data.reviewsAndPrs && data.reviewsAndPrs.avgTurnaroundHours !== null && data.reviewsAndPrs.avgTurnaroundHours !== undefined
+        ? `${data.reviewsAndPrs.avgTurnaroundHours}h`
+        : 'N/A';
+    const turnaroundSub = data.reviewsAndPrs ? `${data.reviewsAndPrs.totalReviews} reviews completed` : '0 reviews logged';
+
+    const dqsVal = data.summary.avgDQS !== null && data.summary.avgDQS !== undefined ? `${data.summary.avgDQS.toFixed(1)}` : 'N/A';
 
     const cards = [
       {
@@ -324,7 +330,7 @@ export class PdfGeneratorService {
       },
       {
         label: 'MEAN DEVELOPER SCORE (DQS)',
-        value: `${data.summary.avgDQS.toFixed(1)}`,
+        value: dqsVal,
         sub: `${data.summary.totalDevelopers} active contributors`,
         color: this.getDqsColor(data.summary.avgDQS),
       },
@@ -420,12 +426,12 @@ export class PdfGeneratorService {
       .fillColor(this.colors.textPrimary)
       .text('Technical Debt Categorization', startX + 10, sectionY + 8);
 
-    const todoCount = data.technicalDebt?.todoCount || 8;
-    const fixmeCount = data.technicalDebt?.fixmeCount || 4;
-    const hackCount = data.technicalDebt?.hackCount || 2;
-    const resolvedCount = data.technicalDebt?.resolvedItems || 12;
-    const totalItems = data.technicalDebt?.totalItems || 26;
-    const resolvedPct = Math.round((resolvedCount / Math.max(totalItems, 1)) * 100);
+    const todoCount = data.technicalDebt?.todoCount ?? 0;
+    const fixmeCount = data.technicalDebt?.fixmeCount ?? 0;
+    const hackCount = data.technicalDebt?.hackCount ?? 0;
+    const resolvedCount = data.technicalDebt?.resolvedItems ?? 0;
+    const totalItems = data.technicalDebt?.totalItems ?? 0;
+    const resolvedPct = totalItems > 0 ? Math.round((resolvedCount / totalItems) * 100) : 0;
 
     const debtRows = [
       { label: 'TODO Markers (Feature / Task Backlog)', count: todoCount, color: this.colors.primaryAccent },
@@ -461,36 +467,39 @@ export class PdfGeneratorService {
       .fillColor(this.colors.textPrimary)
       .text('Identified Code Hotspots & Fragile Files', rightX + 10, sectionY + 8);
 
-    const hotspots = data.technicalDebt?.topHotspots || [
-      { file: 'backend/src/modules/auth/auth.service.ts', count: 4 },
-      { file: 'backend/src/modules/reports/pdf.service.ts', count: 3 },
-      { file: 'frontend/src/pages/dashboard/Dashboard.tsx', count: 3 },
-      { file: 'backend/src/modules/sprints/sprints.service.ts', count: 2 },
-    ];
+    const hotspots = data.technicalDebt?.topHotspots || [];
 
-    hotspots.slice(0, 4).forEach((hotspot, idx) => {
-      const rowY = sectionY + 25 + idx * 18;
-      doc
-        .fontSize(7)
-        .font('Helvetica-Bold')
-        .fillColor(this.colors.textPrimary)
-        .text(`${idx + 1}.`, rightX + 10, rowY);
-
-      doc
-        .fontSize(7)
-        .font('Helvetica')
-        .fillColor(this.colors.textSecondary)
-        .text(hotspot.file, rightX + 22, rowY, { width: colWidth - 75, ellipsis: true });
-
+    if (hotspots.length === 0) {
       doc
         .fontSize(7.5)
-        .font('Helvetica-Bold')
-        .fillColor(this.colors.amberAccent)
-        .text(`${hotspot.count} debt items`, rightX + colWidth - 65, rowY, {
-          width: 55,
-          align: 'right',
-        });
-    });
+        .font('Helvetica')
+        .fillColor(this.colors.textSecondary)
+        .text('No active debt hotspots detected in analyzed codebases.', rightX + 10, sectionY + 30);
+    } else {
+      hotspots.slice(0, 4).forEach((hotspot, idx) => {
+        const rowY = sectionY + 25 + idx * 18;
+        doc
+          .fontSize(7)
+          .font('Helvetica-Bold')
+          .fillColor(this.colors.textPrimary)
+          .text(`${idx + 1}.`, rightX + 10, rowY);
+
+        doc
+          .fontSize(7)
+          .font('Helvetica')
+          .fillColor(this.colors.textSecondary)
+          .text(hotspot.file, rightX + 22, rowY, { width: colWidth - 75, ellipsis: true });
+
+        doc
+          .fontSize(7.5)
+          .font('Helvetica-Bold')
+          .fillColor(this.colors.amberAccent)
+          .text(`${hotspot.count} debt items`, rightX + colWidth - 65, rowY, {
+            width: 55,
+            align: 'right',
+          });
+      });
+    }
 
     doc.y = sectionY + sectionHeight + 12;
   }
@@ -563,16 +572,19 @@ export class PdfGeneratorService {
       .fillColor(this.colors.textPrimary)
       .text('Pull Request & Review Turnaround SLA', rightX + 10, sectionY + 8);
 
-    const prs = data.reviewsAndPrs?.totalPrs || 16;
-    const merged = data.reviewsAndPrs?.mergedPrs || 14;
-    const mergeRate = Math.round((merged / Math.max(prs, 1)) * 100);
-    const avgTurn = data.reviewsAndPrs?.avgTurnaroundHours || 4.2;
-    const reviewsSubmitted = data.reviewsAndPrs?.totalReviews || 24;
+    const prs = data.reviewsAndPrs?.totalPrs ?? 0;
+    const merged = data.reviewsAndPrs?.mergedPrs ?? 0;
+    const mergeRate = prs > 0 ? Math.round((merged / prs) * 100) : 0;
+    const avgTurn =
+      data.reviewsAndPrs?.avgTurnaroundHours !== null && data.reviewsAndPrs?.avgTurnaroundHours !== undefined
+        ? `${data.reviewsAndPrs.avgTurnaroundHours} hours`
+        : 'N/A';
+    const reviewsSubmitted = data.reviewsAndPrs?.totalReviews ?? 0;
 
     const prStats = [
       { label: 'PRs Processed & Merged', val: `${merged} / ${prs} (${mergeRate}%)`, color: this.colors.emeraldAccent },
       { label: 'Peer Reviews Completed', val: `${reviewsSubmitted} reviews`, color: this.colors.primaryAccent },
-      { label: 'Mean Review Turnaround', val: `${avgTurn} hours`, color: this.colors.textPrimary },
+      { label: 'Mean Review Turnaround', val: avgTurn, color: this.colors.textPrimary },
     ];
 
     prStats.forEach((p, idx) => {
@@ -892,7 +904,8 @@ export class PdfGeneratorService {
   /**
    * Performance tier helper
    */
-  private getDqsTier(score: number): string {
+  private getDqsTier(score: number | null | undefined): string {
+    if (score === null || score === undefined) return 'Pending';
     if (score >= 85) return 'Elite';
     if (score >= 70) return 'Proficient';
     if (score >= 50) return 'Standard';
@@ -902,7 +915,8 @@ export class PdfGeneratorService {
   /**
    * Color based on DQS score
    */
-  private getDqsColor(score: number): string {
+  private getDqsColor(score: number | null | undefined): string {
+    if (score === null || score === undefined) return this.colors.textMuted;
     if (score >= 80) return this.colors.emeraldAccent;
     if (score >= 65) return this.colors.primaryAccent;
     if (score >= 50) return this.colors.amberAccent;
