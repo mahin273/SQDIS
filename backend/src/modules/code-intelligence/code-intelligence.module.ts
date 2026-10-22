@@ -1,15 +1,15 @@
 import { Module, forwardRef } from '@nestjs/common';
-import { PrismaModule } from '../../prisma/prisma.module.js';
-import { OrganizationsModule } from '../organizations/organizations.module.js';
-import { AuthModule } from '../auth/auth.module.js';
-import { CodeIntelligenceController } from './code-intelligence.controller.js';
-import { CodeIntelligenceService } from './code-intelligence.service.js';
-import { CodeRemediationService } from './services/code-remediation.service.js';
+import { PrismaModule } from '../../prisma';
+import { OrganizationsModule } from '../organizations/organizations.module';
+import { AuthModule } from '../auth/auth.module';
+import { CodeIntelligenceController } from './code-intelligence.controller';
+import { CodeIntelligenceService } from './code-intelligence.service';
+import { CodeRemediationService } from './services/code-remediation.service';
 
 @Module({
   imports: [
     PrismaModule,
-    OrganizationsModule,
+    forwardRef(() => OrganizationsModule),
     forwardRef(() => AuthModule),
   ],
   controllers: [CodeIntelligenceController],

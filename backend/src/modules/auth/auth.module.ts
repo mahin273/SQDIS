@@ -62,6 +62,7 @@ import { getRequiredJwtSecret } from './utils/jwt-secret.util';
     AuthService,
     JwtModule,
     OrganizationGuard,
+    OrganizationsModule,
     OrganizationContextService,
     PermissionCacheService,
     DataFilterService,

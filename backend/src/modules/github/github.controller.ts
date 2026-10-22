@@ -686,7 +686,7 @@ export class GitHubController {
   @Get('repositories/:id/backfill/status')
   @UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(Role.OWNER, Role.ADMIN, Role.MEMBER)
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD, Role.DEVELOPER)
   @ApiOperation({ summary: 'Get backfill status for repository' })
   @ApiParam({ name: 'id', description: 'Repository ID' })
   @ApiResponse({

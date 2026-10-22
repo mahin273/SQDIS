@@ -34,6 +34,7 @@ import { WebSocketModule } from '../websocket/websocket.module';
 import { PullRequestQueueModule } from '../../config';
 import { AlertsModule } from '../alerts/alerts.module';
 import { AuthModule } from '../auth/auth.module';
+import { OrganizationsModule } from '../organizations/organizations.module';
 import { PrQualityGateBotService } from './services/pr-quality-gate-bot.service';
 import { CodeIntelligenceModule } from '../code-intelligence/code-intelligence.module';
 
@@ -46,9 +47,10 @@ import { CodeIntelligenceModule } from '../code-intelligence/code-intelligence.m
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     PullRequestQueueModule,
-    CodeIntelligenceModule,
+    forwardRef(() => CodeIntelligenceModule),
     forwardRef(() => WebSocketModule),
     forwardRef(() => AlertsModule),
+    forwardRef(() => OrganizationsModule),
     forwardRef(() => AuthModule),
   ],
   controllers: [GitHubController],
