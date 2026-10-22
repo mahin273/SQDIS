@@ -101,4 +101,62 @@ describe('AuditLogInterceptor Tenant Attribution', () => {
       }),
     );
   });
+
+  it('skips audit logging when method has no @AuditLog metadata', async () => {
+    reflector.get!.mockReturnValue(undefined);
+
+    const mockRequest = {
+      user: { id: 'user-1', organizationId: 'org-1' },
+      headers: {},
+      params: {},
+    };
+
+    const next = {
+      handle: () => of({ success: true }),
+    };
+
+    const stream$ = interceptor.intercept(createMockContext(mockRequest), next);
+    const result = await firstValueFrom(stream$);
+
+    expect(result).toEqual({ success: true });
+    expect(auditLogService.logAction).not.toHaveBeenCalled();
+  });
+
+  it('captures request and response payloads when configured', async () => {
+    reflector.get!.mockReturnValue({
+      action: 'CREATE',
+      resourceType: 'Project',
+      includeRequestBody: true,
+      includeResponseBody: true,
+    });
+
+    const mockRequest = {
+      user: { id: 'user-1', organizationId: 'org-1' },
+      organizationId: 'org-1',
+      headers: { 'user-agent': 'Jest-Agent' },
+      body: { name: 'New Project' },
+      params: {},
+      ip: '127.0.0.1',
+    };
+
+    const next = {
+      handle: () => of({ id: 'proj-1', name: 'New Project' }),
+    };
+
+    const stream$ = interceptor.intercept(createMockContext(mockRequest), next);
+    await firstValueFrom(stream$);
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(auditLogService.logAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'CREATE',
+        resourceType: 'Project',
+        metadata: {
+          requestBody: { name: 'New Project' },
+          responseBody: { id: 'proj-1', name: 'New Project' },
+        },
+      }),
+    );
+  });
 });

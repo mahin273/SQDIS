@@ -1,4 +1,5 @@
 import { Module, forwardRef } from '@nestjs/common';
+import { APP_INTERCEPTOR } from '@nestjs/core';
 import { BullModule } from '@nestjs/bullmq';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -105,6 +106,10 @@ import { ARCHIVAL_QUEUE, AUDIT_WRITE_QUEUE, EXPORT_QUEUE } from './constants';
     AuditAnalyticsService,
     AuditMonitorService,
     AuditLogInterceptor,
+    {
+      provide: APP_INTERCEPTOR,
+      useClass: AuditLogInterceptor,
+    },
     AuditWriteProcessor,
     ArchivalProcessor,
     ExportProcessor,

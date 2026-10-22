@@ -15,12 +15,22 @@ import {
 export class CodeIntelligenceService {
   private readonly logger = new Logger(CodeIntelligenceService.name);
   private readonly mlServiceUrl: string;
+  private readonly mlServiceSecret: string;
 
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
   ) {
     this.mlServiceUrl = this.configService.get<string>('ML_SERVICE_URL', 'http://ml-service:8000');
+    this.mlServiceSecret = this.configService.get<string>('ML_SERVICE_SECRET', 'sqdis-ml-internal-secret-token');
+  }
+
+  private getHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'X-Service-Key': this.mlServiceSecret,
+      ...customHeaders,
+    };
   }
 
   /**
@@ -40,7 +50,7 @@ export class CodeIntelligenceService {
 
       const resp = await fetch(`${this.mlServiceUrl}/api/ml/defects/predict-module`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -96,7 +106,7 @@ export class CodeIntelligenceService {
 
       const resp = await fetch(`${this.mlServiceUrl}/api/ml/defects/predict`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -176,7 +186,7 @@ export class CodeIntelligenceService {
 
       const resp = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/test-impact`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -215,7 +225,7 @@ export class CodeIntelligenceService {
 
       const resp = await fetch(`${this.mlServiceUrl}/api/ml/telemetry/canary-analysis`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -237,7 +247,7 @@ export class CodeIntelligenceService {
     try {
       const resp = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/analyze`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: this.getHeaders(),
         body: JSON.stringify({
           files,
           repository_id: repositoryId,
@@ -386,7 +396,7 @@ export class CodeIntelligenceService {
     // Call ML service bus factor engine
     const resp = await fetch(`${this.mlServiceUrl}/api/ml/teams/bus-factor`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: this.getHeaders(),
       body: JSON.stringify({
         repository_name: team.name,
         modules: modulesPayload,

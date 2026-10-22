@@ -1327,9 +1327,13 @@ export class ReviewsService {
     try {
       // Call ML service for comment classification
       const mlServiceUrl = process.env.ML_SERVICE_URL || 'http://localhost:8000';
+      const mlServiceSecret = process.env.ML_SERVICE_SECRET || 'sqdis-ml-internal-secret-token';
       const response = await fetch(`${mlServiceUrl}/api/ml/classify/comment`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Service-Key': mlServiceSecret,
+        },
         body: JSON.stringify({ body }),
       });
 

@@ -55,12 +55,22 @@ export interface ClassifyRequest {
 export class MlClientService {
   private readonly logger = new Logger(MlClientService.name);
   private readonly mlServiceUrl: string;
+  private readonly mlServiceSecret: string;
 
   constructor(
     private readonly configService: ConfigService,
     @Optional() @Inject(MetricsService) private readonly metricsService?: MetricsService,
   ) {
     this.mlServiceUrl = this.configService.get<string>('ML_SERVICE_URL', 'http://localhost:8000');
+    this.mlServiceSecret = this.configService.get<string>('ML_SERVICE_SECRET', 'sqdis-ml-internal-secret-token');
+  }
+
+  private getHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'X-Service-Key': this.mlServiceSecret,
+      ...customHeaders,
+    };
   }
 
   /**
@@ -95,9 +105,7 @@ export class MlClientService {
 
       const response = await fetch(`${this.mlServiceUrl}/api/ml/classify`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -147,9 +155,7 @@ export class MlClientService {
 
       const response = await fetch(`${this.mlServiceUrl}/api/ml/classify/batch`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -216,9 +222,7 @@ export class MlClientService {
 
       const response = await fetch(`${this.mlServiceUrl}/api/ml/anomaly/detect`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 

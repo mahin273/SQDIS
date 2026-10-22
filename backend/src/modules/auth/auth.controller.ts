@@ -68,7 +68,7 @@ export class AuthController {
 
   @Public()
   @Post('register')
-  @Throttle({ auth: { ttl: 60000, limit: 60 } }) // 5 requests per minute for auth endpoints
+  @Throttle({ auth: { ttl: 60000, limit: 10 } }) // 10 requests per minute for auth endpoints
   @ApiOperation({ summary: 'Register a new user with email/password' })
   @ApiResponse({ status: 201, description: 'User registered successfully' })
   @ApiResponse({ status: 400, description: 'Invalid input data' })
@@ -81,7 +81,7 @@ export class AuthController {
   @Public()
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ auth: { ttl: 60000, limit: 60 } }) // 5 requests per minute for auth endpoints
+  @Throttle({ auth: { ttl: 60000, limit: 10 } }) // 10 requests per minute for auth endpoints
   @ApiOperation({ summary: 'Login with email/password' })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
@@ -95,7 +95,7 @@ export class AuthController {
   @Public()
   @Post('refresh')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ auth: { ttl: 60000, limit: 60 } }) // 5 requests per minute for auth endpoints
+  @Throttle({ auth: { ttl: 60000, limit: 30 } }) // 30 requests per minute for auth endpoints
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
   @ApiResponse({ status: 200, description: 'Token refreshed successfully' })
   @ApiResponse({ status: 401, description: 'Invalid or expired refresh token' })
@@ -199,7 +199,7 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Post('change-password')
   @HttpCode(HttpStatus.OK)
-  @Throttle({ auth: { ttl: 60000, limit: 5 } })
+  @Throttle({ auth: { ttl: 60000, limit: 5 } }) // 5 requests per minute for password change
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Change password for current authenticated user' })
   @ApiResponse({ status: 200, description: 'Password changed successfully' })

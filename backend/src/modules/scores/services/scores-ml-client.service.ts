@@ -101,12 +101,22 @@ interface SQSPredictRequest {
 export class ScoresMlClientService {
   private readonly logger = new Logger(ScoresMlClientService.name);
   private readonly mlServiceUrl: string;
+  private readonly mlServiceSecret: string;
 
   constructor(
     private readonly configService: ConfigService,
     @Optional() @Inject(MetricsService) private readonly metricsService?: MetricsService,
   ) {
     this.mlServiceUrl = this.configService.get<string>('ML_SERVICE_URL', 'http://localhost:8000');
+    this.mlServiceSecret = this.configService.get<string>('ML_SERVICE_SECRET', 'sqdis-ml-internal-secret-token');
+  }
+
+  private getHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
+    return {
+      'Content-Type': 'application/json',
+      'X-Service-Key': this.mlServiceSecret,
+      ...customHeaders,
+    };
   }
 
   /**
@@ -139,9 +149,7 @@ export class ScoresMlClientService {
 
       const response = await fetch(`${this.mlServiceUrl}/api/ml/dqs/predict`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -300,9 +308,7 @@ export class ScoresMlClientService {
 
       const response = await fetch(`${this.mlServiceUrl}/api/ml/sqs/predict`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -492,9 +498,7 @@ export class ScoresMlClientService {
 
       const response = await fetch(`${this.mlServiceUrl}/api/ml/dqs/explain`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -543,6 +547,7 @@ export class ScoresMlClientService {
     try {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/dqs/model-info`, {
         method: 'GET',
+        headers: { 'X-Service-Key': this.mlServiceSecret },
       });
 
       if (!response.ok) {
@@ -567,6 +572,7 @@ export class ScoresMlClientService {
     try {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/sqs/model-info`, {
         method: 'GET',
+        headers: { 'X-Service-Key': this.mlServiceSecret },
       });
 
       if (!response.ok) {
@@ -650,9 +656,7 @@ export class ScoresMlClientService {
     try {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/analyze`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -685,9 +689,7 @@ export class ScoresMlClientService {
     try {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/quality-gate`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: this.getHeaders(),
         body: JSON.stringify(payload),
       });
 
@@ -710,6 +712,7 @@ export class ScoresMlClientService {
     try {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/cache/${repositoryId}`, {
         method: 'DELETE',
+        headers: { 'X-Service-Key': this.mlServiceSecret },
       });
       return response.ok;
     } catch (error) {
