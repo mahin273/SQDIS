@@ -44,7 +44,7 @@ import { AuditLog } from '../audit/decorators/audit-log.decorator';
  */
 @ApiTags('Teams')
 @Controller('teams')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard)
 @ApiBearerAuth()
 @SkipThrottle() // Skip rate limiting for teams endpoints (frequently accessed by dashboard)
 export class TeamsController {

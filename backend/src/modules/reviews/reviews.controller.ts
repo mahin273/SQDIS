@@ -11,6 +11,7 @@ import {
 import type { Response } from 'express';
 import { ReviewsService } from './reviews.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { User } from '@prisma/client';
@@ -20,7 +21,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery }
 @ApiTags('Reviews')
 @ApiBearerAuth()
 @Controller('reviews')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard)
 export class ReviewsController {
   constructor(private readonly reviewsService: ReviewsService) {}
 

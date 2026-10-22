@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { ReportsService } from './reports.service';
@@ -36,7 +37,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@ne
 @ApiTags('Reports')
 @ApiBearerAuth()
 @Controller('reports')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard)
 export class ReportsController {
   constructor(
     private readonly reportsService: ReportsService,
@@ -245,7 +246,7 @@ export class ReportsController {
 @ApiTags('Leaderboard')
 @ApiBearerAuth()
 @Controller('leaderboard')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard)
 export class LeaderboardController {
   constructor(private readonly leaderboardService: LeaderboardService) {}
 

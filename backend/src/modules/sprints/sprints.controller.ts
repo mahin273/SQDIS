@@ -43,6 +43,7 @@ import {
   SprintCarryOverDto,
 } from './dto/sprint-analytics.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { OrganizationsService } from '../organizations/organizations.service';
@@ -54,7 +55,7 @@ import { Role } from '@prisma/client';
  */
 @ApiTags('Sprints')
 @Controller('sprints')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard)
 @ApiBearerAuth()
 export class SprintsController {
   constructor(

@@ -79,9 +79,13 @@ export class RolesGuard implements CanActivate {
         if (membership) {
           user.role = membership.role;
           user.organizationId = orgId;
+        } else {
+          // Caller is not a member of the requested organization - deny access
+          return false;
         }
       } catch {
-        // Fallback gracefully if database lookup fails
+        // Fail closed if database lookup fails
+        return false;
       }
     }
 

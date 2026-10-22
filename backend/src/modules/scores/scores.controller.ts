@@ -9,7 +9,7 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ScoresService } from './scores.service';
-import { JwtAuthGuard } from '../auth/guards';
+import { JwtAuthGuard, OrganizationGuard } from '../auth/guards';
 import { GetUser } from '../auth/decorators';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { DQSHistoryQueryDto, SQSHistoryQueryDto, RecalculateDto } from './dto';
@@ -21,7 +21,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@ne
 @ApiTags('Scores')
 @ApiBearerAuth()
 @Controller('scores')
-@UseGuards(JwtAuthGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard)
 export class ScoresController {
   constructor(private readonly scoresService: ScoresService) {}
 
