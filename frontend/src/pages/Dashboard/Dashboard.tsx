@@ -266,7 +266,11 @@ export default function Dashboard() {
             </div>
             <Progress value={stats?.avgCoverage ?? 0} className="h-1.5" />
             <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              Aggregated from latest LCOV test reports
+              {stats?.coverageCalculationMethod === 'line_weighted'
+                ? 'Line-weighted portfolio coverage across repositories'
+                : stats?.coverageCalculationMethod === 'unweighted_average'
+                ? 'Unweighted repository average'
+                : 'Aggregated from latest LCOV test reports'}
             </p>
           </CardContent>
         </Card>

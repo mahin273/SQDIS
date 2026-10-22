@@ -202,19 +202,27 @@ export class ReviewsService {
               repositoryId: true,
               linesAdded: true,
               linesDeleted: true,
+              fileChanges: { select: { filePath: true } },
             },
           })) ?? []
         : [];
 
-    const commitMap = new Map<string, { linesAdded: number; linesDeleted: number }>();
+    const commitMap = new Map<
+      string,
+      { linesAdded: number; linesDeleted: number; changedFiles: string[] }
+    >();
     for (const c of commits) {
       commitMap.set(`${c.repositoryId}:${c.sha}`, {
         linesAdded: c.linesAdded,
         linesDeleted: c.linesDeleted,
+        changedFiles: c.fileChanges ? c.fileChanges.map((fc: any) => fc.filePath) : [],
       });
     }
 
-    const prStatsMap = new Map<string, { linesAdded: number; linesDeleted: number }>();
+    const prStatsMap = new Map<
+      string,
+      { linesAdded: number; linesDeleted: number; changedFiles: string[] }
+    >();
     for (const p of prs || []) {
       if (p.headCommitSha) {
         const stats = commitMap.get(`${p.repositoryId}:${p.headCommitSha}`);
@@ -244,6 +252,7 @@ export class ReviewsService {
             message: true,
             linesAdded: true,
             linesDeleted: true,
+            fileChanges: { select: { filePath: true } },
           },
         })) ?? [];
 
@@ -253,6 +262,7 @@ export class ReviewsService {
             prStatsMap.set(`${mc.repositoryId}:${num}`, {
               linesAdded: mc.linesAdded,
               linesDeleted: mc.linesDeleted,
+              changedFiles: mc.fileChanges ? mc.fileChanges.map((fc: any) => fc.filePath) : [],
             });
             break;
           }
@@ -320,6 +330,7 @@ export class ReviewsService {
         commentCount: r._count?.comments ?? 0,
         linesAdded: stats?.linesAdded ?? 0,
         linesRemoved: stats?.linesDeleted ?? 0,
+        changedFiles: stats?.changedFiles ?? [],
       };
     });
 

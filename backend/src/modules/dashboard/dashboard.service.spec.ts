@@ -122,9 +122,39 @@ describe('DashboardService', () => {
         totalCommits: 120,
         bugFixCommits: 18,
         avgCoverage: 70,
+        coverageCalculationMethod: 'unweighted_average',
         avgSQS: 75,
         riskyModulesCount: 2,
       });
+    });
+
+    it('returns line-weighted portfolio coverage when linesTotal and linesCovered are present', async () => {
+      prisma.repository.count.mockResolvedValue(2);
+      prisma.team.count.mockResolvedValue(1);
+      prisma.project.count.mockResolvedValue(1);
+      prisma.commit.count.mockResolvedValue(50);
+      prisma.organizationMember.count.mockResolvedValue(5);
+      prisma.repository.findMany.mockResolvedValue([{ id: 'repo-small' }, { id: 'repo-large' }]);
+      prisma.coverageReport.findFirst
+        .mockResolvedValueOnce({
+          coveragePercentage: 100,
+          linesTotal: 100,
+          linesCovered: 100,
+        })
+        .mockResolvedValueOnce({
+          coveragePercentage: 20,
+          linesTotal: 900,
+          linesCovered: 180,
+        });
+      prisma.project.findMany.mockResolvedValue([]);
+      prisma.sQSScore.findFirst.mockResolvedValue({ score: 80 });
+      prisma.alert.count.mockResolvedValue(0);
+
+      const result = await service.getOrganizationStats('org-1');
+
+      // (100 + 180) / (100 + 900) * 100 = 280 / 1000 * 100 = 28.0% (instead of arithmetic mean (100+20)/2 = 60%)
+      expect(result.avgCoverage).toBe(28);
+      expect(result.coverageCalculationMethod).toBe('line_weighted');
     });
   });
 

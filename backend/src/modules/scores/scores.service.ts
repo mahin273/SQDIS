@@ -44,23 +44,7 @@ export class ScoresService {
    * @returns DQS score with breakdown
    */
   async getDQS(developerId: string, organizationId: string) {
-    // Try to get from cache first
-    const cacheKey = CACHE_KEYS.DQS_SCORE(developerId);
-    const cached = await this.cacheService.get<{
-      developerId: string;
-      score: number;
-      modelVersion: string;
-      calculatedAt: Date;
-      features: Record<string, number>;
-      shapValues: Array<{ feature: string; impact: number }>;
-    }>(cacheKey);
-
-    if (cached) {
-      this.logger.debug(`Cache hit for DQS score: ${developerId}`);
-      return cached;
-    }
-
-    // Verify developer exists and belongs to organization
+    // Verify developer exists and belongs to organization FIRST before checking cache
     const developer = await this.prisma.user.findFirst({
       where: {
         id: developerId,
@@ -78,6 +62,22 @@ export class ScoresService {
 
     if (!developer) {
       throw new NotFoundException(`Developer with ID ${developerId} not found in organization`);
+    }
+
+    // Try to get from cache with tenant-scoped key
+    const cacheKey = CACHE_KEYS.DQS_SCORE(developerId, organizationId);
+    const cached = await this.cacheService.get<{
+      developerId: string;
+      score: number;
+      modelVersion: string;
+      calculatedAt: Date;
+      features: Record<string, number>;
+      shapValues: Array<{ feature: string; impact: number }>;
+    }>(cacheKey);
+
+    if (cached) {
+      this.logger.debug(`Cache hit for DQS score: ${developerId} in org ${organizationId}`);
+      return cached;
     }
 
     // Get latest DQS score from database
@@ -120,8 +120,22 @@ export class ScoresService {
   async getDQSHistory(developerId: string, organizationId: string, query: DQSHistoryQueryDto) {
     const { startDate, endDate, limit = 30 } = query;
 
-    // Create cache key with query params
-    const cacheKey = `${CACHE_KEYS.DQS_HISTORY(developerId)}:${startDate || ''}:${endDate || ''}:${limit}`;
+    // Verify developer exists and belongs to organization FIRST before checking cache
+    const developer = await this.prisma.user.findFirst({
+      where: {
+        id: developerId,
+        memberships: {
+          some: { organizationId },
+        },
+      },
+    });
+
+    if (!developer) {
+      throw new NotFoundException(`Developer with ID ${developerId} not found in organization`);
+    }
+
+    // Create cache key with query params scoped by organizationId
+    const cacheKey = `${CACHE_KEYS.DQS_HISTORY(developerId, organizationId)}:${startDate || ''}:${endDate || ''}:${limit}`;
     const cached = await this.cacheService.get<{
       developerId: string;
       history: Array<{
@@ -137,22 +151,8 @@ export class ScoresService {
     }>(cacheKey);
 
     if (cached) {
-      this.logger.debug(`Cache hit for DQS history: ${developerId}`);
+      this.logger.debug(`Cache hit for DQS history: ${developerId} in org ${organizationId}`);
       return cached;
-    }
-
-    // Verify developer exists and belongs to organization
-    const developer = await this.prisma.user.findFirst({
-      where: {
-        id: developerId,
-        memberships: {
-          some: { organizationId },
-        },
-      },
-    });
-
-    if (!developer) {
-      throw new NotFoundException(`Developer with ID ${developerId} not found in organization`);
     }
 
     const where: any = { developerId };
@@ -205,8 +205,22 @@ export class ScoresService {
    * @returns SHAP explanation with top 5 features
    */
   async getDQSExplanation(developerId: string, organizationId: string) {
-    // Try to get from cache first
-    const cacheKey = CACHE_KEYS.DQS_EXPLANATION(developerId);
+    // Verify developer exists and belongs to organization FIRST before checking cache
+    const developer = await this.prisma.user.findFirst({
+      where: {
+        id: developerId,
+        memberships: {
+          some: { organizationId },
+        },
+      },
+    });
+
+    if (!developer) {
+      throw new NotFoundException(`Developer with ID ${developerId} not found in organization`);
+    }
+
+    // Try to get from cache with tenant-scoped key
+    const cacheKey = CACHE_KEYS.DQS_EXPLANATION(developerId, organizationId);
     const cached = await this.cacheService.get<{
       developerId: string;
       score: number;
@@ -219,22 +233,8 @@ export class ScoresService {
     }>(cacheKey);
 
     if (cached) {
-      this.logger.debug(`Cache hit for DQS explanation: ${developerId}`);
+      this.logger.debug(`Cache hit for DQS explanation: ${developerId} in org ${organizationId}`);
       return cached;
-    }
-
-    // Verify developer exists and belongs to organization
-    const developer = await this.prisma.user.findFirst({
-      where: {
-        id: developerId,
-        memberships: {
-          some: { organizationId },
-        },
-      },
-    });
-
-    if (!developer) {
-      throw new NotFoundException(`Developer with ID ${developerId} not found in organization`);
     }
 
     // Get latest DQS score with SHAP values
@@ -283,23 +283,7 @@ export class ScoresService {
    * @returns SQS score with risky modules
    */
   async getSQS(projectId: string, organizationId: string) {
-    // Try to get from cache first
-    const cacheKey = CACHE_KEYS.SQS_SCORE(projectId);
-    const cached = await this.cacheService.get<{
-      projectId: string;
-      score: number;
-      modelVersion: string;
-      calculatedAt: Date;
-      riskyModules: Array<{ path: string; risk_level: string; reason: string }>;
-      recommendations: string[];
-    }>(cacheKey);
-
-    if (cached) {
-      this.logger.debug(`Cache hit for SQS score: ${projectId}`);
-      return cached;
-    }
-
-    // Verify project or repository exists in organization
+    // Verify project or repository exists in organization FIRST before checking cache
     const repository = await this.prisma.repository.findFirst({
       where: {
         id: projectId,
@@ -318,6 +302,22 @@ export class ScoresService {
 
     if (!repository && !project) {
       throw new NotFoundException(`Project or Repository with ID ${projectId} not found in organization`);
+    }
+
+    // Try to get from cache with tenant-scoped key
+    const cacheKey = CACHE_KEYS.SQS_SCORE(projectId, organizationId);
+    const cached = await this.cacheService.get<{
+      projectId: string;
+      score: number;
+      modelVersion: string;
+      calculatedAt: Date;
+      riskyModules: Array<{ path: string; risk_level: string; reason: string }>;
+      recommendations: string[];
+    }>(cacheKey);
+
+    if (cached) {
+      this.logger.debug(`Cache hit for SQS score: ${projectId} in org ${organizationId}`);
+      return cached;
     }
 
     // Get latest SQS score from database
@@ -361,28 +361,7 @@ export class ScoresService {
   async getSQSHistory(projectId: string, organizationId: string, query: SQSHistoryQueryDto) {
     const { startDate, endDate, limit = 30 } = query;
 
-    // Create cache key with query params
-    const cacheKey = `${CACHE_KEYS.SQS_HISTORY(projectId)}:${startDate || ''}:${endDate || ''}:${limit}`;
-    const cached = await this.cacheService.get<{
-      projectId: string;
-      history: Array<{
-        id: string;
-        score: number;
-        modelVersion: string;
-        calculatedAt: Date;
-      }>;
-      meta: {
-        count: number;
-        dateRange: { start: string | null; end: string | null };
-      };
-    }>(cacheKey);
-
-    if (cached) {
-      this.logger.debug(`Cache hit for SQS history: ${projectId}`);
-      return cached;
-    }
-
-    // Verify project or repository exists in organization
+    // Verify project or repository exists in organization FIRST before checking cache
     const repository = await this.prisma.repository.findFirst({
       where: {
         id: projectId,
@@ -401,6 +380,27 @@ export class ScoresService {
 
     if (!repository && !project) {
       throw new NotFoundException(`Project or Repository with ID ${projectId} not found in organization`);
+    }
+
+    // Create cache key with query params scoped by organizationId
+    const cacheKey = `${CACHE_KEYS.SQS_HISTORY(projectId, organizationId)}:${startDate || ''}:${endDate || ''}:${limit}`;
+    const cached = await this.cacheService.get<{
+      projectId: string;
+      history: Array<{
+        id: string;
+        score: number;
+        modelVersion: string;
+        calculatedAt: Date;
+      }>;
+      meta: {
+        count: number;
+        dateRange: { start: string | null; end: string | null };
+      };
+    }>(cacheKey);
+
+    if (cached) {
+      this.logger.debug(`Cache hit for SQS history: ${projectId} in org ${organizationId}`);
+      return cached;
     }
 
     const where: any = { projectId };
@@ -481,22 +481,7 @@ export class ScoresService {
       }
     }
 
-    // Try to get from cache first
-    const cacheKey = CACHE_KEYS.SQS_RISKS(targetProjectId);
-    const cached = await this.cacheService.get<{
-      projectId: string;
-      riskyModules: Array<{ path: string; risk_level: string; reason: string }>;
-      totalRiskyModules: number;
-      highCriticalCount: number;
-      calculatedAt: Date;
-    }>(cacheKey);
-
-    if (cached) {
-      this.logger.debug(`Cache hit for SQS risks: ${targetProjectId}`);
-      return cached;
-    }
-
-    // Verify project exists and belongs to organization (check repository first, then project)
+    // Verify project exists and belongs to organization FIRST before checking cache (check repository first, then project)
     let repository = await this.prisma.repository.findFirst({
       where: {
         id: targetProjectId,
@@ -517,6 +502,21 @@ export class ScoresService {
       } else if (!project && projectId !== 'default') {
         throw new NotFoundException(`Project with ID ${projectId} not found in organization`);
       }
+    }
+
+    // Try to get from cache with tenant-scoped key
+    const cacheKey = CACHE_KEYS.SQS_RISKS(targetProjectId, organizationId);
+    const cached = await this.cacheService.get<{
+      projectId: string;
+      riskyModules: Array<{ path: string; risk_level: string; reason: string }>;
+      totalRiskyModules: number;
+      highCriticalCount: number;
+      calculatedAt: Date;
+    }>(cacheKey);
+
+    if (cached) {
+      this.logger.debug(`Cache hit for SQS risks: ${targetProjectId} in org ${organizationId}`);
+      return cached;
     }
 
     // Get latest SQS score with risky modules
@@ -782,7 +782,7 @@ export class ScoresService {
     });
 
     // Invalidate cache for this developer
-    await this.cacheService.invalidateDQS(developerId);
+    await this.cacheService.invalidateDQS(developerId, organizationId);
 
     // Publish score:updated event for real-time updates
     this.publishScoreCalculatedEvent(
@@ -1237,7 +1237,7 @@ export class ScoresService {
     });
 
     // Invalidate cache for this project
-    await this.cacheService.invalidateSQS(projectId);
+    await this.cacheService.invalidateSQS(projectId, organizationId);
 
     // Publish score:updated event for real-time updates
     this.publishScoreCalculatedEvent(

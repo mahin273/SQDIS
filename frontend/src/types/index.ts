@@ -199,6 +199,7 @@ export interface DashboardStats {
   riskyModulesCount?: number;
   coverage?: number;
   avgCoverage?: number;
+  coverageCalculationMethod?: 'line_weighted' | 'unweighted_average' | 'none';
   techDebt?: number;
 }
 
@@ -1168,6 +1169,7 @@ export interface Review {
   commentCount: number;
   linesAdded: number;
   linesRemoved: number;
+  changedFiles?: string[];
   qualityGate?: {
     id: string;
     status: 'PASSED' | 'WARNING' | 'BLOCKED';
