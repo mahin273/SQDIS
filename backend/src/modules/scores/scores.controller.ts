@@ -72,8 +72,9 @@ export class ScoresController {
   async getDQS(
     @Param('developerId', ParseUUIDPipe) developerId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.scoresService.getDQS(developerId, organizationId);
+    return this.scoresService.getDQS(developerId, organizationId, user);
   }
 
   /**
@@ -87,8 +88,9 @@ export class ScoresController {
     @Param('developerId', ParseUUIDPipe) developerId: string,
     @Query() query: DQSHistoryQueryDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.scoresService.getDQSHistory(developerId, organizationId, query);
+    return this.scoresService.getDQSHistory(developerId, organizationId, query, user);
   }
 
   /**
@@ -101,8 +103,9 @@ export class ScoresController {
   async getDQSExplanation(
     @Param('developerId', ParseUUIDPipe) developerId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.scoresService.getDQSExplanation(developerId, organizationId);
+    return this.scoresService.getDQSExplanation(developerId, organizationId, user);
   }
 
   /**
@@ -115,8 +118,9 @@ export class ScoresController {
   async getSQS(
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.scoresService.getSQS(projectId, organizationId);
+    return this.scoresService.getSQS(projectId, organizationId, user);
   }
 
   /**
@@ -129,8 +133,9 @@ export class ScoresController {
   async getRepositorySQS(
     @Param('repositoryId', ParseUUIDPipe) repositoryId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.scoresService.getSQS(repositoryId, organizationId);
+    return this.scoresService.getSQS(repositoryId, organizationId, user);
   }
 
   /**
@@ -144,8 +149,9 @@ export class ScoresController {
     @Param('projectId', ParseUUIDPipe) projectId: string,
     @Query() query: SQSHistoryQueryDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.scoresService.getSQSHistory(projectId, organizationId, query);
+    return this.scoresService.getSQSHistory(projectId, organizationId, query, user);
   }
 
   /**
@@ -158,8 +164,9 @@ export class ScoresController {
   async getRiskyModules(
     @Param('projectId') projectId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.scoresService.getRiskyModules(projectId, organizationId);
+    return this.scoresService.getRiskyModules(projectId, organizationId, user);
   }
 
   /**
@@ -168,7 +175,11 @@ export class ScoresController {
   @Post('recalculate')
   @ApiOperation({ summary: 'Trigger score recalculation manually' })
   @ApiResponse({ status: 201, description: 'Recalculation successfully triggered.' })
-  async recalculate(@Body() body: RecalculateDto, @GetOrganization() organizationId: string) {
-    return this.scoresService.triggerRecalculation(body.entityId, body.type, organizationId);
+  async recalculate(
+    @Body() body: RecalculateDto,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ) {
+    return this.scoresService.triggerRecalculation(body.entityId, body.type, organizationId, user);
   }
 }

@@ -3,7 +3,7 @@ export type AuthzErrorType = 'FORBIDDEN' | 'INSUFFICIENT_ROLE' | 'INSUFFICIENT_P
 
 export interface AuthzFailureDetails {
   userId?: string
-  userRole?: string
+  userRole?: string | null
   attemptedAction?: string
   attemptedRoute?: string
   reason: string

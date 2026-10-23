@@ -55,11 +55,6 @@ const ROLE_COLORS: Record<UserRole, { bg: string; text: string; border: string }
     text: 'text-blue-800 dark:text-blue-300',
     border: 'border-blue-200 dark:border-blue-800',
   },
-  VIEWER: {
-    bg: 'bg-slate-100 dark:bg-slate-800',
-    text: 'text-slate-800 dark:text-slate-300',
-    border: 'border-slate-200 dark:border-slate-700',
-  },
 }
 
 export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {}) {
@@ -695,7 +690,6 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
                     <option value="ADMIN">Admin</option>
                     <option value="TEAM_LEAD">Team Lead</option>
                     <option value="DEVELOPER">Developer</option>
-                    <option value="VIEWER">Viewer</option>
                   </select>
                   <ChevronDown className="absolute right-2.5 top-2.5 h-3.5 w-3.5 text-slate-400 pointer-events-none" />
                 </div>
@@ -863,7 +857,6 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
                                   <option value="ADMIN">Admin</option>
                                   <option value="TEAM_LEAD">Team Lead</option>
                                   <option value="DEVELOPER">Developer</option>
-                                  <option value="VIEWER">Viewer</option>
                                 </select>
 
                                 <Button
@@ -1238,7 +1231,7 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
               Initial Role Assignment
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 mt-2">
-              {(['ADMIN', 'TEAM_LEAD', 'DEVELOPER', 'VIEWER'] as UserRole[]).map((role) => (
+              {(['ADMIN', 'TEAM_LEAD', 'DEVELOPER'] as UserRole[]).map((role) => (
                 <div
                   key={role}
                   className={`border rounded-lg p-3 cursor-pointer transition-all ${
@@ -1258,7 +1251,6 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
                     {role === 'ADMIN' && 'Full platform management and team assignments.'}
                     {role === 'TEAM_LEAD' && 'Manage sprint goals, review debt, and mentors.'}
                     {role === 'DEVELOPER' && 'Submit commits, PRs, and track DQS telemetry.'}
-                    {role === 'VIEWER' && 'Read-only access to quality metrics and analytics.'}
                   </p>
                 </div>
               ))}

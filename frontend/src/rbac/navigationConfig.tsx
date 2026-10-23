@@ -32,7 +32,8 @@ export const NAV_CONFIG: NavItemConfig[] = [
   {
     label: 'Organization Members',
     path: '/dashboard/org-members',
-    requiredPermission: 'organization:view',
+    requiredRole: 'ADMIN',
+    requiredPermission: 'members:view',
   },
   {
     label: 'Onboarding',

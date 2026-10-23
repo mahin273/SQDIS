@@ -1,7 +1,7 @@
 import * as fc from 'fast-check';
 import type { UserRole, User, CommitClassification } from '@/types';
 
-export const userRoleArbitrary = fc.constantFrom<UserRole>('OWNER', 'ADMIN', 'TEAM_LEAD', 'DEVELOPER', 'VIEWER');
+export const userRoleArbitrary = fc.constantFrom<UserRole>('OWNER', 'ADMIN', 'TEAM_LEAD', 'DEVELOPER');
 
 export const userArbitrary: fc.Arbitrary<User> = fc.record({
   id: fc.uuid(),

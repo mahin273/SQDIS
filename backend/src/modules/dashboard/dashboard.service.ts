@@ -369,12 +369,54 @@ export class DashboardService {
   }
 
   /**
-   * Get top developers by DQS
+   * Get top developers by DQS (scoped by stakeholder role)
    */
-  async getTopDevelopers(organizationId: string, limit: number = 5) {
+  async getTopDevelopers(
+    organizationId: string,
+    limit: number = 5,
+    caller?: { id: string; role?: string },
+  ) {
+    let allowedUserIds: string[] | null = null;
+    if (caller) {
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: caller.id,
+          },
+        },
+      });
+      const effectiveRole = membership?.role || caller.role;
+      if (effectiveRole === 'DEVELOPER') {
+        allowedUserIds = [caller.id];
+      } else if (effectiveRole === 'TEAM_LEAD') {
+        const teamMemberships = await this.prisma.teamMembership.findMany({
+          where: {
+            leftAt: null,
+            team: {
+              organizationId,
+              members: {
+                some: {
+                  userId: caller.id,
+                  leftAt: null,
+                },
+              },
+            },
+          },
+          select: { userId: true },
+        });
+        const ids = new Set(teamMemberships.map((m) => m.userId));
+        ids.add(caller.id);
+        allowedUserIds = Array.from(ids);
+      }
+    }
+
     // Get organization members
     const members = await this.prisma.organizationMember.findMany({
-      where: { organizationId },
+      where: {
+        organizationId,
+        ...(allowedUserIds ? { userId: { in: allowedUserIds } } : {}),
+      },
       include: {
         user: {
           select: { id: true, name: true, email: true, avatarUrl: true },

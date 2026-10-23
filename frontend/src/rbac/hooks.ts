@@ -4,25 +4,32 @@ import { useAuthStore } from '@/stores/authStore'
 import { useOrganizationStore } from '@/stores/organizationStore'
 import { NAV_CONFIG, type NavItemConfig } from './navigationConfig'
 
-export function useUserRole(): UserRole {
+const VALID_ROLES: ReadonlyArray<UserRole> = ['OWNER', 'ADMIN', 'TEAM_LEAD', 'DEVELOPER']
+
+export function useUserRole(): UserRole | null {
   const user = useAuthStore((state) => state.user)
   const currentOrganization = useOrganizationStore((state) => state.currentOrganization)
 
-  if (currentOrganization?.role) {
+  if (currentOrganization?.role && VALID_ROLES.includes(currentOrganization.role)) {
     return currentOrganization.role
   }
-  if (user?.role) {
+  if (user?.role && VALID_ROLES.includes(user.role)) {
     return user.role
   }
   if (user?.memberships && user.memberships.length > 0) {
     if (currentOrganization) {
       const membership = user.memberships.find((m) => m.organizationId === currentOrganization.id)
-      if (membership?.role) return membership.role
+      if (membership?.role && VALID_ROLES.includes(membership.role)) {
+        return membership.role
+      }
     }
-    return user.memberships[0].role
+    const firstRole = user.memberships[0]?.role
+    if (firstRole && VALID_ROLES.includes(firstRole)) {
+      return firstRole
+    }
   }
-  // Default to OWNER if user is logged in so all standard modules are visible
-  return 'OWNER'
+  // Fail-closed: Never default to OWNER or privileged role
+  return null
 }
 
 export function usePermission(

@@ -1,8 +1,8 @@
-import { Injectable, Logger, NotFoundException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { Queue } from 'bullmq';
-import { Prisma } from '@prisma/client';
+import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../prisma';
 import {
   ScoresMlClientService,
@@ -37,13 +37,168 @@ export class ScoresService {
   ) {}
 
   /**
+   * Verify developer DQS privacy access
+   * DEVELOPER: self only
+   * TEAM_LEAD: self or active team members
+   * OWNER/ADMIN: org-wide
+   */
+  async verifyDqsPrivacyAccess(
+    developerId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<void> {
+    if (!caller) return;
+
+    // Resolve authoritative role from active organization membership
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: caller.id,
+        },
+      },
+    });
+
+    const effectiveRole = (membership?.role || caller.role) as Role | undefined;
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return;
+    }
+
+    if (effectiveRole === Role.DEVELOPER) {
+      if (caller.id !== developerId) {
+        throw new ForbiddenException('Developers can only view their own DQS profile.');
+      }
+      return;
+    }
+
+    if (effectiveRole === Role.TEAM_LEAD) {
+      if (caller.id === developerId) {
+        return;
+      }
+      const sharedTeam = await this.prisma.teamMembership.findFirst({
+        where: {
+          userId: developerId,
+          leftAt: null,
+          team: {
+            organizationId,
+            members: {
+              some: {
+                userId: caller.id,
+                leftAt: null,
+              },
+            },
+          },
+        },
+      });
+
+      if (!sharedTeam) {
+        throw new ForbiddenException(
+          'Team Leads can only view DQS for members of their assigned teams.',
+        );
+      }
+      return;
+    }
+  }
+
+  /**
+   * Verify project SQS access
+   * OWNER/ADMIN: org-wide
+   * TEAM_LEAD/DEVELOPER: projects assigned to active teams
+   */
+  async verifyProjectAccess(
+    entityId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<{ projectId: string }> {
+    let repository = await this.prisma.repository.findFirst({
+      where: { id: entityId, organizationId },
+    });
+
+    let project = !repository
+      ? await this.prisma.project.findFirst({
+          where: { id: entityId, organizationId },
+        })
+      : null;
+
+    if (!repository && !project) {
+      throw new NotFoundException(`Project or Repository with ID ${entityId} not found in organization`);
+    }
+
+    if (!caller) {
+      return { projectId: project ? project.id : entityId };
+    }
+
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: caller.id,
+        },
+      },
+    });
+
+    const effectiveRole = (membership?.role || caller.role) as Role | undefined;
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return { projectId: project ? project.id : entityId };
+    }
+
+    let targetProjectId = project?.id;
+    if (!targetProjectId && repository) {
+      const projRepo = await this.prisma.projectRepository.findFirst({
+        where: { repositoryId: repository.id },
+        include: { project: true },
+      });
+      if (projRepo?.project && projRepo.project.organizationId === organizationId) {
+        targetProjectId = projRepo.project.id;
+      }
+    }
+
+    if (!targetProjectId) {
+      throw new ForbiddenException('You do not have access to unassigned repository quality scores.');
+    }
+
+    const hasAssignment = await this.prisma.teamProjectAssignment.findFirst({
+      where: {
+        projectId: targetProjectId,
+        endDate: null,
+        team: {
+          organizationId,
+          members: {
+            some: {
+              userId: caller.id,
+              leftAt: null,
+            },
+          },
+        },
+      },
+    });
+
+    if (!hasAssignment) {
+      throw new ForbiddenException(
+        'Access denied: This project is not assigned to any of your active teams.',
+      );
+    }
+
+    return { projectId: targetProjectId };
+  }
+
+  /**
    * Get developer DQS score
    *
    * @param developerId - Developer user ID
    * @param organizationId - Organization ID
+   * @param caller - Requesting user context for privacy scoping
    * @returns DQS score with breakdown
    */
-  async getDQS(developerId: string, organizationId: string) {
+  async getDQS(
+    developerId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ) {
+    if (caller) {
+      await this.verifyDqsPrivacyAccess(developerId, organizationId, caller);
+    }
+
     // Verify developer exists and belongs to organization FIRST before checking cache
     const developer = await this.prisma.user.findFirst({
       where: {
@@ -117,7 +272,15 @@ export class ScoresService {
    * @param query - History query parameters
    * @returns Array of historical DQS scores
    */
-  async getDQSHistory(developerId: string, organizationId: string, query: DQSHistoryQueryDto) {
+  async getDQSHistory(
+    developerId: string,
+    organizationId: string,
+    query: DQSHistoryQueryDto,
+    caller?: { id: string; role?: string },
+  ) {
+    if (caller) {
+      await this.verifyDqsPrivacyAccess(developerId, organizationId, caller);
+    }
     const { startDate, endDate, limit = 30 } = query;
 
     // Verify developer exists and belongs to organization FIRST before checking cache
@@ -204,7 +367,14 @@ export class ScoresService {
    * @param organizationId - Organization ID
    * @returns SHAP explanation with top 5 features
    */
-  async getDQSExplanation(developerId: string, organizationId: string) {
+  async getDQSExplanation(
+    developerId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ) {
+    if (caller) {
+      await this.verifyDqsPrivacyAccess(developerId, organizationId, caller);
+    }
     // Verify developer exists and belongs to organization FIRST before checking cache
     const developer = await this.prisma.user.findFirst({
       where: {
@@ -282,27 +452,13 @@ export class ScoresService {
    * @param organizationId - Organization ID
    * @returns SQS score with risky modules
    */
-  async getSQS(projectId: string, organizationId: string) {
-    // Verify project or repository exists in organization FIRST before checking cache
-    const repository = await this.prisma.repository.findFirst({
-      where: {
-        id: projectId,
-        organizationId,
-      },
-    });
-
-    const project = !repository
-      ? await this.prisma.project.findFirst({
-          where: {
-            id: projectId,
-            organizationId,
-          },
-        })
-      : null;
-
-    if (!repository && !project) {
-      throw new NotFoundException(`Project or Repository with ID ${projectId} not found in organization`);
-    }
+  async getSQS(
+    projectId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ) {
+    // Verify project or repository access in organization FIRST before checking cache
+    await this.verifyProjectAccess(projectId, organizationId, caller);
 
     // Try to get from cache with tenant-scoped key
     const cacheKey = CACHE_KEYS.SQS_SCORE(projectId, organizationId);
@@ -358,29 +514,16 @@ export class ScoresService {
    * @param query - History query parameters
    * @returns Array of historical SQS scores
    */
-  async getSQSHistory(projectId: string, organizationId: string, query: SQSHistoryQueryDto) {
+  async getSQSHistory(
+    projectId: string,
+    organizationId: string,
+    query: SQSHistoryQueryDto,
+    caller?: { id: string; role?: string },
+  ) {
     const { startDate, endDate, limit = 30 } = query;
 
-    // Verify project or repository exists in organization FIRST before checking cache
-    const repository = await this.prisma.repository.findFirst({
-      where: {
-        id: projectId,
-        organizationId,
-      },
-    });
-
-    const project = !repository
-      ? await this.prisma.project.findFirst({
-          where: {
-            id: projectId,
-            organizationId,
-          },
-        })
-      : null;
-
-    if (!repository && !project) {
-      throw new NotFoundException(`Project or Repository with ID ${projectId} not found in organization`);
-    }
+    // Verify project or repository access in organization FIRST before checking cache
+    await this.verifyProjectAccess(projectId, organizationId, caller);
 
     // Create cache key with query params scoped by organizationId
     const cacheKey = `${CACHE_KEYS.SQS_HISTORY(projectId, organizationId)}:${startDate || ''}:${endDate || ''}:${limit}`;
@@ -452,7 +595,14 @@ export class ScoresService {
    * @param organizationId - Organization ID
    * @returns List of risky modules
    */
-  async getRiskyModules(projectId: string, organizationId: string) {
+  async getRiskyModules(
+    projectId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ) {
+    if (caller && projectId !== 'default') {
+      await this.verifyProjectAccess(projectId, organizationId, caller);
+    }
     let targetProjectId = projectId;
     if (projectId === 'default') {
       const defaultRepo = await this.prisma.repository.findFirst({
@@ -630,7 +780,19 @@ export class ScoresService {
    * @param organizationId - Organization ID
    * @returns Job enqueue result
    */
-  async triggerRecalculation(entityId: string, type: ScoreType, organizationId: string) {
+  async triggerRecalculation(
+    entityId: string,
+    type: ScoreType,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ) {
+    if (caller) {
+      if (type === ScoreType.SQS) {
+        await this.verifyProjectAccess(entityId, organizationId, caller);
+      } else if (type === ScoreType.DQS) {
+        await this.verifyDqsPrivacyAccess(entityId, organizationId, caller);
+      }
+    }
     await this.verifyEntityOwnership(entityId, type, organizationId);
 
     const jobType = type === ScoreType.DQS ? ScoreJobType.DQS : ScoreJobType.SQS;

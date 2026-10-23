@@ -67,15 +67,6 @@ const ROLE_PERMISSIONS: Record<
       'Complete assigned onboarding checklist workflows',
     ],
   },
-  VIEWER: {
-    label: 'Read-Only Observer',
-    description: 'Telemetry and analytics monitoring without mutation rights.',
-    privileges: [
-      'Inspect engineering quality dashboards',
-      'Review release canary telemetry & regression logs',
-      'View aggregated team performance benchmarks',
-    ],
-  },
 }
 
 export function MemberProfileDrawer({
@@ -239,7 +230,6 @@ export function MemberProfileDrawer({
                 <option value="ADMIN">Admin (Settings, Teams &amp; Invites)</option>
                 <option value="TEAM_LEAD">Team Lead (Sprint &amp; Review Governance)</option>
                 <option value="DEVELOPER">Developer (Contributor &amp; Telemetry)</option>
-                <option value="VIEWER">Viewer (Read-Only Access)</option>
               </select>
             </div>
 
