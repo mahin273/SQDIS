@@ -124,7 +124,7 @@ export class ScoresService {
           },
         },
       });
-      if (repository && repository.projectRepositories.length > 0) {
+      if (repository?.projectRepositories && repository.projectRepositories.length > 0) {
         project = repository.projectRepositories[0].project;
       }
     }
