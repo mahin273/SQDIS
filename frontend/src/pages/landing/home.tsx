@@ -23,7 +23,7 @@ export default function Home() {
   }, [hash])
 
   return (
-    <div className="min-h-screen bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-500 selection:text-white transition-colors duration-200">
+    <div className="min-h-screen bg-zinc-50 dark:bg-[#08090d] text-zinc-900 dark:text-zinc-100 font-sans selection:bg-indigo-500/30 selection:text-indigo-200 transition-colors duration-200">
       <LandingHeader />
       <main>
         <HeroSection />

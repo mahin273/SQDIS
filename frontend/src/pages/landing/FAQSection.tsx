@@ -7,60 +7,65 @@ export default function FAQSection() {
   const faqs = [
     {
       q: 'How is the Software Quality Score (SQS) calculated?',
-      a: 'SQS uses machine learning models trained on millions of open-source and commercial commits. It analyzes cyclomatic complexity, cognitive load, coupling, test coverage density, architectural anti-patterns, and historical defect rates to generate a calibrated 0–100 score.',
+      a: 'SQS utilizes polyglot Tree-sitter AST parsing coupled with pre-trained ML models. It evaluates cyclomatic complexity, cognitive branch depth, coupling density, test coverage deltas, and defect risk probabilities to produce a calibrated 0-100 score benchmarked against historical baseline data.',
     },
     {
       q: 'Does SQDIS store or train models on our proprietary source code?',
-      a: 'No. SQDIS never stores your proprietary code files on permanent storage. All AST parsing and complexity calculations occur ephemerally in-memory. Only sanitized metadata (AST metrics, cyclomatic scores, commit hashes) are persisted with AES-256 encryption.',
+      a: 'No. SQDIS never stores your proprietary source code files on persistent storage. All AST parsing and cyclomatic calculations occur ephemerally in worker RAM. Only sanitized, encrypted AST metadata (cyclomatic metrics, commit SHAs, line churn) are persisted with AES-256 encryption.',
     },
     {
-      q: 'How does the GitHub / GitLab integration work?',
-      a: 'You can connect in under 60 seconds using a GitHub Personal Access Token or OAuth GitHub App. SQDIS automatically registers secure HMAC-SHA256 webhooks for push, pull request, and review events so commits are analyzed in real time.',
+      q: 'How does the GitHub and GitLab integration work?',
+      a: 'You can connect in under 60 seconds using 1-click GitHub OAuth or a Personal Access Token. SQDIS automatically provisions HMAC-SHA256 authenticated webhooks for push, pull request, and review events to process commits with sub-second latency.',
     },
     {
-      q: 'Can SQDIS block pull requests or fail CI/CD builds if SQS drops below a target?',
-      a: 'Yes. You can configure Quality Gate thresholds per repository or organization. If a pull request introduces severe technical debt or drops coverage below your threshold, SQDIS can flag the PR or report status to your CI/CD pipeline.',
+      q: 'Can SQDIS block pull requests if quality thresholds are violated?',
+      a: 'Yes. You can configure granular Quality Gate policies per repository or organization. When a pull request introduces severe cyclomatic hotspots or drops test coverage below your policy floor, SQDIS reports a failure check to the GitHub Checks API to halt merge approval.',
     },
     {
       q: 'Can we self-host SQDIS on our private cloud or Kubernetes cluster?',
-      a: 'Yes! Our Enterprise tier provides complete Docker Compose and Kubernetes Helm chart deployments for air-gapped or VPC-isolated environments with SAML/SSO integration.',
+      a: 'Yes. Enterprise tiers include complete Docker Compose and Kubernetes Helm chart deployment bundles designed for air-gapped or VPC-isolated environments with SAML 2.0 / Okta SSO integration.',
     },
   ]
 
   return (
-    <section id="faq" className="border-t border-slate-200/80 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-900/30 py-20 lg:py-32">
-      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+    <section id="faq" className="border-t border-zinc-200 dark:border-zinc-800/80 bg-zinc-100/60 dark:bg-[#07080c] py-20 lg:py-28 scroll-mt-16">
+      <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8 space-y-12">
+        {/* Header */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 uppercase tracking-wider">
-            Got Questions?
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700/60 uppercase tracking-wider">
+            Technical FAQ
           </div>
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-            Frequently Asked Questions
+          <h2 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Frequently Asked Questions.
           </h2>
-          <p className="text-base text-slate-600 dark:text-slate-300">
-            Everything you need to know about SQDIS software intelligence and security.
+          <p className="text-base text-zinc-600 dark:text-zinc-400">
+            Everything you need to know about SQDIS code intelligence, security, and gates.
           </p>
         </div>
 
-        <div className="mt-12 space-y-4">
+        {/* Accordion */}
+        <div className="space-y-3">
           {faqs.map((faq, idx) => {
             const isOpen = openIdx === idx
             return (
               <div
                 key={idx}
-                className="overflow-hidden rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 transition-all"
+                className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0e15] transition-all"
               >
                 <button
                   onClick={() => setOpenIdx(isOpen ? null : idx)}
-                  className="flex w-full items-center justify-between p-5 text-left font-semibold text-slate-900 dark:text-white hover:text-blue-600 dark:hover:text-blue-400 transition-colors"
+                  className="flex w-full items-center justify-between p-5 text-left font-semibold text-zinc-900 dark:text-zinc-100 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
                 >
-                  <span className="text-base sm:text-lg">{faq.q}</span>
+                  <span className="text-sm sm:text-base font-mono">{faq.q}</span>
                   <ChevronDown
-                    className={`h-5 w-5 shrink-0 text-slate-500 transition-transform duration-200 ${isOpen ? 'rotate-180 text-blue-600 dark:text-blue-400' : ''}`}
+                    className={`h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200 ${
+                      isOpen ? 'rotate-180 text-indigo-500' : ''
+                    }`}
                   />
                 </button>
+
                 {isOpen && (
-                  <div className="px-5 pb-5 text-sm text-slate-600 dark:text-slate-300 leading-relaxed border-t border-slate-100 dark:border-slate-800/80 pt-4">
+                  <div className="px-5 pb-5 pt-1 text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed border-t border-zinc-100 dark:border-zinc-800/60">
                     {faq.a}
                   </div>
                 )}

@@ -1,6 +1,6 @@
 import { 
-  Brain, TrendingUp, Users, GitBranch, 
-  Target, CheckCircle2, AlertTriangle
+  Cpu, GitPullRequest, AlertTriangle, 
+  Users, Shield, CheckCircle2, Lock, Zap
 } from 'lucide-react'
 
 type Props = {
@@ -8,114 +8,225 @@ type Props = {
 }
 
 export default function Feature({ id = 'features' }: Props) {
-  const features = [
-    {
-      icon: <Brain className="h-6 w-6 text-blue-600 dark:text-blue-400" />,
-      title: 'ML-Powered Quality Scores (SQS)',
-      description: 'Continuous multidimensional scoring based on AST complexity, cyclomatic depth, architecture patterns, and test rigour.',
-      badge: 'Core Engine',
-      gradient: 'from-blue-500/10 to-indigo-500/5',
-      highlights: ['AST pattern inspection', 'Weighted complexity metrics', 'Historical baseline benchmarking'],
-    },
-    {
-      icon: <TrendingUp className="h-6 w-6 text-emerald-600 dark:text-emerald-400" />,
-      title: 'Sprint & Release Quality Tracking',
-      description: 'Visualize code health evolution sprint over sprint with automated velocity burndown and release readiness gates.',
-      badge: 'Velocity & Gates',
-      gradient: 'from-emerald-500/10 to-teal-500/5',
-      highlights: ['Sprint burndown correlation', 'Release quality gates', 'Automated changelog intelligence'],
-    },
-    {
-      icon: <Users className="h-6 w-6 text-purple-600 dark:text-purple-400" />,
-      title: 'Team & Developer Intelligence',
-      description: 'Actionable developer analytics and constructive leaderboard recognizing craftsmanship, review velocity, and quality habits.',
-      badge: 'Team Analytics',
-      gradient: 'from-purple-500/10 to-pink-500/5',
-      highlights: ['Individual quality trends', 'Fair commit attribution', 'Constructive leaderboard'],
-    },
-    {
-      icon: <GitBranch className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />,
-      title: 'Real-Time GitHub & GitLab Webhooks',
-      description: 'Instant webhook event capture for every push, pull request review, and merge with sub-second background processing.',
-      badge: 'Zero-Latency',
-      gradient: 'from-indigo-500/10 to-blue-500/5',
-      highlights: ['Webhook signature validation', 'Backfill historical commits', 'Branch-level tracking'],
-    },
-    {
-      icon: <AlertTriangle className="h-6 w-6 text-amber-600 dark:text-amber-400" />,
-      title: 'Technical Debt Radar',
-      description: 'Automatically pinpoint monolithic functions, duplication hotspots, and high-risk modules with estimated remediation effort.',
-      badge: 'Code Health',
-      gradient: 'from-amber-500/10 to-orange-500/5',
-      highlights: ['Hotspot heatmaps', 'Effort estimation in hours', 'Smell severity tagging'],
-    },
-    {
-      icon: <Target className="h-6 w-6 text-rose-600 dark:text-rose-400" />,
-      title: 'Intelligent Quality Alerts & Goals',
-      description: 'Set custom thresholds for coverage and complexity, receiving immediate alerts via Slack, Email, or Webhooks when standards drop.',
-      badge: 'Proactive Guard',
-      gradient: 'from-rose-500/10 to-red-500/5',
-      highlights: ['Multi-channel notifications', 'Custom SQS thresholds', 'Audit compliance logs'],
-    },
-  ]
-
   return (
-    <section id={id} className="mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8 py-20 lg:py-32">
-      {/* Header */}
-      <div className="mx-auto max-w-3xl text-center space-y-4">
-        <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/60 px-3 py-1 text-xs font-bold text-blue-600 dark:text-blue-400 border border-blue-200/60 dark:border-blue-800/60 uppercase tracking-wider">
-          Engineered for Modern Teams
+    <section id={id} className="py-20 lg:py-28 scroll-mt-16">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-12">
+        {/* Section Header */}
+        <div className="mx-auto max-w-3xl text-center space-y-4">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-mono font-medium bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700/60 uppercase tracking-wider">
+            Platform Capabilities
+          </div>
+          <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100">
+            Engineered for Deep Code Intelligence.
+          </h2>
+          <p className="text-base sm:text-lg text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-2xl mx-auto">
+            Moving beyond surface-level linters. SQDIS inspects abstract syntax trees, calculates cyclomatic depth, and automates engineering governance.
+          </p>
         </div>
-        <h2 className="text-3xl sm:text-4xl lg:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white">
-          Everything You Need to Ship{' '}
-          <span className="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
-            Bulletproof Software
-          </span>
-        </h2>
-        <p className="text-base sm:text-lg text-slate-600 dark:text-slate-300 max-w-2xl mx-auto">
-          Stop guessing about code quality. Replace fragmented linters with an intelligent, end-to-end quality observability platform.
-        </p>
-      </div>
 
-      {/* Feature Grid */}
-      <div className="mt-16 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 lg:gap-8">
-        {features.map((feat, idx) => (
-          <div
-            key={idx}
-            className="group relative flex flex-col justify-between overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 sm:p-8 shadow-sm hover:shadow-xl hover:border-blue-500/40 dark:hover:border-blue-500/40 transition-all duration-300"
-          >
-            {/* Top Accent Gradient */}
-            <div className={`absolute top-0 right-0 left-0 h-1 bg-gradient-to-r ${feat.gradient} group-hover:h-1.5 transition-all`} />
-
-            <div>
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-100 dark:bg-slate-800 group-hover:scale-110 transition-transform">
-                  {feat.icon}
+        {/* Asymmetric Engineering Bento Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5">
+          {/* BENTO 1: Polyglot AST Engine (Large - 2 cols) */}
+          <div className="md:col-span-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0e15] p-6 sm:p-7 flex flex-col justify-between shadow-xs">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 text-xs font-mono font-medium text-indigo-500 uppercase tracking-wider">
+                  <Cpu className="h-4 w-4" />
+                  <span>Core AST Engine</span>
                 </div>
-                <span className="rounded-md bg-slate-100 dark:bg-slate-800 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:text-slate-400">
-                  {feat.badge}
+                <span className="rounded px-2 py-0.5 text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200 dark:border-zinc-700">
+                  Tree-sitter Native
                 </span>
               </div>
-
-              <h3 className="text-xl font-bold text-slate-900 dark:text-white group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                {feat.title}
+              <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                Polyglot AST & Cyclomatic Complexity Analysis
               </h3>
-
-              <p className="mt-3 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
-                {feat.description}
+              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl">
+                Continuous in-memory syntax tree parsing across TypeScript, Python, Go, Java, and Rust. Evaluates nested condition depth, cognitive branch load, and architectural couplings per function.
               </p>
+            </div>
 
-              <div className="mt-6 pt-6 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
-                {feat.highlights.map((h, i) => (
-                  <div key={i} className="flex items-center gap-2 text-xs font-medium text-slate-700 dark:text-slate-300">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-blue-500 shrink-0" />
-                    <span>{h}</span>
-                  </div>
-                ))}
+            {/* Embedded Code Diff Visualizer */}
+            <div className="mt-6 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-900 text-zinc-200 p-3.5 font-mono text-[11px] space-y-1.5 overflow-x-auto shadow-inner">
+              <div className="flex items-center justify-between pb-2 border-b border-zinc-800 text-[10px] text-zinc-400">
+                <span>src/auth/token-service.ts</span>
+                <span className="text-emerald-400">Cyclomatic: 3 (Reduced from 11)</span>
+              </div>
+              <div className="text-zinc-500">@@ -42,7 +42,9 @@ export class TokenManager &#123;</div>
+              <div className="text-rose-400/90 bg-rose-950/30 px-1 py-0.5 rounded">-   if (auth &amp;&amp; !isRevoked &amp;&amp; (token.exp &gt; now || fallback)) &#123;</div>
+              <div className="text-emerald-400/90 bg-emerald-950/30 px-1 py-0.5 rounded">+   if (this.isValidSession(auth, token, now)) &#123;</div>
+              <div className="text-zinc-400 px-1">       return this.dispatchClaims(token);</div>
+              <div className="text-zinc-400 px-1">     &#125;</div>
+            </div>
+          </div>
+
+          {/* BENTO 2: Automated PR Quality Gates (1 col) */}
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0e15] p-6 sm:p-7 flex flex-col justify-between shadow-xs">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 text-xs font-mono font-medium text-emerald-500 uppercase tracking-wider">
+                <GitPullRequest className="h-4 w-4" />
+                <span>Merge Governance</span>
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                Automated PR Quality Gates
+              </h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Block architectural regressions before merging. Enforce SQS score floors, coverage thresholds, and zero blocker policies.
+              </p>
+            </div>
+
+            <div className="mt-6 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 space-y-2 text-xs font-mono">
+              <div className="flex items-center justify-between text-emerald-500 font-semibold text-[11px]">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> GitHub Checks: Passed
+                </span>
+                <span>380ms</span>
+              </div>
+              <div className="space-y-1 text-[10px] text-zinc-500">
+                <div className="flex justify-between"><span>SQS Quality Score</span><span className="text-zinc-300">94.2 (&gt;= 85)</span></div>
+                <div className="flex justify-between"><span>Coverage Delta</span><span className="text-zinc-300">+2.1% (&gt;= 0%)</span></div>
+                <div className="flex justify-between"><span>High Risk Smells</span><span className="text-zinc-300">0 detected</span></div>
               </div>
             </div>
           </div>
-        ))}
+
+          {/* BENTO 3: Sub-500ms Webhook Engine (1 col) */}
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0e15] p-6 sm:p-7 flex flex-col justify-between shadow-xs">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 text-xs font-mono font-medium text-amber-500 uppercase tracking-wider">
+                <Zap className="h-4 w-4" />
+                <span>Zero Latency</span>
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                Sub-500ms Webhooks
+              </h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                HMAC-SHA256 verified event capture. Asynchronous worker threads index commits and update scores without blocking CI queues.
+              </p>
+            </div>
+
+            <div className="mt-6 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 space-y-1.5 font-mono text-[10px]">
+              <div className="flex items-center justify-between text-zinc-400">
+                <span>Webhook Ingestion Rate</span>
+                <span className="text-amber-500 font-bold">1,240 events/sec</span>
+              </div>
+              <div className="flex items-center justify-between text-zinc-400">
+                <span>Mean Queue Time</span>
+                <span className="text-emerald-500 font-bold">14ms</span>
+              </div>
+              <div className="flex items-center justify-between text-zinc-400">
+                <span>HMAC Signature</span>
+                <span className="text-zinc-300 font-mono">SHA256 Verified</span>
+              </div>
+            </div>
+          </div>
+
+          {/* BENTO 4: Tech Debt Radar (Large - 2 cols) */}
+          <div className="md:col-span-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0e15] p-6 sm:p-7 flex flex-col justify-between shadow-xs">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 text-xs font-mono font-medium text-cyan-500 uppercase tracking-wider">
+                  <AlertTriangle className="h-4 w-4" />
+                  <span>Debt Identification</span>
+                </div>
+                <span className="rounded px-2 py-0.5 text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200 dark:border-zinc-700">
+                  Effort Estimation
+                </span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                Technical Debt Radar & Remediation Effort
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl">
+                Automatically locate monolithic functions, duplicate clone blocks, and cyclic imports. SQDIS provides realistic hour estimates so teams can schedule debt cleanup in sprint backlogs.
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3 font-mono text-xs">
+              <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 space-y-1">
+                <div className="flex justify-between font-semibold text-zinc-800 dark:text-zinc-200">
+                  <span>Monolithic Function</span>
+                  <span className="text-amber-500">High Risk</span>
+                </div>
+                <div className="text-[11px] text-zinc-500">packages/core/src/parser.ts:184</div>
+                <div className="text-[10px] text-indigo-400 pt-1">Estimated effort: ~3.5 hours</div>
+              </div>
+
+              <div className="p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 space-y-1">
+                <div className="flex justify-between font-semibold text-zinc-800 dark:text-zinc-200">
+                  <span>Cyclic Import Hotspot</span>
+                  <span className="text-cyan-400">Medium Risk</span>
+                </div>
+                <div className="text-[11px] text-zinc-500">services/auth &lt;-&gt; services/user</div>
+                <div className="text-[10px] text-indigo-400 pt-1">Estimated effort: ~1.5 hours</div>
+              </div>
+            </div>
+          </div>
+
+          {/* BENTO 5: Developer Quality Scores (1 col) */}
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0e15] p-6 sm:p-7 flex flex-col justify-between shadow-xs">
+            <div className="space-y-3">
+              <div className="inline-flex items-center gap-2 text-xs font-mono font-medium text-purple-400 uppercase tracking-wider">
+                <Users className="h-4 w-4" />
+                <span>Fair Metrics</span>
+              </div>
+              <h3 className="text-lg font-bold text-zinc-900 dark:text-zinc-100">
+                Developer Quality Scores (DQS)
+              </h3>
+              <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed">
+                Reward craftsmanship over commit volume. Normalized scoring accounts for file complexity, test rigor, and refactoring impact.
+              </p>
+            </div>
+
+            <div className="mt-6 p-3 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/60 space-y-2 font-mono text-xs">
+              <div className="flex items-center justify-between text-zinc-300">
+                <span className="text-[11px]">Fair Commit Attribution</span>
+                <span className="text-emerald-500 font-bold">Top 5%</span>
+              </div>
+              <div className="w-full bg-zinc-200 dark:bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                <div className="bg-emerald-500 h-full w-[94%]" />
+              </div>
+              <div className="text-[10px] text-zinc-500 text-right">
+                94.8 Calibrated DQS Score
+              </div>
+            </div>
+          </div>
+
+          {/* BENTO 6: SOC-2 & Zero Source Storage (Large - 2 cols) */}
+          <div className="md:col-span-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0e15] p-6 sm:p-7 flex flex-col justify-between shadow-xs">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="inline-flex items-center gap-2 text-xs font-mono font-medium text-emerald-500 uppercase tracking-wider">
+                  <Shield className="h-4 w-4" />
+                  <span>Enterprise Security</span>
+                </div>
+                <span className="rounded px-2 py-0.5 text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200 dark:border-zinc-700">
+                  Zero Source Retention
+                </span>
+              </div>
+              <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                SOC-2 Type II Certified & Ephemeral In-Memory Execution
+              </h3>
+              <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl">
+                Your proprietary source code never touches persistent disks. All AST parsing and cyclomatic calculation occurs ephemerally in volatile RAM. Only sanitized, AES-256 encrypted metadata is persisted.
+              </p>
+            </div>
+
+            <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-[11px]">
+              <div className="p-2.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 flex items-center gap-2">
+                <Lock className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                <span className="text-zinc-700 dark:text-zinc-300">RAM Ephemeral Worker</span>
+              </div>
+              <div className="p-2.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 flex items-center gap-2">
+                <Shield className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
+                <span className="text-zinc-700 dark:text-zinc-300">Zero Disk Retention</span>
+              </div>
+              <div className="p-2.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 flex items-center gap-2">
+                <CheckCircle2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
+                <span className="text-zinc-700 dark:text-zinc-300">AES-256 at Rest</span>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   )
