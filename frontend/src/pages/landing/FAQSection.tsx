@@ -23,7 +23,7 @@ export default function FAQSection() {
     },
     {
       q: 'Can we self-host SQDIS on our private cloud or Kubernetes cluster?',
-      a: 'Yes. Enterprise tiers include complete Docker Compose and Kubernetes Helm chart deployment bundles designed for air-gapped or VPC-isolated environments with SAML 2.0 / Okta SSO integration.',
+      a: 'Yes. Enterprise tiers include complete Docker Compose and Kubernetes Helm chart deployment bundles designed for air-gapped or VPC-isolated environments with GitHub OAuth and role-based access control (RBAC).',
     },
   ]
 

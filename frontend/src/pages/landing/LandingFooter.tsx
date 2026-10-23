@@ -20,7 +20,7 @@ export default function LandingFooter() {
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                 <span>All Systems Operational</span>
               </div>
-              <span className="text-[10px] text-zinc-400">&lt; 500ms Webhook SLA</span>
+              <span className="text-[10px] text-zinc-400">&lt; 500ms Pipeline Latency</span>
             </div>
 
             <div className="flex items-center gap-3 pt-2">
@@ -82,17 +82,17 @@ export default function LandingFooter() {
             </ul>
           </div>
 
-          {/* Col 4: Compliance & Legal */}
+          {/* Col 4: Tech Stack */}
           <div className="space-y-3">
             <h4 className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-900 dark:text-white">
-              Governance
+              Tech Stack
             </h4>
             <ul className="space-y-2 text-xs">
-              <li><span className="text-zinc-500">SOC-2 Type II</span></li>
-              <li><span className="text-zinc-500">Zero Code Retention</span></li>
-              <li><span className="text-zinc-500">AES-256 Encryption</span></li>
-              <li><span className="text-zinc-500">GDPR Compliant</span></li>
-              <li><span className="text-zinc-500">Air-Gapped Ready</span></li>
+              <li><span className="text-zinc-500">NestJS Core API</span></li>
+              <li><span className="text-zinc-500">FastAPI ML Service</span></li>
+              <li><span className="text-zinc-500">Tree-sitter AST</span></li>
+              <li><span className="text-zinc-500">PostgreSQL & Redis</span></li>
+              <li><span className="text-zinc-500">Prometheus & Grafana</span></li>
             </ul>
           </div>
         </div>

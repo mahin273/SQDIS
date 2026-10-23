@@ -45,18 +45,18 @@ export default function CTASection() {
           </Link>
         </div>
 
-        {/* Trust Points */}
+        {/* Architecture Specs */}
         <div className="pt-4 flex flex-wrap items-center justify-center gap-6 text-xs font-mono text-zinc-500">
           <span className="flex items-center gap-1.5">
-            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> SOC-2 Type II Certified
+            <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" /> HMAC-SHA256 Verified
           </span>
           <span className="text-zinc-700">|</span>
           <span className="flex items-center gap-1.5">
-            <Lock className="h-3.5 w-3.5 text-indigo-400" /> Zero Proprietary Code Retained
+            <Lock className="h-3.5 w-3.5 text-indigo-400" /> Ephemeral AST (Zero File Persistence)
           </span>
           <span className="text-zinc-700">|</span>
           <span className="flex items-center gap-1.5">
-            <Zap className="h-3.5 w-3.5 text-amber-500" /> 99.99% Uptime SLA
+            <Zap className="h-3.5 w-3.5 text-amber-500" /> Sub-500ms Ingestion
           </span>
         </div>
       </div>

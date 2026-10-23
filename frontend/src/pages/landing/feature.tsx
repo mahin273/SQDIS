@@ -191,38 +191,38 @@ export default function Feature({ id = 'features' }: Props) {
             </div>
           </div>
 
-          {/* BENTO 6: SOC-2 & Zero Source Storage (Large - 2 cols) */}
+          {/* BENTO 6: Ephemeral AST & Metadata-Only Storage (Large - 2 cols) */}
           <div className="md:col-span-2 rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-[#0c0e15] p-6 sm:p-7 flex flex-col justify-between shadow-xs">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <div className="inline-flex items-center gap-2 text-xs font-mono font-medium text-emerald-500 uppercase tracking-wider">
                   <Shield className="h-4 w-4" />
-                  <span>Enterprise Security</span>
+                  <span>Architecture Security</span>
                 </div>
                 <span className="rounded px-2 py-0.5 text-[10px] font-mono bg-zinc-100 dark:bg-zinc-800 text-zinc-500 border border-zinc-200 dark:border-zinc-700">
-                  Zero Source Retention
+                  Zero File Storage
                 </span>
               </div>
               <h3 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-100">
-                SOC-2 Type II Certified & Ephemeral In-Memory Execution
+                Ephemeral In-Memory AST Parsing & Metadata-Only Storage
               </h3>
               <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed max-w-xl">
-                Your proprietary source code never touches persistent disks. All AST parsing and cyclomatic calculation occurs ephemerally in volatile RAM. Only sanitized, AES-256 encrypted metadata is persisted.
+                Your repository files are never written to disk or cloned to permanent volumes. Tree-sitter parses the commit diff ephemerally in worker memory, persists only computed complexity metrics and commit SHAs to PostgreSQL, and immediately frees raw code from RAM.
               </p>
             </div>
 
             <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3 font-mono text-[11px]">
               <div className="p-2.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 flex items-center gap-2">
                 <Lock className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
-                <span className="text-zinc-700 dark:text-zinc-300">RAM Ephemeral Worker</span>
+                <span className="text-zinc-700 dark:text-zinc-300">RAM-Only AST Worker</span>
               </div>
               <div className="p-2.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 flex items-center gap-2">
                 <Shield className="h-3.5 w-3.5 text-emerald-500 shrink-0" />
-                <span className="text-zinc-700 dark:text-zinc-300">Zero Disk Retention</span>
+                <span className="text-zinc-700 dark:text-zinc-300">Zero File Persistence</span>
               </div>
               <div className="p-2.5 rounded-md border border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/40 flex items-center gap-2">
                 <CheckCircle2 className="h-3.5 w-3.5 text-cyan-400 shrink-0" />
-                <span className="text-zinc-700 dark:text-zinc-300">AES-256 at Rest</span>
+                <span className="text-zinc-700 dark:text-zinc-300">Postgres Metadata Only</span>
               </div>
             </div>
           </div>

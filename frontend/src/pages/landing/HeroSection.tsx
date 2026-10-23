@@ -60,19 +60,19 @@ export default function HeroSection() {
             </a>
           </div>
 
-          {/* Trust Points */}
+          {/* Technical Architecture Guarantees */}
           <div className="flex flex-wrap items-center justify-center gap-x-6 gap-y-2 pt-3 text-xs font-mono text-zinc-500 dark:text-zinc-400">
             <div className="flex items-center gap-1.5">
               <ShieldCheck className="h-3.5 w-3.5 text-emerald-500" />
-              <span>SOC-2 Type II Certified</span>
+              <span>HMAC-SHA256 Webhook Verification</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Lock className="h-3.5 w-3.5 text-indigo-400" />
-              <span>Ephemeral In-Memory AST (Zero Code Retained)</span>
+              <span>Ephemeral In-Memory AST (Zero File Persistence)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <Zap className="h-3.5 w-3.5 text-amber-500" />
-              <span>Sub-500ms Webhook SLA</span>
+              <span>Sub-500ms Event Pipeline</span>
             </div>
           </div>
         </div>
