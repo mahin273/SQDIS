@@ -19,16 +19,10 @@ export default function LandingHeader() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-zinc-200 dark:border-zinc-800/80 bg-white/80 dark:bg-[#08090d]/85 backdrop-blur-md transition-colors">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
-        {/* Brand Logo & Engine Status */}
-        <div className="flex items-center gap-4">
-          <Link to="/" className="inline-flex items-center group transition-opacity hover:opacity-90">
-            <Logo size="sm" variant="neural" />
-          </Link>
-          <div className="hidden sm:inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-mono font-medium bg-zinc-100 dark:bg-zinc-800/80 text-zinc-700 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700/60">
-            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-            <span>v2.0 Engine</span>
-          </div>
-        </div>
+        {/* Brand Logo */}
+        <Link to="/" className="inline-flex items-center group transition-opacity hover:opacity-90">
+          <Logo size="sm" variant="neural" />
+        </Link>
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-7">
