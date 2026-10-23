@@ -1,17 +1,7 @@
-import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { ArrowRight, ShieldCheck, Lock, Zap, Check, Copy } from 'lucide-react'
+import { ArrowRight, ShieldCheck, Lock, Zap } from 'lucide-react'
 
 export default function CTASection() {
-  const [copied, setCopied] = useState(false)
-  const installCmd = 'curl -sSL https://app.sqdis.io/install.sh | bash'
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(installCmd)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
   return (
     <section className="relative overflow-hidden py-20 lg:py-24 bg-[#08090d] text-zinc-100 border-t border-zinc-800">
       {/* Subtle ambient illumination */}
@@ -20,7 +10,7 @@ export default function CTASection() {
       <div className="relative mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 text-center space-y-8">
         <div className="inline-flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-900/80 px-3.5 py-1.5 text-xs font-mono text-zinc-300">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Zero Configuration Setup</span>
+          <span>Zero Local Dependencies - 1-Click Cloud Setup</span>
         </div>
 
         <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold tracking-tight text-white leading-tight">
@@ -31,10 +21,10 @@ export default function CTASection() {
         </h2>
 
         <p className="text-base sm:text-lg text-zinc-400 max-w-2xl mx-auto leading-relaxed">
-          Connect your GitHub repository in 60 seconds. Zero config files, zero CI build slowdown, and instant AST quality scoring on every commit.
+          Link your GitHub organization in 60 seconds with OAuth. No local agent to install, no CI build configuration files, and instant AST scoring on every commit.
         </p>
 
-        {/* Action Buttons & Terminal Snippet */}
+        {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
           <Link
             to="/register"
@@ -53,21 +43,6 @@ export default function CTASection() {
           >
             <span>Sign In to Console</span>
           </Link>
-        </div>
-
-        {/* Copyable CLI Snippet */}
-        <div className="pt-2 flex justify-center">
-          <div className="inline-flex items-center gap-3 rounded-lg border border-zinc-800 bg-zinc-900/90 px-4 py-2 font-mono text-xs text-zinc-300 shadow-inner">
-            <span className="text-zinc-500">$</span>
-            <span>{installCmd}</span>
-            <button
-              onClick={handleCopy}
-              className="p-1 rounded text-zinc-400 hover:text-white transition-colors"
-              aria-label="Copy install command"
-            >
-              {copied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
-            </button>
-          </div>
         </div>
 
         {/* Trust Points */}
