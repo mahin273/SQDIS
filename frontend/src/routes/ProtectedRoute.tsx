@@ -6,11 +6,10 @@ import { PageLoader } from '@/components/common/PageLoader'
 import { logAuthzFailure } from '@/rbac/errors'
 
 const roleRank: Record<UserRole, number> = {
-  VIEWER: 1,
-  DEVELOPER: 2,
-  TEAM_LEAD: 3,
-  ADMIN: 4,
-  OWNER: 5,
+  DEVELOPER: 1,
+  TEAM_LEAD: 2,
+  ADMIN: 3,
+  OWNER: 4,
 }
 
 interface ProtectedRouteProps {

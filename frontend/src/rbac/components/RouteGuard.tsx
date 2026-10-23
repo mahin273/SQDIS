@@ -22,11 +22,11 @@ export function RouteGuard({
   const user = useAuthStore((state) => state.user)
   const currentRole = useUserRole()
 
-  const hasSingleRole = useRole(requiredRole || ('VIEWER' as UserRole))
-  const permResult = usePermission(requiredPermission || ('*' as PermissionString))
+  const hasSingleRole = requiredRole ? useRole(requiredRole) : true
+  const permResult = requiredPermission ? usePermission(requiredPermission) : { hasPermission: true }
 
-  const roleCheck = requiredRole ? hasSingleRole : true
-  const permCheck = requiredPermission ? permResult.hasPermission : true
+  const roleCheck = hasSingleRole
+  const permCheck = permResult.hasPermission
 
   if (!roleCheck || !permCheck) {
     logAuthzFailure({

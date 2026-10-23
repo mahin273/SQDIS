@@ -35,7 +35,7 @@ export class DevelopersController {
     @GetUser() user: any,
   ) {
     const orgId = organizationId || user?.organizationId;
-    return this.developersService.getDevelopers(orgId);
+    return this.developersService.getDevelopers(orgId, user);
   }
 
   /**
@@ -52,7 +52,7 @@ export class DevelopersController {
     @GetUser() user: any,
   ) {
     const orgId = organizationId || user?.organizationId;
-    return this.developersService.getDeveloperById(id, orgId);
+    return this.developersService.getDeveloperById(id, orgId, user);
   }
 
   /**
@@ -69,6 +69,6 @@ export class DevelopersController {
     @GetUser() user: any,
   ) {
     const orgId = organizationId || user?.organizationId;
-    return this.developersService.getDeveloperStats(id, orgId);
+    return this.developersService.getDeveloperStats(id, orgId, user);
   }
 }

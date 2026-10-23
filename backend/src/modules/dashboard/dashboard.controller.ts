@@ -1,7 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { DashboardService } from './dashboard.service';
 import { JwtAuthGuard, OrganizationGuard } from '../auth/guards';
-import { GetOrganization } from '../auth/decorators';
+import { GetOrganization, GetUser } from '../auth/decorators';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 
 @ApiTags('Dashboard')
@@ -80,9 +80,10 @@ export class DashboardController {
   @ApiResponse({ status: 200, description: 'Top developers list retrieved successfully.' })
   async getTopDevelopers(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query('limit') limit?: string,
   ) {
-    return this.dashboardService.getTopDevelopers(organizationId, limit ? parseInt(limit) : 5);
+    return this.dashboardService.getTopDevelopers(organizationId, limit ? parseInt(limit) : 5, user);
   }
 
   /**

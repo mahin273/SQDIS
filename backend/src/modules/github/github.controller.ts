@@ -145,11 +145,12 @@ export class GitHubController {
 
   /**
    * Validate GitHub PAT without connecting
+   * Only OWNER role can validate GitHub PAT
    */
   @Post('validate')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @ApiOperation({ summary: 'Validate GitHub PAT without connecting' })
   @ApiResponse({
     status: 200,
@@ -165,12 +166,12 @@ export class GitHubController {
 
   /**
    * Get GitHub OAuth 2.0 authorization URL for 1-click connection
-   * Only OWNER and ADMIN roles can initiate connection
+   * Only OWNER role can initiate connection
    */
   @Get('oauth/authorize')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @AuditLog({
     action: 'READ',
     resourceType: 'GitHubConnection',
@@ -223,12 +224,12 @@ export class GitHubController {
 
   /**
    * Connect GitHub PAT to organization
-   * Only OWNER and ADMIN roles can connect GitHub
+   * Only OWNER role can connect GitHub
    */
   @Post('connect')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @AuditLog({
     action: 'CREATE',
     resourceType: 'GitHubConnection',
@@ -259,12 +260,12 @@ export class GitHubController {
 
   /**
    * Disconnect GitHub from organization
-   * Only OWNER and ADMIN roles can disconnect GitHub
+   * Only OWNER role can disconnect GitHub
    */
   @Delete('disconnect')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @ApiBearerAuth()
-  @Roles(Role.OWNER, Role.ADMIN)
+  @Roles(Role.OWNER)
   @AuditLog({
     action: 'DELETE',
     resourceType: 'GitHubConnection',

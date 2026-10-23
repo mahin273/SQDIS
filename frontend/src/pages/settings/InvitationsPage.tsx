@@ -13,12 +13,15 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { organizationService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { useOrganizationStore } from '@/stores/organizationStore'
+import { useUserRole } from '@/rbac/hooks'
 import { QueryState } from '../pageUtils'
 import type { Invitation, UserRole } from '@/types'
 
 export function InvitationsPage() {
   const queryClient = useQueryClient()
   const { currentOrganization } = useOrganizationStore()
+  const currentUserRole = useUserRole()
+  const isOwner = currentUserRole === 'OWNER'
   
   const [searchQuery, setSearchQuery] = useState('')
   const [isInviteOpen, setIsInviteOpen] = useState(false)
@@ -246,10 +249,9 @@ export function InvitationsPage() {
               onChange={(e) => setInviteRole(e.target.value as UserRole)}
               className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm dark:border-slate-700 dark:bg-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
-              <option value="ADMIN">Admin - Full access</option>
+              {isOwner && <option value="ADMIN">Admin - Full access</option>}
               <option value="TEAM_LEAD">Team Lead - Manage teams & projects</option>
               <option value="DEVELOPER">Developer - Standard access</option>
-              <option value="VIEWER">Viewer - Read only</option>
             </select>
           </div>
 

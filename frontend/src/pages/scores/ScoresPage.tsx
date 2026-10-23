@@ -80,10 +80,11 @@ export function ScoresPage() {
   const activeProjectId =
     selectedProjectId || (projects && projects.length > 0 ? projects[0].id : '');
 
-  const { data: riskyModules } = useQuery({
+  const { data: riskyModules, isError: isRiskyModulesError } = useQuery({
     queryKey: queryKeys.scores.riskyModules(activeProjectId),
     queryFn: () => scoresService.getRiskyModules(activeProjectId),
     enabled: Boolean(activeProjectId && activeProjectId !== 'default'),
+    retry: false,
   });
 
   const getDqsGrade = (score?: number) => {
@@ -425,7 +426,14 @@ export function ScoresPage() {
               )}
             </CardHeader>
             <CardContent className="p-0">
-              {riskyModules && riskyModules.length > 0 ? (
+              {isRiskyModulesError ? (
+                <div className="p-8 text-center text-sm text-slate-500">
+                  <p className="font-semibold text-slate-700 dark:text-slate-300">Project Not Assigned</p>
+                  <p className="mt-1 text-xs text-slate-400">
+                    This project is not assigned to any of your active teams. Project SQS telemetry is scoped to assigned teams.
+                  </p>
+                </div>
+              ) : riskyModules && riskyModules.length > 0 ? (
                 <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   {riskyModules.map((module: RiskModule, idx: number) => (
                     <div key={idx} className="p-4 flex items-center justify-between">

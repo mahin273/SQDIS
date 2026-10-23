@@ -23,9 +23,10 @@ export interface User {
 
 export type UserRole = typeof USER_ROLES[keyof typeof USER_ROLES];
 export const USER_ROLES = {
+  OWNER: 'OWNER',
   ADMIN: 'ADMIN',
-  USER: 'USER',
-  VIEWER: 'VIEWER',
+  TEAM_LEAD: 'TEAM_LEAD',
+  DEVELOPER: 'DEVELOPER',
 } as const;
 
 export interface AuthTokens {

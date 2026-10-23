@@ -15,7 +15,8 @@ import {
   ShieldCheck,
   TrendingUp,
 } from 'lucide-react'
-import { dashboardService, repositoriesService, codeIntelligenceService } from '@/services'
+import { dashboardService, repositoriesService, codeIntelligenceService, scoresService } from '@/services'
+import { useUserRole } from '@/rbac/hooks'
 import SQSTrendChart from './components/SQSTrendChart'
 import CommitActivityChart from './components/CommitActivityChart'
 import TeamPerformanceChart from './components/TeamPerformanceChart'
@@ -42,12 +43,23 @@ type RepoCenterTab = 'all' | 'attention' | 'developers'
 type TimeRangeOption = '7' | '30' | '90'
 
 export default function Dashboard() {
+  const userRole = useUserRole()
+  const isDeveloper = userRole === 'DEVELOPER'
+  const isTeamLead = userRole === 'TEAM_LEAD'
+  const isOwner = userRole === 'OWNER'
+
   const [workbenchTab, setWorkbenchTab] = useState<WorkbenchTab>('quality')
   const [repoCenterTab, setRepoCenterTab] = useState<RepoCenterTab>('all')
   const [timeRange, setTimeRange] = useState<TimeRangeOption>('30')
   const [selectedRepoFilter, setSelectedRepoFilter] = useState<string>('ALL')
   const [selectedDrawerItem, setSelectedDrawerItem] = useState<RecentActivity | null>(null)
   const [copiedSha, setCopiedSha] = useState(false)
+
+  const { data: myScore } = useQuery({
+    queryKey: ['scores', 'me'],
+    queryFn: () => scoresService.getMyScore(),
+    enabled: isDeveloper,
+  })
 
   const { data: stats, isLoading: isStatsLoading } = useQuery({
     queryKey: ['dashboard', 'stats'],
@@ -103,11 +115,41 @@ export default function Dashboard() {
       {/* Top Header & Context Controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
-            Engineering Overview
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-100">
+              {isDeveloper
+                ? 'Developer Quality & Growth'
+                : isTeamLead
+                ? 'Team Lead Delivery Workbench'
+                : 'Executive Overview'}
+            </h1>
+            <Badge
+              variant="outline"
+              className={
+                isOwner
+                  ? 'bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/40 dark:text-purple-300'
+                  : userRole === 'ADMIN'
+                  ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/40 dark:text-blue-300'
+                  : isTeamLead
+                  ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/40 dark:text-amber-300'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-300'
+              }
+            >
+              {isOwner
+                ? 'Owner View'
+                : userRole === 'ADMIN'
+                ? 'Administrator View'
+                : isTeamLead
+                ? 'Team Lead View'
+                : 'Developer View'}
+            </Badge>
+          </div>
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-            Software quality metrics, repository health, and recent delivery activity.
+            {isDeveloper
+              ? 'Personal performance telemetry, assigned review debt, and active project quality scores.'
+              : isTeamLead
+              ? 'Team delivery trends, review turnaround, sprint health, and assigned project SQS.'
+              : 'Full organization health, multi-repository quality, active developers, and platform audit compliance.'}
           </p>
         </div>
 
@@ -172,6 +214,54 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+
+      {/* Developer Individual Performance & Telemetry Strip */}
+      {isDeveloper && myScore && (
+        <div className="rounded-xl border border-indigo-200/80 bg-indigo-50/40 dark:border-indigo-900/40 dark:bg-indigo-950/20 p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold text-base shadow-sm">
+                {myScore.score ? myScore.score.toFixed(0) : '—'}
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                    My Developer Quality Score (DQS)
+                  </h3>
+                  <Badge variant="outline" className="text-[10px] bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300 border-indigo-200">
+                    Personal Telemetry
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Private score based on your commits, code reviews, and defect prevention.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 text-xs">
+              <div className="text-center sm:text-right">
+                <span className="block text-slate-400 text-[10px] uppercase font-semibold">Code Quality</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{myScore.codeQuality ?? 'N/A'}%</span>
+              </div>
+              <div className="text-center sm:text-right">
+                <span className="block text-slate-400 text-[10px] uppercase font-semibold">Review Speed</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{myScore.reviewSpeed ? `${myScore.reviewSpeed}/100` : 'N/A'}</span>
+              </div>
+              <div className="text-center sm:text-right">
+                <span className="block text-slate-400 text-[10px] uppercase font-semibold">Bugfix Rate</span>
+                <span className="font-bold text-slate-800 dark:text-slate-200">{myScore.bugFixRate ?? 0}%</span>
+              </div>
+              <Link
+                to="/scores"
+                className="inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-700 dark:text-indigo-400 ml-2"
+              >
+                <span>View Details</span>
+                <ArrowRight className="h-3 w-3" />
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Setup banner if no repositories exist yet */}
       {!isStatsLoading && stats && stats.totalRepositories === 0 && (
@@ -472,7 +562,11 @@ export default function Dashboard() {
                       : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-100'
                   }`}
                 >
-                  Top Contributors ({stats?.totalDevelopers ?? 0})
+                  {isDeveloper
+                    ? 'My Contributions'
+                    : isTeamLead
+                    ? 'Team Contributors'
+                    : `Top Contributors (${stats?.totalDevelopers ?? 0})`}
                 </button>
               </div>
             </CardHeader>

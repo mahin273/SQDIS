@@ -38,6 +38,7 @@ import { useActiveRepository } from '@/hooks/useActiveRepository'
 import { formatDate } from '@/lib/utils'
 import { PageHeader, QueryState, formatScore } from '../pageUtils'
 import type { Developer } from '@/types'
+import { useUserRole } from '@/rbac/hooks'
 
 function getDqsTier(score?: number | null) {
   if (score === null || score === undefined) {
@@ -179,11 +180,24 @@ export function DevelopersPage() {
 
   const avgTier = getDqsTier(avgDqs)
 
+  const userRole = useUserRole()
+  const pageTitle = userRole === 'DEVELOPER'
+    ? 'My Performance & Growth'
+    : userRole === 'TEAM_LEAD'
+    ? 'Team Members Performance Directory'
+    : 'Developer Intelligence & Talent Roster'
+
+  const pageDescription = userRole === 'DEVELOPER'
+    ? 'Personal DQS performance, commit footprint, and engineering contributions.'
+    : userRole === 'TEAM_LEAD'
+    ? 'Quality metrics, review velocity, and capacity for members of your assigned teams.'
+    : 'Engineering capacity, DQS performance tiers, commit footprints, and contributor analytics.'
+
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Developer Intelligence & Talent Roster"
-        description="Engineering capacity, DQS performance tiers, commit footprints, and contributor analytics."
+        title={pageTitle}
+        description={pageDescription}
         action={
           <div className="flex items-center gap-2">
             <Link to="/scores">

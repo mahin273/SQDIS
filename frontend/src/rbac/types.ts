@@ -1,4 +1,4 @@
-export type UserRole = 'OWNER' | 'ADMIN' | 'TEAM_LEAD' | 'DEVELOPER' | 'VIEWER';
+export type UserRole = 'OWNER' | 'ADMIN' | 'TEAM_LEAD' | 'DEVELOPER';
 
 export type PermissionCategory =
   | 'organization'

@@ -1,4 +1,5 @@
-import { Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../../prisma';
 import { ScoresService } from '../scores/scores.service';
 
@@ -69,16 +70,136 @@ export class DevelopersService {
   ) {}
 
   /**
+   * Verify individual developer profile and analytics privacy access
+   */
+  async verifyDeveloperPrivacyAccess(
+    targetUserId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<void> {
+    if (!caller) return;
+
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: caller.id,
+        },
+      },
+    });
+
+    const effectiveRole = (membership?.role || caller.role) as Role | undefined;
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return;
+    }
+
+    if (effectiveRole === Role.DEVELOPER) {
+      if (caller.id !== targetUserId) {
+        throw new ForbiddenException('Developers can only access their own profile and telemetry.');
+      }
+      return;
+    }
+
+    if (effectiveRole === Role.TEAM_LEAD) {
+      if (caller.id === targetUserId) {
+        return;
+      }
+      const sharedTeam = await this.prisma.teamMembership.findFirst({
+        where: {
+          userId: targetUserId,
+          leftAt: null,
+          team: {
+            organizationId,
+            members: {
+              some: {
+                userId: caller.id,
+                leftAt: null,
+              },
+            },
+          },
+        },
+      });
+
+      if (!sharedTeam) {
+        throw new ForbiddenException(
+          'Team Leads can only view performance metrics for members of their assigned teams.',
+        );
+      }
+      return;
+    }
+  }
+
+  /**
+   * Determine allowed developer user IDs for scoped listing
+   */
+  async getAllowedDeveloperUserIds(
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<string[] | null> {
+    if (!caller) return null;
+
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: caller.id,
+        },
+      },
+    });
+
+    const effectiveRole = (membership?.role || caller.role) as Role | undefined;
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return null;
+    }
+
+    if (effectiveRole === Role.DEVELOPER) {
+      return [caller.id];
+    }
+
+    if (effectiveRole === Role.TEAM_LEAD) {
+      const teamMemberships = await this.prisma.teamMembership.findMany({
+        where: {
+          leftAt: null,
+          team: {
+            organizationId,
+            members: {
+              some: {
+                userId: caller.id,
+                leftAt: null,
+              },
+            },
+          },
+        },
+        select: { userId: true },
+      });
+      const ids = new Set(teamMemberships.map((m) => m.userId));
+      ids.add(caller.id);
+      return Array.from(ids);
+    }
+
+    return null;
+  }
+
+  /**
    * Get all developers in an organization
    */
-  async getDevelopers(organizationId: string): Promise<DeveloperDto[]> {
+  async getDevelopers(
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<DeveloperDto[]> {
     if (!organizationId) {
       return [];
     }
 
+    const allowedUserIds = await this.getAllowedDeveloperUserIds(organizationId, caller);
+    const memberWhere: any = { organizationId };
+    if (allowedUserIds !== null) {
+      memberWhere.userId = { in: allowedUserIds };
+    }
+
     const [members, commitGroups, orgRepos] = await Promise.all([
       this.prisma.organizationMember.findMany({
-        where: { organizationId },
+        where: memberWhere,
         include: {
           user: {
             include: {
@@ -189,7 +310,14 @@ export class DevelopersService {
   /**
    * Get a specific developer profile by user ID
    */
-  async getDeveloperById(developerId: string, organizationId: string): Promise<DeveloperDto> {
+  async getDeveloperById(
+    developerId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<DeveloperDto> {
+    if (caller) {
+      await this.verifyDeveloperPrivacyAccess(developerId, organizationId, caller);
+    }
     const member = await this.prisma.organizationMember.findFirst({
       where: { userId: developerId, organizationId },
       include: {
@@ -248,7 +376,14 @@ export class DevelopersService {
   /**
    * Get detailed statistics and performance analytics for a developer
    */
-  async getDeveloperStats(developerId: string, organizationId: string): Promise<DeveloperStatsDto> {
+  async getDeveloperStats(
+    developerId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<DeveloperStatsDto> {
+    if (caller) {
+      await this.verifyDeveloperPrivacyAccess(developerId, organizationId, caller);
+    }
     // 1. Verify membership
     const member = await this.prisma.organizationMember.findFirst({
       where: { userId: developerId, organizationId },

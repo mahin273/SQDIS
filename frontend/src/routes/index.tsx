@@ -107,14 +107,45 @@ export const routes: RouteObject[] = [
           { path: '/alerts', element: <AlertsPage /> },
           { path: '/settings', element: <SettingsPage /> },
           { path: '/settings/profile', element: <SettingsPage initialTab="profile" /> },
-          { path: '/settings/organization', element: <SettingsPage initialTab="organization" /> },
-          { path: '/settings/github', element: <SettingsPage initialTab="github" /> },
-          { path: '/settings/repositories', element: <SettingsPage initialTab="repositories" /> },
-          { path: '/settings/members', element: <SettingsPage initialTab="members" /> },
-          { path: '/settings/invitations', element: <SettingsPage initialTab="invitations" /> },
           { path: '/settings/email-aliases', element: <SettingsPage initialTab="email-aliases" /> },
-          { path: '/settings/unmapped-emails', element: <SettingsPage initialTab="unmapped-emails" /> },
           { path: '/settings/notifications', element: <SettingsPage initialTab="notifications" /> },
+
+          // Owner-only GitHub integration routes
+          {
+            element: <ProtectedRoute requiredRoles={['OWNER']} />,
+            children: [
+              { path: '/settings/github', element: <SettingsPage initialTab="github" /> },
+              { path: '/dashboard/integrations/github', element: <Navigate to="/settings/github" replace /> },
+            ],
+          },
+
+          // Admin & Owner workspace governance routes
+          {
+            element: <ProtectedRoute requiredRoles={['OWNER', 'ADMIN']} />,
+            children: [
+              { path: '/settings/organization', element: <SettingsPage initialTab="organization" /> },
+              { path: '/settings/repositories', element: <SettingsPage initialTab="repositories" /> },
+              { path: '/settings/members', element: <SettingsPage initialTab="members" /> },
+              { path: '/settings/invitations', element: <SettingsPage initialTab="invitations" /> },
+              { path: '/settings/unmapped-emails', element: <SettingsPage initialTab="unmapped-emails" /> },
+              { path: '/members', element: <OrgMembersPage /> },
+              { path: '/organization/members', element: <OrgMembersPage /> },
+              { path: '/dashboard/org-members', element: <OrgMembersPage /> },
+              { path: '/dashboard/repositories', element: <Navigate to="/settings/repositories" replace /> },
+            ],
+          },
+
+          // Admin & Owner compliance audit routes
+          {
+            element: <ProtectedRoute requiredRoles={['OWNER', 'ADMIN']} />,
+            children: [
+              { path: '/audit-logs', element: <Navigate to="/audit-logs/monitor" replace /> },
+              { path: '/audit-logs/monitor', element: <RealTimeAuditMonitorPage /> },
+              { path: '/audit-logs/explorer', element: <AuditLogsPage /> },
+              { path: '/audit-logs/analytics', element: <AuditAnalyticsPage /> },
+              { path: '/dashboard/audit-logs', element: <Navigate to="/audit-logs" replace /> },
+            ],
+          },
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/commits', element: <CommitsPage /> },
           { path: '/coverage', element: <CoveragePage /> },
@@ -122,13 +153,6 @@ export const routes: RouteObject[] = [
           { path: '/developers/:id', element: <DeveloperProfilePage /> },
           { path: '/leaderboard', element: <LeaderboardPage /> },
           { path: '/onboarding', element: <OnboardingPage /> },
-          { path: '/audit-logs', element: <Navigate to="/audit-logs/monitor" replace /> },
-          { path: '/audit-logs/monitor', element: <RealTimeAuditMonitorPage /> },
-          { path: '/audit-logs/explorer', element: <AuditLogsPage /> },
-          { path: '/audit-logs/analytics', element: <AuditAnalyticsPage /> },
-          { path: '/members', element: <OrgMembersPage /> },
-          { path: '/organization/members', element: <OrgMembersPage /> },
-          { path: '/dashboard/org-members', element: <OrgMembersPage /> },
           // Dashboard route redirects/aliases
           { path: '/dashboard/teams', element: <Navigate to="/teams" replace /> },
           { path: '/dashboard/onboarding', element: <Navigate to="/onboarding" replace /> },

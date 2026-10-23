@@ -17,6 +17,9 @@ import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useOrganizationStore } from '@/stores/organizationStore'
 import { useAuthStore } from '@/stores/authStore'
+import { useUserRole } from '@/rbac/hooks'
+import { permissionService } from '@/rbac/permissionService'
+import type { UserRole } from '@/rbac/types'
 
 export type SettingsTab =
   | 'profile'
@@ -129,22 +132,38 @@ const ALL_TABS: SettingsTab[] = [
   'notifications',
 ]
 
+const TAB_REQUIRED_ROLES: Partial<Record<SettingsTab, UserRole>> = {
+  github: 'OWNER',
+  organization: 'ADMIN',
+  members: 'ADMIN',
+  invitations: 'ADMIN',
+  repositories: 'ADMIN',
+  'unmapped-emails': 'ADMIN',
+}
+
 export function SettingsPage({ initialTab = 'profile' }: { initialTab?: SettingsTab }) {
   const [searchParams, setSearchParams] = useSearchParams()
   const { currentOrganization } = useOrganizationStore()
   const { user } = useAuthStore()
+  const userRole = useUserRole()
+
+  const isTabAllowed = (tab: SettingsTab): boolean => {
+    const requiredRole = TAB_REQUIRED_ROLES[tab]
+    if (!requiredRole) return true
+    return permissionService.hasRole(userRole, requiredRole)
+  }
 
   // Determine active tab from URL query param "?tab=..." or fallback to initialTab prop
   const tabFromUrl = searchParams.get('tab') as SettingsTab | null
   const currentTab: SettingsTab = useMemo(() => {
-    if (tabFromUrl && ALL_TABS.includes(tabFromUrl)) {
-      return tabFromUrl
-    }
-    if (ALL_TABS.includes(initialTab)) {
-      return initialTab
-    }
-    return 'profile'
-  }, [tabFromUrl, initialTab])
+    const candidate = tabFromUrl && ALL_TABS.includes(tabFromUrl)
+      ? tabFromUrl
+      : ALL_TABS.includes(initialTab)
+      ? initialTab
+      : 'profile'
+
+    return isTabAllowed(candidate) ? candidate : 'profile'
+  }, [tabFromUrl, initialTab, userRole])
 
   const [activeTab, setActiveTab] = useState<SettingsTab>(currentTab)
   const [searchQuery, setSearchQuery] = useState('')
@@ -173,21 +192,23 @@ export function SettingsPage({ initialTab = 'profile' }: { initialTab?: Settings
     return { category: 'Account & Security', item: CATEGORIES[0].items[0] }
   }, [activeTab])
 
-  // Filter categories by search query
+  // Filter categories by search query and role-based access
   const filteredCategories = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
-    if (!q) return CATEGORIES
 
     return CATEGORIES.map((cat) => ({
       ...cat,
-      items: cat.items.filter(
-        (item) =>
+      items: cat.items.filter((item) => {
+        if (!isTabAllowed(item.id)) return false
+        if (!q) return true
+        return (
           item.label.toLowerCase().includes(q) ||
           item.description.toLowerCase().includes(q) ||
           cat.title.toLowerCase().includes(q)
-      ),
+        )
+      }),
     })).filter((cat) => cat.items.length > 0)
-  }, [searchQuery])
+  }, [searchQuery, userRole])
 
   return (
     <div className="space-y-6">

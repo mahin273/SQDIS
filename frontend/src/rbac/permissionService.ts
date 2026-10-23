@@ -3,7 +3,7 @@ import { PERMISSION_MATRIX, hasRoleLevel } from './config'
 
 export class PermissionService {
   public hasPermission(
-    userRole: UserRole | undefined,
+    userRole: UserRole | null | undefined,
     permission: PermissionString,
     context?: PermissionCheckContext
   ): PermissionCheckResult {
@@ -56,12 +56,12 @@ export class PermissionService {
     }
   }
 
-  public hasRole(userRole: UserRole | undefined, requiredRole: UserRole): boolean {
+  public hasRole(userRole: UserRole | null | undefined, requiredRole: UserRole): boolean {
     if (!userRole) return false
     return hasRoleLevel(userRole, requiredRole)
   }
 
-  public hasAnyRole(userRole: UserRole | undefined, requiredRoles: UserRole[]): boolean {
+  public hasAnyRole(userRole: UserRole | null | undefined, requiredRoles: UserRole[]): boolean {
     if (!userRole) return false
     return requiredRoles.some((role) => hasRoleLevel(userRole, role))
   }

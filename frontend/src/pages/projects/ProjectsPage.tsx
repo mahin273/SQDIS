@@ -38,6 +38,7 @@ import { queryKeys } from '@/lib/queryClient'
 import { formatNumber } from '@/lib/utils'
 import { PageHeader, QueryState, formatScore } from '../pageUtils'
 import type { Project, CreateProjectRequest, UpdateProjectRequest } from '@/types'
+import { usePermission } from '@/rbac/hooks'
 
 function getSqsTier(score?: number | null) {
   if (score === null || score === undefined || score === 0) {
@@ -82,6 +83,9 @@ function getSqsTier(score?: number | null) {
 
 export function ProjectsPage() {
   const queryClient = useQueryClient()
+  const canCreateProject = usePermission('projects:create').hasPermission
+  const canEditProject = usePermission('projects:edit').hasPermission
+  const canDeleteProject = usePermission('projects:delete').hasPermission
 
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
   const [healthFilter, setHealthFilter] = useState<'ALL' | 'ELITE' | 'GOOD' | 'MODERATE' | 'NEEDS_ATTENTION' | 'UNRATED'>('ALL')
@@ -246,9 +250,11 @@ export function ProjectsPage() {
         title="Project Portfolio"
         description="Enterprise oversight of software quality scores, linked repositories, and engineering velocity."
         action={
-          <Button onClick={openCreateModal} className="gap-2 shadow-xs">
-            <Plus className="h-4 w-4" /> Create Project
-          </Button>
+          canCreateProject ? (
+            <Button onClick={openCreateModal} className="gap-2 shadow-xs">
+              <Plus className="h-4 w-4" /> Create Project
+            </Button>
+          ) : undefined
         }
       />
 
@@ -526,11 +532,11 @@ export function ProjectsPage() {
                     >
                       Clear Filters
                     </Button>
-                  ) : (
+                  ) : canCreateProject ? (
                     <Button onClick={openCreateModal} className="gap-2">
                       <Plus className="h-4 w-4" /> Create Project
                     </Button>
-                  )
+                  ) : undefined
                 }
               />
             ) : viewMode === 'grid' ? (
@@ -567,28 +573,34 @@ export function ProjectsPage() {
                             </div>
 
                             <div className="flex items-center gap-1.5 shrink-0">
-                              <Dropdown>
-                                <DropdownTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  >
-                                    <MoreVertical className="h-4 w-4" />
-                                  </Button>
-                                </DropdownTrigger>
-                                <DropdownMenu align="end">
-                                  <DropdownItem onClick={() => openEditModal(project)} className="gap-2">
-                                    <Edit2 className="h-4 w-4" /> Edit Details
-                                  </DropdownItem>
-                                  <DropdownItem
-                                    onClick={() => openDeleteModal(project)}
-                                    className="gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                                  >
-                                    <Trash2 className="h-4 w-4" /> Delete Project
-                                  </DropdownItem>
-                                </DropdownMenu>
-                              </Dropdown>
+                              {(canEditProject || canDeleteProject) && (
+                                <Dropdown>
+                                  <DropdownTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 w-7 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                      <MoreVertical className="h-4 w-4" />
+                                    </Button>
+                                  </DropdownTrigger>
+                                  <DropdownMenu align="end">
+                                    {canEditProject && (
+                                      <DropdownItem onClick={() => openEditModal(project)} className="gap-2">
+                                        <Edit2 className="h-4 w-4" /> Edit Details
+                                      </DropdownItem>
+                                    )}
+                                    {canDeleteProject && (
+                                      <DropdownItem
+                                        onClick={() => openDeleteModal(project)}
+                                        className="gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                                      >
+                                        <Trash2 className="h-4 w-4" /> Delete Project
+                                      </DropdownItem>
+                                    )}
+                                  </DropdownMenu>
+                                </Dropdown>
+                              )}
                             </div>
                           </div>
 
@@ -808,24 +820,30 @@ export function ProjectsPage() {
                                   <ArrowRight className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
                                 </Button>
                               </Link>
-                              <Dropdown>
-                                <DropdownTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                                    <MoreVertical className="h-3.5 w-3.5 text-slate-500" />
-                                  </Button>
-                                </DropdownTrigger>
-                                <DropdownMenu align="end">
-                                  <DropdownItem onClick={() => openEditModal(project)} className="gap-2">
-                                    <Edit2 className="h-4 w-4" /> Edit
-                                  </DropdownItem>
-                                  <DropdownItem
-                                    onClick={() => openDeleteModal(project)}
-                                    className="gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50"
-                                  >
-                                    <Trash2 className="h-4 w-4" /> Delete
-                                  </DropdownItem>
-                                </DropdownMenu>
-                              </Dropdown>
+                              {(canEditProject || canDeleteProject) && (
+                                <Dropdown>
+                                  <DropdownTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                                      <MoreVertical className="h-3.5 w-3.5 text-slate-500" />
+                                    </Button>
+                                  </DropdownTrigger>
+                                  <DropdownMenu align="end">
+                                    {canEditProject && (
+                                      <DropdownItem onClick={() => openEditModal(project)} className="gap-2">
+                                        <Edit2 className="h-4 w-4" /> Edit
+                                      </DropdownItem>
+                                    )}
+                                    {canDeleteProject && (
+                                      <DropdownItem
+                                        onClick={() => openDeleteModal(project)}
+                                        className="gap-2 text-rose-600 hover:text-rose-700 hover:bg-rose-50 dark:hover:bg-rose-950/50"
+                                      >
+                                        <Trash2 className="h-4 w-4" /> Delete
+                                      </DropdownItem>
+                                    )}
+                                  </DropdownMenu>
+                                </Dropdown>
+                              )}
                             </div>
                           </td>
                         </tr>

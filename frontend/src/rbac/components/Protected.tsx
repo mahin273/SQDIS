@@ -19,9 +19,10 @@ export function Protected({
   context,
   fallback = null,
 }: ProtectedProps) {
-  const hasPerm = usePermission(permission || ('*' as PermissionString), context).hasPermission
-  const hasSingleRole = useRole(requiredRole || ('VIEWER' as UserRole))
-  const hasMultipleRoles = useAnyRole(requiredRoles || [])
+  const permResult = permission ? usePermission(permission, context) : { hasPermission: true }
+  const hasPerm = permResult.hasPermission
+  const hasSingleRole = requiredRole ? useRole(requiredRole) : true
+  const hasMultipleRoles = requiredRoles && requiredRoles.length > 0 ? useAnyRole(requiredRoles) : true
 
   if (permission && !hasPerm) {
     return <>{fallback}</>

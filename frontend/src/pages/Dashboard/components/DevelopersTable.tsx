@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { FiAward, FiUser } from 'react-icons/fi'
 import MetricTable from './MetricTable'
 import { dashboardService } from '@/services'
+import { useUserRole } from '@/rbac/hooks'
 
 function scoreTone(score: number) {
   if (score > 70) return { dot: 'bg-emerald-500', text: 'text-emerald-600 dark:text-emerald-400' }
@@ -23,16 +24,23 @@ function initials(name: string) {
 
 export default function DevelopersTable() {
   const navigate = useNavigate()
+  const userRole = useUserRole()
   const { data: developers = [], isLoading } = useQuery({
     queryKey: ['dashboard', 'top-developers'],
     queryFn: () => dashboardService.getTopDevelopers(5),
   })
 
+  const tableTitle = userRole === 'DEVELOPER'
+    ? 'My Individual Quality & DQS'
+    : userRole === 'TEAM_LEAD'
+    ? 'Team Members by DQS'
+    : 'Top Developers by DQS'
+
   return (
     <MetricTable
-      title="Top Developers by DQS"
+      title={tableTitle}
       icon={<FiAward />}
-      onAction={() => navigate('/developers')}
+      onAction={() => navigate(userRole === 'DEVELOPER' ? '/scores' : '/developers')}
     >
       {isLoading ? (
         <div className="py-6 text-center text-sm text-slate-500">Loading developers...</div>

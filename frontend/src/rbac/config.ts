@@ -5,7 +5,6 @@ export const ROLE_HIERARCHY: Record<UserRole, number> = {
   ADMIN: 80,
   TEAM_LEAD: 60,
   DEVELOPER: 40,
-  VIEWER: 20,
 }
 
 export const PERMISSION_MATRIX: Record<UserRole, PermissionString[]> = {
@@ -42,7 +41,6 @@ export const PERMISSION_MATRIX: Record<UserRole, PermissionString[]> = {
     'settings:view',
     'settings:edit',
     'integrations:view',
-    'integrations:edit',
     'onboarding:view',
     'onboarding:manage',
     'reviews:view',
@@ -97,20 +95,10 @@ export const PERMISSION_MATRIX: Record<UserRole, PermissionString[]> = {
     'alerts:view',
     'debt:view',
   ],
-  VIEWER: [
-    'organization:view',
-    'members:view',
-    'teams:view',
-    'projects:view',
-    'sprints:view',
-    'metrics:view',
-    'reviews:view',
-    'goals:view',
-    'reports:view',
-  ],
 }
 
-export function hasRoleLevel(userRole: UserRole, requiredRole: UserRole): boolean {
+export function hasRoleLevel(userRole: UserRole | null | undefined, requiredRole: UserRole): boolean {
+  if (!userRole) return false
   const userLevel = ROLE_HIERARCHY[userRole] ?? 0
   const requiredLevel = ROLE_HIERARCHY[requiredRole] ?? 0
   return userLevel >= requiredLevel

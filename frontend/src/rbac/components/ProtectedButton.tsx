@@ -23,13 +23,13 @@ export function ProtectedButton({
   tooltipText = 'You do not have permission to perform this action',
   ...props
 }: ProtectedButtonProps) {
-  const permResult = usePermission(permission || ('*' as PermissionString), context)
-  const hasSingleRole = useRole(requiredRole || ('VIEWER' as UserRole))
-  const hasMultipleRoles = useAnyRole(requiredRoles || [])
+  const permResult = permission ? usePermission(permission, context) : { hasPermission: true }
+  const hasSingleRole = requiredRole ? useRole(requiredRole) : true
+  const hasMultipleRoles = requiredRoles && requiredRoles.length > 0 ? useAnyRole(requiredRoles) : true
 
-  const hasPerm = permission ? permResult.hasPermission : true
-  const roleCheck = requiredRole ? hasSingleRole : true
-  const rolesCheck = requiredRoles?.length ? hasMultipleRoles : true
+  const hasPerm = permResult.hasPermission
+  const roleCheck = hasSingleRole
+  const rolesCheck = hasMultipleRoles
 
   const isAllowed = hasPerm && roleCheck && rolesCheck
 

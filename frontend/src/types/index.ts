@@ -33,7 +33,7 @@ export interface ApiResponse<T> {
 
 // ============== AUTH & USER ==============
 
-export type UserRole = 'OWNER' | 'ADMIN' | 'TEAM_LEAD' | 'DEVELOPER' | 'VIEWER';
+export type UserRole = 'OWNER' | 'ADMIN' | 'TEAM_LEAD' | 'DEVELOPER';
 
 export interface User {
   id: string;
