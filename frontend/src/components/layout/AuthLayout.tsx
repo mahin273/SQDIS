@@ -112,11 +112,11 @@ export function AuthLayout() {
           <div className="flex items-center justify-between text-xs text-zinc-400 pt-6 border-t border-zinc-800/60 relative z-10">
             <div className="flex items-center gap-2">
               <Shield className="h-3.5 w-3.5 text-zinc-400" />
-              <span>SOC 2 Type II Certified</span>
+              <span>HMAC-SHA256 Verified</span>
             </div>
             <div className="flex items-center gap-2">
               <Lock className="h-3.5 w-3.5 text-zinc-400" />
-              <span>Zero Source Retention</span>
+              <span>Metadata-Only AST</span>
             </div>
             <div>
               <span>&copy; {new Date().getFullYear()} SQDIS</span>
