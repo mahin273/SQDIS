@@ -110,26 +110,17 @@ export class ScoresService {
     organizationId: string,
     caller?: { id: string; role?: string },
   ): Promise<{ projectId: string }> {
-    let project = await this.prisma.project.findFirst({
+    let repository = await this.prisma.repository.findFirst({
       where: { id: entityId, organizationId },
     });
 
-    let repository = null;
-    if (!project) {
-      repository = await this.prisma.repository.findFirst({
-        where: { id: entityId, organizationId },
-        include: {
-          projectRepositories: {
-            include: { project: true },
-          },
-        },
-      });
-      if (repository?.projectRepositories && repository.projectRepositories.length > 0) {
-        project = repository.projectRepositories[0].project;
-      }
-    }
+    let project = !repository
+      ? await this.prisma.project.findFirst({
+          where: { id: entityId, organizationId },
+        })
+      : null;
 
-    if (!project && !repository) {
+    if (!repository && !project) {
       throw new NotFoundException(`Project or Repository with ID ${entityId} not found in organization`);
     }
 
@@ -151,7 +142,17 @@ export class ScoresService {
       return { projectId: project ? project.id : entityId };
     }
 
-    const targetProjectId = project?.id;
+    let targetProjectId = project?.id;
+    if (!targetProjectId && repository) {
+      const projRepo = await this.prisma.projectRepository.findFirst({
+        where: { repositoryId: repository.id },
+        include: { project: true },
+      });
+      if (projRepo?.project && projRepo.project.organizationId === organizationId) {
+        targetProjectId = projRepo.project.id;
+      }
+    }
+
     if (!targetProjectId) {
       throw new ForbiddenException('You do not have access to unassigned repository quality scores.');
     }
