@@ -804,7 +804,9 @@ export function ReleasesPage() {
                               Bug Resolution
                             </span>
                             <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                              {readiness.bugScore ?? 100}%
+                              {readiness.bugScore !== null && readiness.bugScore !== undefined
+                                ? `${Math.round(readiness.bugScore)}%`
+                                : 'N/A'}
                             </span>
                           </div>
 
@@ -813,7 +815,9 @@ export function ReleasesPage() {
                               Test Coverage
                             </span>
                             <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                              {readiness.coverageScore ?? 80}%
+                              {readiness.coverageScore !== null && readiness.coverageScore !== undefined
+                                ? `${Math.round(readiness.coverageScore)}%`
+                                : 'N/A'}
                             </span>
                           </div>
 
@@ -822,7 +826,9 @@ export function ReleasesPage() {
                               DQS Score
                             </span>
                             <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                              {readiness.dqsScore ?? 85}%
+                              {readiness.dqsScore !== null && readiness.dqsScore !== undefined
+                                ? `${Math.round(readiness.dqsScore)}%`
+                                : 'N/A'}
                             </span>
                           </div>
 
@@ -831,7 +837,9 @@ export function ReleasesPage() {
                               Test Pass Rate
                             </span>
                             <span className="font-mono font-bold text-slate-900 dark:text-slate-100">
-                              {readiness.testPassRate ?? 80}%
+                              {readiness.testPassRate !== null && readiness.testPassRate !== undefined
+                                ? `${Math.round(readiness.testPassRate)}%`
+                                : 'N/A'}
                             </span>
                           </div>
 

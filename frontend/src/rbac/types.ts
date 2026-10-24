@@ -26,7 +26,8 @@ export type PermissionAction =
   | 'manage'
   | 'export'
   | 'assign'
-  | 'approve';
+  | 'approve'
+  | 'remove-request';
 
 export type PermissionScope = 'all' | 'team' | 'own' | 'organization';
 

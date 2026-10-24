@@ -9,9 +9,11 @@ import {
   ParseUUIDPipe,
 } from '@nestjs/common';
 import { ScoresService } from './scores.service';
-import { JwtAuthGuard, OrganizationGuard } from '../auth/guards';
+import { JwtAuthGuard, OrganizationGuard, RolesGuard } from '../auth/guards';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
+import { Role } from '@prisma/client';
 import { DQSHistoryQueryDto, SQSHistoryQueryDto, RecalculateDto } from './dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
 
@@ -21,7 +23,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@ne
 @ApiTags('Scores')
 @ApiBearerAuth()
 @Controller('scores')
-@UseGuards(JwtAuthGuard, OrganizationGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
 export class ScoresController {
   constructor(private readonly scoresService: ScoresService) {}
 
@@ -173,6 +175,7 @@ export class ScoresController {
    * Trigger score recalculation
    */
   @Post('recalculate')
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Trigger score recalculation manually' })
   @ApiResponse({ status: 201, description: 'Recalculation successfully triggered.' })
   async recalculate(

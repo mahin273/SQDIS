@@ -73,6 +73,13 @@ describe('OrganizationsService', () => {
         findMany: jest.fn(),
         updateMany: jest.fn(),
       },
+      memberRemovalRequest: {
+        findFirst: jest.fn(),
+        findMany: jest.fn(),
+        create: jest.fn(),
+        update: jest.fn(),
+        updateMany: jest.fn(),
+      },
       unmappedEmail: {
         findMany: jest.fn(),
         deleteMany: jest.fn(),
@@ -569,5 +576,100 @@ describe('OrganizationsService', () => {
     const result = await service.inviteAll('org-1', 'admin-1');
     expect(result.totalInvited).toBe(1);
     expect(result.emails).toEqual(['uninvited@example.com']);
+  });
+
+  describe('Member Removal Approval Workflow', () => {
+    it('creates a pending removal request when Admin requests removal of a member', async () => {
+      prisma.organization.findUnique.mockResolvedValue(organization);
+      prisma.organizationMember.findUnique
+        .mockResolvedValueOnce({ id: 'admin-mem', userId: 'admin-1', role: Role.ADMIN }) // requester
+        .mockResolvedValueOnce({ id: 'dev-mem', userId: 'dev-1', role: Role.DEVELOPER }); // target
+      prisma.memberRemovalRequest.findFirst.mockResolvedValue(null);
+      prisma.memberRemovalRequest.create.mockResolvedValue({
+        id: 'req-1',
+        organizationId: 'org-1',
+        requesterId: 'admin-1',
+        targetUserId: 'dev-1',
+        reason: 'Performance issues',
+        status: 'PENDING',
+      });
+
+      const res = await service.createRemovalRequest(
+        'org-1',
+        'dev-1',
+        'admin-1',
+        'Performance issues',
+      );
+      expect(res.id).toBe('req-1');
+      expect(prisma.memberRemovalRequest.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            organizationId: 'org-1',
+            requesterId: 'admin-1',
+            targetUserId: 'dev-1',
+            reason: 'Performance issues',
+            status: 'PENDING',
+          }),
+        }),
+      );
+    });
+
+    it('rejects Admin requesting removal of an Owner or another Admin', async () => {
+      prisma.organization.findUnique.mockResolvedValue(organization);
+      prisma.organizationMember.findUnique
+        .mockResolvedValueOnce({ id: 'admin-mem', userId: 'admin-1', role: Role.ADMIN })
+        .mockResolvedValueOnce({ id: 'owner-mem', userId: 'owner-1', role: Role.OWNER });
+
+      await expect(
+        service.createRemovalRequest('org-1', 'owner-1', 'admin-1'),
+      ).rejects.toBeInstanceOf(ForbiddenException);
+    });
+
+    it('Owner approves removal request and deletes target membership', async () => {
+      prisma.organizationMember.findUnique
+        .mockResolvedValueOnce({ id: 'owner-mem', userId: 'owner-1', role: Role.OWNER })
+        .mockResolvedValueOnce({ id: 'dev-mem', userId: 'dev-1', role: Role.DEVELOPER });
+      prisma.memberRemovalRequest.findFirst.mockResolvedValue({
+        id: 'req-1',
+        organizationId: 'org-1',
+        targetUserId: 'dev-1',
+        status: 'PENDING',
+      });
+      prisma.organizationMember.delete.mockResolvedValue({});
+      prisma.memberRemovalRequest.update.mockResolvedValue({
+        id: 'req-1',
+        status: 'APPROVED',
+        approverId: 'owner-1',
+      });
+
+      const approved = await service.approveRemovalRequest('org-1', 'req-1', 'owner-1', 'Approved');
+      expect(approved.status).toBe('APPROVED');
+      expect(prisma.organizationMember.delete).toHaveBeenCalledWith({
+        where: { id: 'dev-mem' },
+      });
+    });
+
+    it('Owner rejects removal request without deleting member', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValueOnce({
+        id: 'owner-mem',
+        userId: 'owner-1',
+        role: Role.OWNER,
+      });
+      prisma.memberRemovalRequest.findFirst.mockResolvedValue({
+        id: 'req-1',
+        organizationId: 'org-1',
+        targetUserId: 'dev-1',
+        status: 'PENDING',
+      });
+      prisma.memberRemovalRequest.update.mockResolvedValue({
+        id: 'req-1',
+        status: 'REJECTED',
+        approverId: 'owner-1',
+      });
+
+      const rejected = await service.rejectRemovalRequest('org-1', 'req-1', 'owner-1', 'Rejected');
+      expect(rejected.status).toBe('REJECTED');
+      expect(prisma.organizationMember.delete).not.toHaveBeenCalled();
+    });
   });
 });

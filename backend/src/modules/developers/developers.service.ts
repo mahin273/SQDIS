@@ -110,7 +110,7 @@ export class DevelopersService {
           leftAt: null,
           team: {
             organizationId,
-            members: {
+            memberships: {
               some: {
                 userId: caller.id,
                 leftAt: null,
@@ -162,7 +162,7 @@ export class DevelopersService {
           leftAt: null,
           team: {
             organizationId,
-            members: {
+            memberships: {
               some: {
                 userId: caller.id,
                 leftAt: null,

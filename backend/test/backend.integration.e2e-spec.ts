@@ -25,6 +25,7 @@ import { RateLimitService } from '../src/modules/github/services/rate-limit.serv
 import { WebhookLogService } from '../src/modules/github/services/webhook-log.service';
 import { WebhookMonitoringService } from '../src/modules/github/services/webhook-monitoring.service';
 import { WebhookService } from '../src/modules/github/services/webhook.service';
+import { PrQualityGateBotService } from '../src/modules/github/services/pr-quality-gate-bot.service';
 import { MetricsController } from '../src/modules/metrics/metrics.controller';
 import { MetricsService } from '../src/modules/metrics/metrics.service';
 import { NotificationsController } from '../src/modules/notifications/notifications.controller';
@@ -129,7 +130,10 @@ describe('Auth API integration', () => {
       }),
     };
 
-    app = await initApp([AuthController], [{ provide: AuthService, useValue: authService }]);
+    app = await initApp([AuthController], [
+      { provide: AuthService, useValue: authService },
+      { provide: GitHubService, useValue: {} },
+    ]);
   });
 
   afterEach(async () => {
@@ -404,6 +408,7 @@ describe('GitHub and metrics API integration', () => {
         { provide: WebhookLogService, useValue: webhookLogService },
         { provide: WebhookMonitoringService, useValue: webhookMonitoringService },
         { provide: RateLimitService, useValue: rateLimitService },
+        { provide: PrQualityGateBotService, useValue: {} },
         {
           provide: MetricsService,
           useValue: {

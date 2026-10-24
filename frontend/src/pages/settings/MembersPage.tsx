@@ -30,6 +30,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { membersService, organizationService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { useOrganizationStore } from '@/stores/organizationStore'
+import { useUserRole } from '@/rbac/hooks'
 import { QueryState } from '../pageUtils'
 import { MemberProfileDrawer } from './components'
 import type { OrganizationMember, UserRole, RepositoryContributor, Invitation } from '@/types'
@@ -64,6 +65,11 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
   // Tab state: 'members' | 'contributors' | 'invitations'
   const [activeTab, setActiveTab] = useState<'members' | 'contributors' | 'invitations'>('members')
 
+  const userRole = useUserRole()
+  const isOwner = userRole === 'OWNER'
+  const isAdmin = userRole === 'ADMIN'
+  const canManageMembers = isOwner || isAdmin
+
   // Modals & form state
   const [isInviteOpen, setIsInviteOpen] = useState(false)
   const [inviteEmail, setInviteEmail] = useState('')
@@ -76,6 +82,9 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
     direction: 'asc',
   })
   const [memberToRemove, setMemberToRemove] = useState<string | null>(null)
+  const [targetForRemovalRequest, setTargetForRemovalRequest] = useState<OrganizationMember | null>(null)
+  const [removalReason, setRemovalReason] = useState('')
+  const [isRemovalRequestModalOpen, setIsRemovalRequestModalOpen] = useState(false)
 
   // Drawer state
   const [selectedMemberForDrawer, setSelectedMemberForDrawer] = useState<OrganizationMember | null>(null)
@@ -131,14 +140,78 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
     },
   })
 
-  const removeMemberMutation = useMutation({
-    mutationFn: (targetId: string) => membersService.remove(targetId),
+  const removalRequestsQuery = useQuery({
+    queryKey: ['organizations', currentOrganization?.id, 'removal-requests'],
+    queryFn: () => membersService.getRemovalRequests('PENDING'),
+    enabled: !!currentOrganization?.id && canManageMembers,
+  })
+
+  const approveRemovalMutation = useMutation({
+    mutationFn: (requestId: string) => membersService.approveRemovalRequest(requestId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.members.all() })
+      queryClient.invalidateQueries({ queryKey: ['organizations', currentOrganization?.id, 'removal-requests'] })
+      setFeedbackMessage({ text: 'Member removal request approved and member removed', type: 'success' })
+      setTimeout(() => setFeedbackMessage(null), 4000)
+    },
+    onError: (err: any) => {
+      setFeedbackMessage({
+        text: err?.response?.data?.message || err.message || 'Failed to approve removal request',
+        type: 'error',
+      })
+      setTimeout(() => setFeedbackMessage(null), 5000)
+    },
+  })
+
+  const rejectRemovalMutation = useMutation({
+    mutationFn: (requestId: string) => membersService.rejectRemovalRequest(requestId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations', currentOrganization?.id, 'removal-requests'] })
+      setFeedbackMessage({ text: 'Member removal request rejected', type: 'success' })
+      setTimeout(() => setFeedbackMessage(null), 4000)
+    },
+    onError: (err: any) => {
+      setFeedbackMessage({
+        text: err?.response?.data?.message || err.message || 'Failed to reject removal request',
+        type: 'error',
+      })
+      setTimeout(() => setFeedbackMessage(null), 5000)
+    },
+  })
+
+  const createRemovalRequestMutation = useMutation({
+    mutationFn: ({ targetUserId, reason }: { targetUserId: string; reason: string }) =>
+      membersService.createRemovalRequest(targetUserId, reason),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['organizations', currentOrganization?.id, 'removal-requests'] })
+      setIsRemovalRequestModalOpen(false)
+      setTargetForRemovalRequest(null)
+      setRemovalReason('')
+      setFeedbackMessage({ text: 'Member removal request submitted for Owner approval', type: 'success' })
+      setTimeout(() => setFeedbackMessage(null), 4000)
+    },
+    onError: (err: any) => {
+      setFeedbackMessage({
+        text: err?.response?.data?.message || err.message || 'Failed to submit removal request',
+        type: 'error',
+      })
+      setTimeout(() => setFeedbackMessage(null), 5000)
+    },
+  })
+
+  const removeMemberMutation = useMutation({
+    mutationFn: (targetId: string) => membersService.remove(targetId),
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.members.all() })
+      queryClient.invalidateQueries({ queryKey: ['organizations', currentOrganization?.id, 'removal-requests'] })
       setMemberToRemove(null)
       setIsProfileDrawerOpen(false)
       setSelectedMemberForDrawer(null)
-      setFeedbackMessage({ text: 'Member removed from organization', type: 'success' })
+      if (data && data.status === 'PENDING_APPROVAL') {
+        setFeedbackMessage({ text: 'Member removal request submitted for Owner approval', type: 'success' })
+      } else {
+        setFeedbackMessage({ text: 'Member removed from organization', type: 'success' })
+      }
       setTimeout(() => setFeedbackMessage(null), 4000)
     },
     onError: (err: any) => {
@@ -558,6 +631,75 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
           </Card>
         </div>
 
+        {/* Pending Member Removal Requests Banner for Owner */}
+        {isOwner && (removalRequestsQuery.data?.length ?? 0) > 0 && (
+          <Card className="border-amber-200 dark:border-amber-900/60 bg-amber-50/50 dark:bg-amber-950/20 shadow-xs">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                  <CardTitle className="text-sm font-bold text-amber-900 dark:text-amber-200">
+                    Pending Member Removal Requests ({removalRequestsQuery.data?.length})
+                  </CardTitle>
+                </div>
+                <Badge variant="outline" className="text-[10px] border-amber-300 text-amber-800 dark:text-amber-300">
+                  Action Required
+                </Badge>
+              </div>
+              <CardDescription className="text-xs text-amber-700/80 dark:text-amber-300/80">
+                Administrators have requested removal of the following members. As Organization Owner, your approval is required to revoke access.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="pt-0 space-y-2.5">
+              {removalRequestsQuery.data?.map((req) => (
+                <div
+                  key={req.id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border border-amber-200/80 dark:border-amber-900/40 bg-white/80 dark:bg-slate-900/80 gap-3"
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
+                        {req.targetUser?.name || req.targetUser?.email || req.targetUserId}
+                      </span>
+                      <span className="text-[11px] text-slate-500 font-mono">({req.targetUser?.email})</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-slate-500 flex-wrap">
+                      <span>
+                        Requested by: <strong className="text-slate-700 dark:text-slate-300">{req.requester?.name || req.requester?.email || 'Admin'}</strong>
+                      </span>
+                      {req.reason && (
+                        <span>
+                          Reason: <em className="text-slate-600 dark:text-slate-400">"{req.reason}"</em>
+                        </span>
+                      )}
+                      <span>Date: {new Date(req.createdAt).toLocaleDateString()}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 self-end sm:self-center">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="text-xs border-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      disabled={rejectRemovalMutation.isPending || approveRemovalMutation.isPending}
+                      onClick={() => rejectRemovalMutation.mutate(req.id)}
+                    >
+                      Reject
+                    </Button>
+                    <Button
+                      size="sm"
+                      className="text-xs bg-red-600 hover:bg-red-700 text-white"
+                      disabled={rejectRemovalMutation.isPending || approveRemovalMutation.isPending}
+                      onClick={() => approveRemovalMutation.mutate(req.id)}
+                    >
+                      Approve Removal
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         {/* Feedback Alert */}
         {feedbackMessage && (
           <div
@@ -846,12 +988,14 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
                                       role: e.target.value as UserRole,
                                     })
                                   }
-                                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium dark:border-slate-700 dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-colors"
+                                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium dark:border-slate-700 dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-colors disabled:opacity-50"
                                   disabled={
-                                    updateRoleMutation.isPending &&
-                                    (updateRoleMutation.variables?.memberId === member.id ||
-                                      updateRoleMutation.variables?.memberId === member.userId)
+                                    !isOwner ||
+                                    (updateRoleMutation.isPending &&
+                                      (updateRoleMutation.variables?.memberId === member.id ||
+                                        updateRoleMutation.variables?.memberId === member.userId))
                                   }
+                                  title={!isOwner ? 'Only Organization Owner can change member roles' : 'Change member role'}
                                 >
                                   <option value="OWNER">Owner</option>
                                   <option value="ADMIN">Admin</option>
@@ -859,14 +1003,25 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
                                   <option value="DEVELOPER">Developer</option>
                                 </select>
 
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                                  onClick={() => setMemberToRemove(member.userId || member.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
+                                {canManageMembers && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 w-7 p-0 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
+                                    title={isOwner ? 'Remove Member' : 'Request Member Removal'}
+                                    onClick={() => {
+                                      if (isOwner) {
+                                        setMemberToRemove(member.userId || member.id)
+                                      } else {
+                                        setTargetForRemovalRequest(member)
+                                        setRemovalReason('')
+                                        setIsRemovalRequestModalOpen(true)
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -1172,6 +1327,12 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
           setIsProfileDrawerOpen(false)
           setMemberToRemove(memberId)
         }}
+        onRequestRemoval={(member) => {
+          setIsProfileDrawerOpen(false)
+          setTargetForRemovalRequest(member)
+          setRemovalReason('')
+          setIsRemovalRequestModalOpen(true)
+        }}
         isUpdatingRole={updateRoleMutation.isPending}
       />
 
@@ -1285,6 +1446,72 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
         confirmVariant="destructive"
         isLoading={removeMemberMutation.isPending}
       />
+
+      {/* Admin Request Member Removal Modal */}
+      <Modal
+        isOpen={isRemovalRequestModalOpen}
+        onClose={() => {
+          setIsRemovalRequestModalOpen(false)
+          setTargetForRemovalRequest(null)
+          setRemovalReason('')
+        }}
+        title="Request Member Removal"
+      >
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (targetForRemovalRequest) {
+              createRemovalRequestMutation.mutate({
+                targetUserId: targetForRemovalRequest.userId || targetForRemovalRequest.id,
+                reason: removalReason,
+              })
+            }
+          }}
+          className="space-y-4"
+        >
+          <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            As an Administrator, you can request removal of member{' '}
+            <strong>{targetForRemovalRequest?.user?.name || targetForRemovalRequest?.user?.email}</strong>.
+            This request will be sent to the Organization Owner for review and approval.
+          </p>
+
+          <div>
+            <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+              Justification / Reason (Optional)
+            </label>
+            <Input
+              value={removalReason}
+              onChange={(e) => setRemovalReason(e.target.value)}
+              placeholder="e.g., Transitioned off project, contract ended"
+              className="text-xs"
+            />
+          </div>
+
+          <div className="flex justify-end gap-2.5 pt-4 border-t border-slate-100 dark:border-slate-800">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setIsRemovalRequestModalOpen(false)
+                setTargetForRemovalRequest(null)
+                setRemovalReason('')
+              }}
+              className="text-xs"
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              size="sm"
+              isLoading={createRemovalRequestMutation.isPending}
+              className="text-xs bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              Submit Removal Request
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

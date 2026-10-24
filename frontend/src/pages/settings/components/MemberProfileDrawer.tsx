@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Award,
   AlertTriangle,
+  Clock,
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +22,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from '@/components/ui/sheet'
+import { useUserRole } from '@/rbac/hooks'
 import type { OrganizationMember, UserRole } from '@/types'
 
 const ROLE_PERMISSIONS: Record<
@@ -75,6 +77,7 @@ export function MemberProfileDrawer({
   onClose,
   onUpdateRole,
   onRemove,
+  onRequestRemoval,
   isUpdatingRole,
 }: {
   member: OrganizationMember | null
@@ -82,8 +85,12 @@ export function MemberProfileDrawer({
   onClose: () => void
   onUpdateRole: (memberId: string, role: UserRole) => void
   onRemove: (memberId: string) => void
+  onRequestRemoval?: (member: OrganizationMember) => void
   isUpdatingRole?: boolean
 }) {
+  const currentUserRole = useUserRole()
+  const isOwner = currentUserRole === 'OWNER'
+  const isAdmin = currentUserRole === 'ADMIN'
   const [selectedRole, setSelectedRole] = useState<UserRole>('DEVELOPER')
 
   useEffect(() => {
@@ -259,23 +266,45 @@ export function MemberProfileDrawer({
         </div>
 
         {/* Danger Zone */}
-        <div className="pt-4 border-t border-red-100 dark:border-red-950/60 space-y-2">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400 flex items-center gap-1.5">
-            <AlertTriangle className="h-3.5 w-3.5" /> Danger Zone
-          </h4>
-          <p className="text-xs text-slate-500">
-            Removing this user will revoke all platform access, repository scoring links, and organization roles immediately.
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onRemove(member.userId || member.id)}
-            className="w-full text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 border-red-200 dark:border-red-900/60 gap-1.5 mt-1"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            Remove Member from Organization
-          </Button>
-        </div>
+        {(isOwner || isAdmin) && (
+          <div className="pt-4 border-t border-red-100 dark:border-red-950/60 space-y-2">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-red-600 dark:text-red-400 flex items-center gap-1.5">
+              <AlertTriangle className="h-3.5 w-3.5" /> Danger Zone
+            </h4>
+            <p className="text-xs text-slate-500">
+              {isOwner
+                ? 'Removing this user will revoke all platform access, repository scoring links, and organization roles immediately.'
+                : 'Submitting a removal request will notify the organization Owner for approval before revoking access.'}
+            </p>
+            {isOwner ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => onRemove(member.userId || member.id)}
+                className="w-full text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/40 border-red-200 dark:border-red-900/60 gap-1.5 mt-1"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                Remove Member from Organization
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  if (onRequestRemoval) {
+                    onRequestRemoval(member)
+                  } else {
+                    onRemove(member.userId || member.id)
+                  }
+                }}
+                className="w-full text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-950/40 border-amber-200 dark:border-amber-900/60 gap-1.5 mt-1"
+              >
+                <Clock className="h-3.5 w-3.5" />
+                Request Member Removal (Requires Owner Approval)
+              </Button>
+            )}
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   )
