@@ -50,6 +50,79 @@ export class ReviewsController {
   }
 
   /**
+   * Helper to resolve allowed repositories for the caller
+   */
+  private async resolveAllowedRepositoryIds(
+    organizationId: string,
+    user: any,
+    repositoryId?: string,
+  ): Promise<{ repositoryId?: string; allowedRepoIds?: string[]; empty: boolean }> {
+    if (repositoryId) {
+      if (this.dataFilterService && user && typeof user === 'object' && user.id) {
+        await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, user);
+      }
+      return { repositoryId, allowedRepoIds: [repositoryId], empty: false };
+    }
+    if (this.dataFilterService && user && typeof user === 'object' && user.id) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        user.id,
+        organizationId,
+        user.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return { empty: true };
+        }
+        return { allowedRepoIds: scope.repositoryIds, empty: false };
+      }
+    }
+    return { empty: false };
+  }
+
+  private emptyAnalytics() {
+    return {
+      totalReviews: 0,
+      approvedReviews: 0,
+      changesRequestedReviews: 0,
+      commentedReviews: 0,
+      avgTurnaroundHours: 0,
+      medianTurnaroundHours: 0,
+      p90TurnaroundHours: 0,
+      totalReviewComments: 0,
+      avgCommentsPerReview: 0,
+      thoroughReviewCount: 0,
+      fastReviewCount: 0,
+      stats: {
+        totalReviews: 0,
+        approvalRate: 0,
+        avgTurnaroundMinutes: 0,
+        turnaroundDistribution: { FAST: 0, NORMAL: 0, SLOW: 0 },
+      },
+      qualityMetrics: this.emptyQualityMetrics(),
+      activityTrend: [],
+      peakHours: [],
+      peakDays: [],
+      averageTurnaroundHours: 0,
+      approvalRate: 0,
+      reviewsByState: { APPROVED: 0 },
+    };
+  }
+
+  private emptyQualityMetrics() {
+    return {
+      totalComments: 0,
+      avgCommentsPerReview: 0,
+      commentClassification: { CONSTRUCTIVE: 0, NITPICK: 0, NEUTRAL: 0 },
+      reviewDepthScore: 0,
+      qualityScore: 0,
+      avgDepthScore: 0,
+      constructiveCommentRatio: 0,
+      followUpDiscussionRate: 0,
+      distribution: { detailed: 0, moderate: 0, brief: 0, rubberStamp: 0 },
+    };
+  }
+
+  /**
    * GET /api/reviews/pending - Get pending reviews for current user
    */
   @Get('pending')
@@ -57,11 +130,13 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Pending reviews retrieved.' })
   async getPendingReviews(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return [];
-    return this.reviewsService.getPendingReviews(user.id, organizationId);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user);
+    if (scope.empty) return [];
+    return this.reviewsService.getPendingReviews(user.id, organizationId, scope.allowedRepoIds);
   }
 
   /**
@@ -74,16 +149,19 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Reviewers leaderboard retrieved.' })
   async getLeaderboard(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
     @Query('limit') limit?: string,
     @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return [];
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) return [];
     return this.reviewsService.getEnhancedLeaderboard(
       organizationId,
       limit ? parseInt(limit, 10) : 10,
-      repositoryId,
+      scope.repositoryId,
+      scope.allowedRepoIds,
     );
   }
 
@@ -98,28 +176,26 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Review analytics retrieved.' })
   async getAnalytics(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) {
-      return {
-        totalReviews: 0,
-        approvedReviews: 0,
-        changesRequestedReviews: 0,
-        commentedReviews: 0,
-        avgTurnaroundHours: 0,
-        medianTurnaroundHours: 0,
-        p90TurnaroundHours: 0,
-        totalReviewComments: 0,
-        avgCommentsPerReview: 0,
-        thoroughReviewCount: 0,
-        fastReviewCount: 0,
-      };
+      return this.emptyAnalytics();
     }
-    return this.reviewsService.getAnalytics(organizationId, startDate, endDate, repositoryId);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) {
+      return this.emptyAnalytics();
+    }
+    return this.reviewsService.getAnalytics(
+      organizationId,
+      startDate,
+      endDate,
+      scope.repositoryId,
+      scope.allowedRepoIds,
+    );
   }
 
   /**
@@ -133,22 +209,26 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Quality metrics retrieved.' })
   async getQualityMetrics(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) {
-      return {
-        qualityScore: 0,
-        avgDepthScore: 0,
-        constructiveCommentRatio: 0,
-        followUpDiscussionRate: 0,
-        distribution: { detailed: 0, moderate: 0, brief: 0, rubberStamp: 0 },
-      };
+      return this.emptyQualityMetrics();
     }
-    return this.reviewsService.getQualityMetrics(organizationId, startDate, endDate, repositoryId);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) {
+      return this.emptyQualityMetrics();
+    }
+    return this.reviewsService.getQualityMetrics(
+      organizationId,
+      startDate,
+      endDate,
+      scope.repositoryId,
+      scope.allowedRepoIds,
+    );
   }
 
   /**
@@ -161,16 +241,19 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Review activity trend retrieved.' })
   async getActivityTrend(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
     @Query('days') days?: string,
     @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return [];
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) return [];
     return this.reviewsService.getActivityTrend(
       organizationId,
       days ? parseInt(days, 10) : 30,
-      repositoryId,
+      scope.repositoryId,
+      scope.allowedRepoIds,
     );
   }
 
@@ -183,12 +266,18 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Peak time metrics retrieved.' })
   async getPeakTimes(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
     @Query('repositoryId') repositoryId?: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return { peakDay: 'Monday', peakHour: 14, heatmap: [] };
-    return this.reviewsService.getPeakTimes(organizationId, repositoryId);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) return { peakDay: 'Monday', peakHour: 14, heatmap: [] };
+    return this.reviewsService.getPeakTimes(
+      organizationId,
+      scope.repositoryId,
+      scope.allowedRepoIds,
+    );
   }
 
   /**
@@ -199,11 +288,13 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'List of repositories retrieved.' })
   async getRepositoriesWithReviews(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return [];
-    return this.reviewsService.getRepositoriesWithReviews(organizationId);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user);
+    if (scope.empty) return [];
+    return this.reviewsService.getRepositoriesWithReviews(organizationId, scope.allowedRepoIds);
   }
 
   /**
