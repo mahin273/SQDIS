@@ -92,13 +92,29 @@ export class ReviewsService {
       repository: { organizationId },
     };
 
-    // Scoping & validation
+    // Repository scoping & validation
     if (repositoryId) {
       if (caller && this.dataFilterService && typeof caller === 'object' && caller.id) {
         await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, caller);
       }
       where.repositoryId = repositoryId;
-    } else if (viewType === 'my_reviews' && currentUserId) {
+    } else if (caller && this.dataFilterService && typeof caller === 'object' && caller.id) {
+      // General review listing: scope for non-org-scoped roles (DEVELOPER, TEAM_LEAD)
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        caller.id,
+        organizationId,
+        caller.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return { data: [], total: 0, page, limit, totalPages: 0 };
+        }
+        where.repositoryId = { in: scope.repositoryIds };
+      }
+    }
+
+    // View type filters (scoped within authorized repositories above)
+    if (viewType === 'my_reviews' && currentUserId) {
       where.reviewerId = currentUserId;
     } else if (viewType === 'reviews_on_my_prs' && currentUserId) {
       where.prAuthorId = currentUserId;
@@ -111,19 +127,6 @@ export class ReviewsService {
           some: { teamId, leftAt: null },
         },
       };
-    } else if (caller && this.dataFilterService && typeof caller === 'object' && caller.id) {
-      // General review listing with no viewType: scope for non-org-scoped roles (DEVELOPER, TEAM_LEAD)
-      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
-        caller.id,
-        organizationId,
-        caller.role as any,
-      );
-      if (!scope.isOrgScoped) {
-        if (scope.repositoryIds.length === 0) {
-          return { data: [], total: 0, page, limit, totalPages: 0 };
-        }
-        where.repositoryId = { in: scope.repositoryIds };
-      }
     }
     if (reviewerId && viewType !== 'my_reviews') where.reviewerId = reviewerId;
     if (prAuthorId && viewType !== 'reviews_on_my_prs') where.prAuthorId = prAuthorId;
@@ -374,11 +377,18 @@ export class ReviewsService {
     startDate?: string,
     endDate?: string,
     repositoryId?: string,
+    allowedRepoIds?: string[],
   ): Promise<ReviewQualityMetrics> {
+    const repoFilter = repositoryId
+      ? { repositoryId }
+      : allowedRepoIds !== undefined
+      ? { repositoryId: { in: allowedRepoIds } }
+      : {};
+
     const where: any = {
       review: {
         repository: { organizationId },
-        ...(repositoryId ? { repositoryId } : {}),
+        ...repoFilter,
       },
       deletedAt: null,
     };
@@ -399,7 +409,7 @@ export class ReviewsService {
 
     const reviewWhere: any = {
       repository: { organizationId },
-      ...(repositoryId ? { repositoryId } : {}),
+      ...repoFilter,
     };
     if (startDate || endDate) {
       reviewWhere.submittedAt = {};
@@ -442,14 +452,21 @@ export class ReviewsService {
     organizationId: string,
     days = 30,
     repositoryId?: string,
+    allowedRepoIds?: string[],
   ): Promise<ReviewActivityData[]> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    const repoFilter = repositoryId
+      ? { repositoryId }
+      : allowedRepoIds !== undefined
+      ? { repositoryId: { in: allowedRepoIds } }
+      : {};
+
     const reviews = await this.prisma.review.findMany({
       where: {
         repository: { organizationId },
-        ...(repositoryId ? { repositoryId } : {}),
+        ...repoFilter,
         submittedAt: { gte: startDate },
       },
       select: {
@@ -498,14 +515,21 @@ export class ReviewsService {
   async getPeakTimes(
     organizationId: string,
     repositoryId?: string,
+    allowedRepoIds?: string[],
   ): Promise<{
     peakHours: { hour: number; count: number }[];
     peakDays: { day: string; count: number }[];
   }> {
+    const repoFilter = repositoryId
+      ? { repositoryId }
+      : allowedRepoIds !== undefined
+      ? { repositoryId: { in: allowedRepoIds } }
+      : {};
+
     const reviews = await this.prisma.review.findMany({
       where: {
         repository: { organizationId },
-        ...(repositoryId ? { repositoryId } : {}),
+        ...repoFilter,
       },
       select: {
         submittedAt: true,
@@ -545,12 +569,13 @@ export class ReviewsService {
     startDate?: string,
     endDate?: string,
     repositoryId?: string,
+    allowedRepoIds?: string[],
   ): Promise<ReviewAnalytics> {
     const [stats, qualityMetrics, activityTrend, peakTimes] = await Promise.all([
-      this.getOrganizationStats(organizationId, startDate, endDate, repositoryId),
-      this.getQualityMetrics(organizationId, startDate, endDate, repositoryId),
-      this.getActivityTrend(organizationId, 30, repositoryId),
-      this.getPeakTimes(organizationId, repositoryId),
+      this.getOrganizationStats(organizationId, startDate, endDate, repositoryId, allowedRepoIds),
+      this.getQualityMetrics(organizationId, startDate, endDate, repositoryId, allowedRepoIds),
+      this.getActivityTrend(organizationId, 30, repositoryId, allowedRepoIds),
+      this.getPeakTimes(organizationId, repositoryId, allowedRepoIds),
     ]);
 
     const averageTurnaroundHours = stats.avgTurnaroundMinutes ? stats.avgTurnaroundMinutes / 60 : 0;
@@ -578,10 +603,17 @@ export class ReviewsService {
     startDate?: string,
     endDate?: string,
     repositoryId?: string,
+    allowedRepoIds?: string[],
   ): Promise<ReviewStats> {
+    const repoFilter = repositoryId
+      ? { repositoryId }
+      : allowedRepoIds !== undefined
+      ? { repositoryId: { in: allowedRepoIds } }
+      : {};
+
     const where: any = {
       repository: { organizationId },
-      ...(repositoryId ? { repositoryId } : {}),
+      ...repoFilter,
     };
 
     if (startDate || endDate) {
@@ -627,12 +659,19 @@ export class ReviewsService {
     organizationId: string,
     limit = 10,
     repositoryId?: string,
+    allowedRepoIds?: string[],
   ): Promise<ReviewerRanking[]> {
+    const repoFilter = repositoryId
+      ? { repositoryId }
+      : allowedRepoIds !== undefined
+      ? { repositoryId: { in: allowedRepoIds } }
+      : {};
+
     const reviewers = await this.prisma.review.groupBy({
       by: ['reviewerId'],
       where: {
         repository: { organizationId },
-        ...(repositoryId ? { repositoryId } : {}),
+        ...repoFilter,
         reviewerId: { not: null },
       },
       _count: { id: true },
@@ -654,7 +693,7 @@ export class ReviewsService {
           where: {
             reviewerId: reviewer.reviewerId,
             repository: { organizationId },
-            ...(repositoryId ? { repositoryId } : {}),
+            ...repoFilter,
             state: 'APPROVED',
           },
         }),
@@ -663,7 +702,7 @@ export class ReviewsService {
             authorId: reviewer.reviewerId,
             review: {
               repository: { organizationId },
-              ...(repositoryId ? { repositoryId } : {}),
+              ...repoFilter,
             },
             commentClass: 'CONSTRUCTIVE',
             deletedAt: null,
@@ -740,12 +779,20 @@ export class ReviewsService {
    */
   async getRepositoriesWithReviews(
     organizationId: string,
+    allowedRepoIds?: string[],
   ): Promise<{ id: string; name: string; fullName: string }[]> {
+    const where: any = {
+      organizationId,
+      reviews: { some: {} },
+    };
+    if (allowedRepoIds !== undefined) {
+      if (allowedRepoIds.length === 0) {
+        return [];
+      }
+      where.id = { in: allowedRepoIds };
+    }
     const repos = await this.prisma.repository.findMany({
-      where: {
-        organizationId,
-        reviews: { some: {} },
-      },
+      where,
       select: {
         id: true,
         name: true,
@@ -793,13 +840,24 @@ export class ReviewsService {
   /**
    * Get pending reviews for a user
    */
-  async getPendingReviews(userId: string, organizationId: string): Promise<Review[]> {
+  async getPendingReviews(
+    userId: string,
+    organizationId: string,
+    allowedRepoIds?: string[],
+  ): Promise<Review[]> {
+    const where: any = {
+      reviewerId: userId,
+      state: 'PENDING',
+      repository: { organizationId },
+    };
+    if (allowedRepoIds !== undefined) {
+      if (allowedRepoIds.length === 0) {
+        return [];
+      }
+      where.repositoryId = { in: allowedRepoIds };
+    }
     return this.prisma.review.findMany({
-      where: {
-        reviewerId: userId,
-        state: 'PENDING',
-        repository: { organizationId },
-      },
+      where,
       orderBy: { createdAt: 'asc' },
       include: {
         repository: { select: { id: true, name: true, fullName: true } },
@@ -815,14 +873,76 @@ export class ReviewsService {
     organizationId: string,
     caller?: { id: string; role?: string },
   ): Promise<ReviewStats> {
-    if (caller && caller.role === 'DEVELOPER' && caller.id !== developerId) {
-      throw new ForbiddenException('Access denied: You can only view your own review statistics.');
+    if (caller && typeof caller === 'object' && caller.id) {
+      let effectiveRole = caller.role;
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: caller.id,
+          },
+        },
+      });
+      if (membership?.role) {
+        effectiveRole = membership.role;
+      }
+
+      if (effectiveRole === 'DEVELOPER') {
+        if (caller.id !== developerId) {
+          throw new ForbiddenException('Access denied: You can only view your own review statistics.');
+        }
+      } else if (effectiveRole === 'TEAM_LEAD') {
+        if (caller.id !== developerId) {
+          const sharedTeam = await this.prisma.teamMembership.findFirst({
+            where: {
+              userId: developerId,
+              leftAt: null,
+              team: {
+                organizationId,
+                memberships: {
+                  some: {
+                    userId: caller.id,
+                    leftAt: null,
+                  },
+                },
+              },
+            },
+          });
+          if (!sharedTeam) {
+            throw new ForbiddenException(
+              'Access denied: Team Leads can only view review statistics for members of their assigned teams.',
+            );
+          }
+        }
+      }
     }
+
+    const where: any = {
+      reviewerId: developerId,
+      repository: { organizationId },
+    };
+
+    if (caller && this.dataFilterService && typeof caller === 'object' && caller.id) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        caller.id,
+        organizationId,
+        caller.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return {
+            totalReviews: 0,
+            approvalRate: 0,
+            avgTurnaroundMinutes: 0,
+            turnaroundDistribution: { FAST: 0, NORMAL: 0, SLOW: 0 },
+          };
+        }
+        where.repositoryId = { in: scope.repositoryIds };
+      }
+    }
+
     const reviews = await this.prisma.review.findMany({
-      where: {
-        reviewerId: developerId,
-        repository: { organizationId },
-      },
+      where,
       select: {
         state: true,
         turnaroundMinutes: true,

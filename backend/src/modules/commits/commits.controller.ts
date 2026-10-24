@@ -1,8 +1,11 @@
 import { Controller, Get, Post, Param, Query, UseGuards, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import { Role } from '@prisma/client';
 import { CommitsService } from './commits.service';
 import { CommitFiltersDto, CommitStatsQueryDto, HeatmapQueryDto } from './dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import type { RequestUser } from '../auth/decorators/get-user.decorator';
@@ -236,6 +239,8 @@ export class CommitsController {
    * Re-attribute existing unattributed commits to developers
    */
   @Post('reattribute')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.OWNER)
   @ApiOperation({ summary: 'Re-attribute existing unattributed commits to developers' })
   @ApiResponse({
     status: 200,
@@ -250,14 +255,21 @@ export class CommitsController {
     if (!organizationId) {
       return { updated: 0, developersDiscovered: 0 };
     }
-    await this.verifyOrganizationAccess(organizationId, user.id);
+    await this.verifyOrganizationAccess(organizationId, user.id, [Role.ADMIN, Role.OWNER]);
+    if (repositoryId && this.dataFilterService) {
+      await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, user);
+    }
     return this.commitsService.reattributeExistingCommits(organizationId, repositoryId);
   }
 
   /**
-   * Verify user has access to an organization
+   * Verify user has access to an organization and possesses required roles
    */
-  private async verifyOrganizationAccess(organizationId: string, userId: string): Promise<void> {
+  private async verifyOrganizationAccess(
+    organizationId: string,
+    userId: string,
+    allowedRoles?: Role[],
+  ): Promise<void> {
     const membership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
@@ -269,6 +281,10 @@ export class CommitsController {
 
     if (!membership) {
       throw new ForbiddenException('You do not have access to this organization');
+    }
+
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(membership.role as Role)) {
+      throw new ForbiddenException('Access denied: Caller lacks required role in organization');
     }
   }
 }

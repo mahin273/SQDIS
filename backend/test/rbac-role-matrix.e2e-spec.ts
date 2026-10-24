@@ -2,6 +2,7 @@ import {
   CanActivate,
   ExecutionContext,
   ForbiddenException,
+  NotFoundException,
   INestApplication,
   ValidationPipe,
 } from '@nestjs/common';
@@ -193,12 +194,16 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
       getStatistics: jest.fn().mockResolvedValue({ totalCommits: 5 }),
       getHeatmapData: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue({ id: 'commit-1', repositoryId: 'repo-1', repository: { organizationId: 'org-1' } }),
+      reattributeExistingCommits: jest.fn().mockResolvedValue({ updated: 5, developersDiscovered: 2 }),
     };
 
     coverageServiceMock = {
       uploadCoverage: jest.fn().mockResolvedValue({ id: 'cov-1', repositoryId: 'repo-1' }),
       findAll: jest.fn().mockImplementation(async (orgId, filters, allowedRepoIds) => {
         if (allowedRepoIds && allowedRepoIds.length === 0) {
+          return { reports: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+        }
+        if (allowedRepoIds && filters?.repositoryId && !allowedRepoIds.includes(filters.repositoryId)) {
           return { reports: [], total: 0, page: 1, limit: 20, totalPages: 0 };
         }
         return { reports: [{ id: 'cov-1', repositoryId: 'repo-1' }], total: 1, page: 1, limit: 20, totalPages: 1 };
@@ -218,6 +223,9 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         if (user?.role === Role.DEVELOPER && filters.repositoryId === 'unassigned-repo') {
           throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
         }
+        if (user?.role === Role.DEVELOPER && user?.id === 'dev-unassigned') {
+          return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+        }
         return { data: [{ id: 'review-1' }], total: 1, page: 1, limit: 20, totalPages: 1 };
       }),
       findById: jest.fn().mockImplementation(async (id, orgId, user) => {
@@ -231,7 +239,40 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         if (user?.role === Role.DEVELOPER && user.id !== devId) {
           throw new ForbiddenException('Access denied: You can only view your own review statistics.');
         }
+        if (user?.role === Role.TEAM_LEAD && devId === 'non-team-dev') {
+          throw new ForbiddenException(
+            'Access denied: Team Leads can only view review statistics for members of their assigned teams.',
+          );
+        }
         return { totalReviews: 5, approvedReviews: 4 };
+      }),
+      getPendingReviews: jest.fn().mockImplementation(async (userId, orgId, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) return [];
+        return [{ id: 'review-1' }];
+      }),
+      getEnhancedLeaderboard: jest.fn().mockImplementation(async (orgId, limit, repoId, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) return [];
+        return [{ reviewerId: 'dev-1', reviewCount: 5 }];
+      }),
+      getAnalytics: jest.fn().mockImplementation(async (orgId, start, end, repoId, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) return { totalReviews: 0 };
+        return { totalReviews: 5 };
+      }),
+      getQualityMetrics: jest.fn().mockImplementation(async (orgId, start, end, repoId, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) return { qualityScore: 0 };
+        return { qualityScore: 85 };
+      }),
+      getActivityTrend: jest.fn().mockImplementation(async (orgId, days, repoId, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) return [];
+        return [{ date: '2026-01-01', count: 1 }];
+      }),
+      getPeakTimes: jest.fn().mockImplementation(async (orgId, repoId, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) return { peakHours: [], peakDays: [] };
+        return { peakHours: [{ hour: 14, count: 5 }], peakDays: [] };
+      }),
+      getRepositoriesWithReviews: jest.fn().mockImplementation(async (orgId, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) return [];
+        return [{ id: 'repo-1', name: 'api', fullName: 'acme/api' }];
       }),
       exportReviews: jest.fn().mockResolvedValue('ID,Title\n1,Test'),
     };
@@ -247,8 +288,11 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         return { isOrgScoped: true, projectIds: [], repositoryIds: [], teamIds: [] };
       }),
       verifyRepositoryAccess: jest.fn().mockImplementation(async (repoId, orgId, user) => {
-        if (user?.role === Role.DEVELOPER && (repoId === 'unassigned-repo' || repoId === 'a0000000-0000-4000-8000-000000000002')) {
-          throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
+        if (repoId === 'unassigned-repo' || repoId === 'a0000000-0000-4000-8000-000000000002') {
+          if (user?.role === Role.DEVELOPER || user?.role === Role.TEAM_LEAD) {
+            throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
+          }
+          throw new NotFoundException(`Repository with ID ${repoId} not found in organization`);
         }
         return { repositoryId: repoId, organizationId: orgId };
       }),
@@ -866,6 +910,103 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
       await request(app.getHttpServer())
         .get('/reviews/stats/dev-1')
         .expect(200);
+    });
+
+    it('Review list modes and aggregations enforce repository scoping', async () => {
+      // Developer with no assigned projects gets empty results across review list modes & aggregations
+      currentAuthUser = {
+        id: 'dev-unassigned',
+        email: 'unassigned@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      const myReviewsRes = await request(app.getHttpServer())
+        .get('/reviews?viewType=my_reviews')
+        .expect(200);
+      expect(myReviewsRes.body.data).toEqual([]);
+      expect(myReviewsRes.body.total).toBe(0);
+
+      const prReviewsRes = await request(app.getHttpServer())
+        .get('/reviews?viewType=reviews_on_my_prs')
+        .expect(200);
+      expect(prReviewsRes.body.data).toEqual([]);
+
+      const leaderboardRes = await request(app.getHttpServer())
+        .get('/reviews/leaderboard')
+        .expect(200);
+      expect(leaderboardRes.body).toEqual([]);
+
+      const analyticsRes = await request(app.getHttpServer())
+        .get('/reviews/analytics')
+        .expect(200);
+      expect(analyticsRes.body.totalReviews).toBe(0);
+
+      const reposRes = await request(app.getHttpServer())
+        .get('/reviews/repositories')
+        .expect(200);
+      expect(reposRes.body).toEqual([]);
+
+      // Querying leaderboard with unassigned repository rejected with 403
+      currentAuthUser.id = 'dev-1';
+      await request(app.getHttpServer())
+        .get('/reviews/leaderboard?repositoryId=unassigned-repo')
+        .expect(403);
+    });
+
+    it('Team Leads can only view review stats for members of their assigned teams', async () => {
+      currentAuthUser = {
+        id: 'lead-1',
+        email: 'lead@acme.com',
+        role: Role.TEAM_LEAD,
+        organizationId: 'org-1',
+      };
+
+      // Querying stats for developer outside assigned teams rejected with 403
+      await request(app.getHttpServer())
+        .get('/reviews/stats/non-team-dev')
+        .expect(403);
+
+      // Querying stats for developer in assigned team allowed with 200
+      await request(app.getHttpServer())
+        .get('/reviews/stats/team-dev')
+        .expect(200);
+    });
+
+    it('Commit re-attribution enforces role authorization and repository access checks', async () => {
+      // Developer rejected with 403
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+      await request(app.getHttpServer())
+        .post('/commits/reattribute')
+        .expect(403);
+
+      // Team Lead rejected with 403
+      currentAuthUser.role = Role.TEAM_LEAD;
+      await request(app.getHttpServer())
+        .post('/commits/reattribute')
+        .expect(403);
+
+      // Admin with non-existent or unassigned repository rejected with 404
+      currentAuthUser.role = Role.ADMIN;
+      await request(app.getHttpServer())
+        .post('/commits/reattribute?repositoryId=unassigned-repo')
+        .expect(404);
+
+      // Admin allowed with 200/201
+      await request(app.getHttpServer())
+        .post('/commits/reattribute?repositoryId=repo-1')
+        .expect(201);
+
+      // Owner allowed with 200/201
+      currentAuthUser.role = Role.OWNER;
+      await request(app.getHttpServer())
+        .post('/commits/reattribute')
+        .expect(201);
     });
 
     it('Code intelligence operations validate repository access and scope defect history', async () => {

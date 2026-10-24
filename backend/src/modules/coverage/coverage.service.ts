@@ -162,10 +162,22 @@ export class CoverageService {
           totalPages: 0,
         };
       }
-      where.repositoryId = { in: allowedRepositoryIds };
-    }
 
-    if (filters.repositoryId) {
+      if (filters.repositoryId) {
+        if (!allowedRepositoryIds.includes(filters.repositoryId)) {
+          return {
+            reports: [],
+            total: 0,
+            page,
+            limit,
+            totalPages: 0,
+          };
+        }
+        where.repositoryId = filters.repositoryId;
+      } else {
+        where.repositoryId = { in: allowedRepositoryIds };
+      }
+    } else if (filters.repositoryId) {
       where.repositoryId = filters.repositoryId;
     }
 
