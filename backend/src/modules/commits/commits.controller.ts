@@ -7,6 +7,7 @@ import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import type { RequestUser } from '../auth/decorators/get-user.decorator';
 import { PrismaService } from '../../prisma';
+import { DataFilterService } from '../auth/services/data-filter.service';
 
 /**
  * Controller for commit endpoints
@@ -19,6 +20,7 @@ export class CommitsController {
   constructor(
     private readonly commitsService: CommitsService,
     private readonly prisma: PrismaService,
+    private readonly dataFilterService?: DataFilterService,
   ) {}
 
   /**
@@ -55,18 +57,40 @@ export class CommitsController {
     await this.verifyOrganizationAccess(organizationId, user.id);
     filters.organizationId = organizationId;
 
-    // If repositoryId is provided, verify access through repository's organization
+    let allowedRepositoryIds: string[] | undefined;
     if (filters.repositoryId) {
-      const repository = await this.prisma.repository.findUnique({
-        where: { id: filters.repositoryId },
-        select: { organizationId: true },
-      });
-      if (repository) {
-        await this.verifyOrganizationAccess(repository.organizationId, user.id);
+      if (this.dataFilterService) {
+        await this.dataFilterService.verifyRepositoryAccess(filters.repositoryId, organizationId, user);
+      } else {
+        const repository = await this.prisma.repository.findUnique({
+          where: { id: filters.repositoryId },
+          select: { organizationId: true },
+        });
+        if (repository) {
+          await this.verifyOrganizationAccess(repository.organizationId, user.id);
+        }
+      }
+    } else if (this.dataFilterService) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        user.id,
+        organizationId,
+        user.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return {
+            data: [],
+            total: 0,
+            page: filters.page || 1,
+            limit: filters.pageSize || filters.limit || 20,
+            totalPages: 0,
+          };
+        }
+        allowedRepositoryIds = scope.repositoryIds;
       }
     }
 
-    return this.commitsService.findAll(filters);
+    return this.commitsService.findAll(filters, allowedRepositoryIds);
   }
 
   /**
@@ -105,18 +129,42 @@ export class CommitsController {
     await this.verifyOrganizationAccess(organizationId, user.id);
     query.organizationId = organizationId;
 
-    // If repositoryId is provided, verify access through repository's organization
+    let allowedRepositoryIds: string[] | undefined;
     if (query.repositoryId) {
-      const repository = await this.prisma.repository.findUnique({
-        where: { id: query.repositoryId },
-        select: { organizationId: true },
-      });
-      if (repository) {
-        await this.verifyOrganizationAccess(repository.organizationId, user.id);
+      if (this.dataFilterService) {
+        await this.dataFilterService.verifyRepositoryAccess(query.repositoryId, organizationId, user);
+      } else {
+        const repository = await this.prisma.repository.findUnique({
+          where: { id: query.repositoryId },
+          select: { organizationId: true },
+        });
+        if (repository) {
+          await this.verifyOrganizationAccess(repository.organizationId, user.id);
+        }
+      }
+    } else if (this.dataFilterService) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        user.id,
+        organizationId,
+        user.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return {
+            totalCommits: 0,
+            totalInsertions: 0,
+            totalDeletions: 0,
+            averageChurnRatio: 0,
+            anomalyCount: 0,
+            classifications: {},
+            topAuthors: [],
+          };
+        }
+        allowedRepositoryIds = scope.repositoryIds;
       }
     }
 
-    return this.commitsService.getStatistics(query);
+    return this.commitsService.getStatistics(query, allowedRepositoryIds);
   }
 
   /**
@@ -137,13 +185,14 @@ export class CommitsController {
     description: 'Repository not found',
   })
   async getHeatmap(@Query() query: HeatmapQueryDto, @GetUser() user: RequestUser) {
-    // Verify user has access to the repository's organization
     const repository = await this.prisma.repository.findUnique({
       where: { id: query.repositoryId },
       select: { organizationId: true },
     });
 
-    if (repository) {
+    if (this.dataFilterService && repository) {
+      await this.dataFilterService.verifyRepositoryAccess(query.repositoryId, repository.organizationId, user);
+    } else if (repository) {
       await this.verifyOrganizationAccess(repository.organizationId, user.id);
     }
 
@@ -171,9 +220,13 @@ export class CommitsController {
   async findOne(@Param('id') id: string, @GetUser() user: RequestUser) {
     const commit = await this.commitsService.findById(id);
 
-    // Verify user has access to the commit's organization
+    // Verify user has access to the commit's organization and assigned repository
     if (commit.repository?.organizationId) {
-      await this.verifyOrganizationAccess(commit.repository.organizationId, user.id);
+      if (this.dataFilterService) {
+        await this.dataFilterService.verifyRepositoryAccess(commit.repositoryId, commit.repository.organizationId, user);
+      } else {
+        await this.verifyOrganizationAccess(commit.repository.organizationId, user.id);
+      }
     }
 
     return commit;

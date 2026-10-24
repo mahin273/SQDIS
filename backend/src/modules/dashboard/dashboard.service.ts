@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
 import { ScoresService } from '../scores/scores.service';
+import { DataFilterService } from '../auth/services/data-filter.service';
 
 @Injectable()
 export class DashboardService {
@@ -9,34 +10,82 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scoresService: ScoresService,
+    private readonly dataFilterService?: DataFilterService,
   ) {}
+
+  /**
+   * Helper to resolve project, repository, and team access scope for caller
+   */
+  private async resolveScope(organizationId: string, caller?: { id: string; role?: string }) {
+    if (!caller?.id || !this.dataFilterService) {
+      return {
+        isOrgScoped: true,
+        effectiveRole: (caller?.role || 'OWNER') as any,
+        projectIds: [] as string[],
+        repositoryIds: [] as string[],
+        teamIds: [] as string[],
+      };
+    }
+    return this.dataFilterService.getScopedProjectAndRepoIds(
+      caller.id,
+      organizationId,
+      caller.role as any,
+    );
+  }
 
   /**
    * Get organization-wide dashboard statistics
    */
-  async getOrganizationStats(organizationId: string) {
+  async getOrganizationStats(organizationId: string, caller?: { id: string; role?: string }) {
+    const scope = await this.resolveScope(organizationId, caller);
+
+    const repoWhere: any = { organizationId, isEnabled: true };
+    const teamWhere: any = { organizationId, isActive: true };
+    const projectWhere: any = { organizationId, isActive: true };
+    const commitWhere: any = { repository: { organizationId } };
+    const bugFixWhere: any = { repository: { organizationId }, classification: 'BUGFIX' };
+
+    if (!scope.isOrgScoped) {
+      repoWhere.id = { in: scope.repositoryIds };
+      teamWhere.id = { in: scope.teamIds };
+      projectWhere.id = { in: scope.projectIds };
+      commitWhere.repositoryId = { in: scope.repositoryIds };
+      bugFixWhere.repositoryId = { in: scope.repositoryIds };
+    }
+
     // Get counts
     const [totalRepositories, totalTeams, totalProjects, totalCommits, bugFixCommits] =
       await Promise.all([
-        this.prisma.repository.count({ where: { organizationId, isEnabled: true } }),
-        this.prisma.team.count({ where: { organizationId, isActive: true } }),
-        this.prisma.project.count({ where: { organizationId, isActive: true } }),
-        this.prisma.commit.count({
-          where: { repository: { organizationId } },
-        }),
-        this.prisma.commit.count({
-          where: { repository: { organizationId }, classification: 'BUGFIX' },
-        }),
+        this.prisma.repository.count({ where: repoWhere }),
+        this.prisma.team.count({ where: teamWhere }),
+        this.prisma.project.count({ where: projectWhere }),
+        this.prisma.commit.count({ where: commitWhere }),
+        this.prisma.commit.count({ where: bugFixWhere }),
       ]);
 
-    // Get total developers (users who are members of this organization)
-    const totalDevelopers = await this.prisma.organizationMember.count({
-      where: { organizationId },
-    });
+    // Get total developers scoped by role and team
+    let totalDevelopers = 0;
+    if (scope.isOrgScoped) {
+      totalDevelopers = await this.prisma.organizationMember.count({
+        where: { organizationId },
+      });
+    } else if (scope.effectiveRole === 'DEVELOPER') {
+      totalDevelopers = 1;
+    } else {
+      const teamMembers = await this.prisma.teamMembership.findMany({
+        where: {
+          teamId: { in: scope.teamIds },
+          leftAt: null,
+        },
+        select: { userId: true },
+        distinct: ['userId'],
+      });
+      totalDevelopers = teamMembers.length;
+    }
 
     // Get average coverage from latest reports using line-weighted aggregation
     const repos = await this.prisma.repository.findMany({
-      where: { organizationId, isEnabled: true },
+      where: repoWhere,
       select: { id: true },
     });
     const repoIds = repos.map((r) => r.id);
@@ -79,9 +128,9 @@ export class DashboardService {
       }
     }
 
-    // Get organization-wide SQS (combining repositories and standalone projects)
+    // Get SQS (combining repositories and standalone projects)
     const projects = await this.prisma.project.findMany({
-      where: { organizationId, isActive: true },
+      where: projectWhere,
       select: { id: true },
     });
     const projectIds = projects.map((p) => p.id);
@@ -164,13 +213,18 @@ export class DashboardService {
         ? validScores.reduce((sum, score) => sum + score, 0) / validScores.length
         : 0;
 
-    // Get risky modules count from alerts
+    // Get risky modules count from alerts scoped by repository
+    const alertWhere: any = {
+      organizationId,
+      status: 'OPEN',
+      severity: { in: ['HIGH', 'CRITICAL'] },
+    };
+    if (!scope.isOrgScoped) {
+      alertWhere.repositoryId = { in: scope.repositoryIds };
+    }
+
     const riskyModulesCount = await this.prisma.alert.count({
-      where: {
-        organizationId,
-        status: 'OPEN',
-        severity: { in: ['HIGH', 'CRITICAL'] },
-      },
+      where: alertWhere,
     });
 
     return {
@@ -190,17 +244,29 @@ export class DashboardService {
   /**
    * Get SQS trend over time for organization
    */
-  async getSQSTrend(organizationId: string, days: number = 30) {
+  async getSQSTrend(organizationId: string, days: number = 30, caller?: { id: string; role?: string }) {
+    const scope = await this.resolveScope(organizationId, caller);
+    if (!scope.isOrgScoped && scope.projectIds.length === 0 && scope.repositoryIds.length === 0) {
+      return [];
+    }
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    const projectWhere: any = { organizationId, isActive: true };
+    const repoWhere: any = { organizationId, isEnabled: true };
+    if (!scope.isOrgScoped) {
+      projectWhere.id = { in: scope.projectIds };
+      repoWhere.id = { in: scope.repositoryIds };
+    }
+
     const [projects, repos] = await Promise.all([
       this.prisma.project.findMany({
-        where: { organizationId, isActive: true },
+        where: projectWhere,
         select: { id: true },
       }),
       this.prisma.repository.findMany({
-        where: { organizationId, isEnabled: true },
+        where: repoWhere,
         select: { id: true },
       }),
     ]);
@@ -247,15 +313,25 @@ export class DashboardService {
   /**
    * Get commit activity trend
    */
-  async getCommitTrend(organizationId: string, days: number = 30) {
+  async getCommitTrend(organizationId: string, days: number = 30, caller?: { id: string; role?: string }) {
+    const scope = await this.resolveScope(organizationId, caller);
+    if (!scope.isOrgScoped && scope.repositoryIds.length === 0) {
+      return [];
+    }
+
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    const commitWhere: any = {
+      repository: { organizationId },
+      committedAt: { gte: startDate },
+    };
+    if (!scope.isOrgScoped) {
+      commitWhere.repositoryId = { in: scope.repositoryIds };
+    }
+
     const commits = await this.prisma.commit.findMany({
-      where: {
-        repository: { organizationId },
-        committedAt: { gte: startDate },
-      },
+      where: commitWhere,
       select: { committedAt: true },
     });
 
@@ -277,9 +353,19 @@ export class DashboardService {
   /**
    * Get top repositories by SQS
    */
-  async getTopRepositories(organizationId: string, limit: number = 5) {
+  async getTopRepositories(organizationId: string, limit: number = 5, caller?: { id: string; role?: string }) {
+    const scope = await this.resolveScope(organizationId, caller);
+    if (!scope.isOrgScoped && scope.repositoryIds.length === 0) {
+      return [];
+    }
+
+    const repoWhere: any = { organizationId, isEnabled: true };
+    if (!scope.isOrgScoped) {
+      repoWhere.id = { in: scope.repositoryIds };
+    }
+
     const repos = await this.prisma.repository.findMany({
-      where: { organizationId, isEnabled: true },
+      where: repoWhere,
       include: {
         _count: { select: { commits: true } },
       },
@@ -360,8 +446,8 @@ export class DashboardService {
   /**
    * Get bottom repositories (needing attention)
    */
-  async getBottomRepositories(organizationId: string, limit: number = 5) {
-    const topRepos = await this.getTopRepositories(organizationId, 50);
+  async getBottomRepositories(organizationId: string, limit: number = 5, caller?: { id: string; role?: string }) {
+    const topRepos = await this.getTopRepositories(organizationId, 50, caller);
     return topRepos
       .filter((r) => r.sqs > 0 || r.commits > 0)
       .sort((a, b) => a.sqs - b.sqs)
@@ -483,9 +569,19 @@ export class DashboardService {
   /**
    * Get top teams by average DQS
    */
-  async getTopTeams(organizationId: string, limit: number = 5) {
+  async getTopTeams(organizationId: string, limit: number = 5, caller?: { id: string; role?: string }) {
+    const scope = await this.resolveScope(organizationId, caller);
+    if (!scope.isOrgScoped && scope.teamIds.length === 0) {
+      return [];
+    }
+
+    const teamWhere: any = { organizationId, isActive: true };
+    if (!scope.isOrgScoped) {
+      teamWhere.id = { in: scope.teamIds };
+    }
+
     const teams = await this.prisma.team.findMany({
-      where: { organizationId, isActive: true },
+      where: teamWhere,
       include: {
         memberships: {
           where: { leftAt: null },
@@ -543,11 +639,36 @@ export class DashboardService {
     limit: number = 10,
     type?: string,
     page: number = 1,
+    caller?: { id: string; role?: string },
   ) {
+    const scope = await this.resolveScope(organizationId, caller);
     const fetchLimit = Math.min(Math.max(limit, 1), 50);
     const currentPage = Math.max(page, 1);
     const filterType = type?.toLowerCase();
     const offset = (currentPage - 1) * fetchLimit;
+
+    if (!scope.isOrgScoped && scope.repositoryIds.length === 0) {
+      return {
+        data: [],
+        total: 0,
+        page: currentPage,
+        limit: fetchLimit,
+        totalPages: 0,
+        counts: { all: 0, commit: 0, alert: 0, debt: 0, release: 0 },
+      };
+    }
+
+    const commitWhere: any = { repository: { organizationId } };
+    const alertWhere: any = { organizationId };
+    const debtWhere: any = { repository: { organizationId } };
+    const releaseWhere: any = { organizationId };
+
+    if (!scope.isOrgScoped) {
+      commitWhere.repositoryId = { in: scope.repositoryIds };
+      alertWhere.repositoryId = { in: scope.repositoryIds };
+      debtWhere.repositoryId = { in: scope.repositoryIds };
+      releaseWhere.repositoryId = { in: scope.repositoryIds };
+    }
 
     const shouldFetchCommits = !filterType || filterType === 'all' || filterType === 'commit';
     const shouldFetchAlerts = !filterType || filterType === 'all' || filterType === 'alert';
@@ -556,16 +677,16 @@ export class DashboardService {
 
     const [commitsCount, alertsCount, debtCount, releasesCount] = await Promise.all([
       shouldFetchCommits && this.prisma.commit?.count
-        ? this.prisma.commit.count({ where: { repository: { organizationId } } })
+        ? this.prisma.commit.count({ where: commitWhere })
         : Promise.resolve(0),
       shouldFetchAlerts && this.prisma.alert?.count
-        ? this.prisma.alert.count({ where: { organizationId } })
+        ? this.prisma.alert.count({ where: alertWhere })
         : Promise.resolve(0),
       shouldFetchDebt && this.prisma.debtItem?.count
-        ? this.prisma.debtItem.count({ where: { repository: { organizationId } } })
+        ? this.prisma.debtItem.count({ where: debtWhere })
         : Promise.resolve(0),
       shouldFetchReleases && this.prisma.release?.count
-        ? this.prisma.release.count({ where: { organizationId } })
+        ? this.prisma.release.count({ where: releaseWhere })
         : Promise.resolve(0),
     ]);
 
@@ -594,7 +715,7 @@ export class DashboardService {
     const [commits, alerts, debtItems, releases] = await Promise.all([
       shouldFetchCommits && this.prisma.commit?.findMany
         ? this.prisma.commit.findMany({
-            where: { repository: { organizationId } },
+            where: commitWhere,
             orderBy: { committedAt: 'desc' },
             skip: commitSkip,
             take: commitTake,
@@ -606,7 +727,7 @@ export class DashboardService {
         : Promise.resolve([]),
       shouldFetchAlerts && this.prisma.alert?.findMany
         ? this.prisma.alert.findMany({
-            where: { organizationId },
+            where: alertWhere,
             orderBy: { createdAt: 'desc' },
             skip: alertSkip,
             take: alertTake,
@@ -614,7 +735,7 @@ export class DashboardService {
         : Promise.resolve([]),
       shouldFetchDebt && this.prisma.debtItem?.findMany
         ? this.prisma.debtItem.findMany({
-            where: { repository: { organizationId } },
+            where: debtWhere,
             orderBy: { createdAt: 'desc' },
             skip: debtSkip,
             take: debtTake,
@@ -626,7 +747,7 @@ export class DashboardService {
         : Promise.resolve([]),
       shouldFetchReleases && this.prisma.release?.findMany
         ? this.prisma.release.findMany({
-            where: { organizationId },
+            where: releaseWhere,
             orderBy: { createdAt: 'desc' },
             skip: releaseSkip,
             take: releaseTake,
@@ -745,13 +866,28 @@ export class DashboardService {
   /**
    * Get alerts/notifications
    */
-  async getAlerts(organizationId: string) {
+  async getAlerts(organizationId: string, caller?: { id: string; role?: string }) {
+    const scope = await this.resolveScope(organizationId, caller);
+    if (!scope.isOrgScoped && scope.repositoryIds.length === 0 && scope.projectIds.length === 0) {
+      return [];
+    }
+
+    const alertWhere: any = {
+      organizationId,
+      status: { in: ['OPEN', 'ACKNOWLEDGED'] },
+    };
+    const projectWhere: any = { organizationId, isActive: true };
+    const repoWhere: any = { organizationId, isEnabled: true };
+
+    if (!scope.isOrgScoped) {
+      alertWhere.repositoryId = { in: scope.repositoryIds };
+      projectWhere.id = { in: scope.projectIds };
+      repoWhere.id = { in: scope.repositoryIds };
+    }
+
     // Get open alerts
     const alerts = await this.prisma.alert.findMany({
-      where: {
-        organizationId,
-        status: { in: ['OPEN', 'ACKNOWLEDGED'] },
-      },
+      where: alertWhere,
       orderBy: { createdAt: 'desc' },
       take: 10,
     });
@@ -759,11 +895,11 @@ export class DashboardService {
     // Get projects and repositories with low SQS
     const [projects, repos] = await Promise.all([
       this.prisma.project.findMany({
-        where: { organizationId, isActive: true },
+        where: projectWhere,
         select: { id: true, name: true },
       }),
       this.prisma.repository.findMany({
-        where: { organizationId, isEnabled: true },
+        where: repoWhere,
         select: { id: true, name: true },
       }),
     ]);

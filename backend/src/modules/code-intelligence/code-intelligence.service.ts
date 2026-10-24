@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadGatewayException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service.js';
+import { DataFilterService } from '../auth/services/data-filter.service.js';
 import {
   AstDefectDto,
   CommitRiskDto,
@@ -20,6 +21,7 @@ export class CodeIntelligenceService {
   constructor(
     private readonly configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly dataFilterService?: DataFilterService,
   ) {
     this.mlServiceUrl = this.configService.get<string>('ML_SERVICE_URL', 'http://ml-service:8000');
     this.mlServiceSecret = this.configService.get<string>('ML_SERVICE_SECRET', 'sqdis-ml-internal-secret-token');
@@ -289,7 +291,10 @@ export class CodeIntelligenceService {
    * Aggregate team commit and churn history from PostgreSQL, calculate Bus Factor via ML service,
    * and persist the audit snapshot.
    */
-  async calculateTeamBusFactor(teamId: string, organizationId?: string) {
+  async calculateTeamBusFactor(teamId: string, organizationId?: string, caller?: { id: string; role?: string }) {
+    if (organizationId && caller && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(teamId, organizationId, caller);
+    }
     const team = await this.prisma.team.findFirst({
       where: organizationId ? { id: teamId, organizationId } : { id: teamId },
       include: {
@@ -464,11 +469,18 @@ export class CodeIntelligenceService {
   }
 
   /**
-   * Helper to verify repository belongs to the active organization
+   * Helper to verify repository belongs to the active organization and is assigned to caller's active teams if applicable.
    */
-  async verifyRepositoryAccess(repositoryId: string, organizationId?: string) {
+  async verifyRepositoryAccess(
+    repositoryId: string,
+    organizationId?: string,
+    caller?: { id: string; role?: string },
+  ) {
     if (!organizationId) {
       return;
+    }
+    if (this.dataFilterService) {
+      return this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, caller);
     }
     const repository = await this.prisma.repository.findFirst({
       where: { id: repositoryId, organizationId },
@@ -482,13 +494,22 @@ export class CodeIntelligenceService {
   /**
    * Retrieve historical Bus Factor snapshots.
    */
-  async getBusFactorSnapshots(teamId?: string, limit = 10, organizationId?: string) {
+  async getBusFactorSnapshots(
+    teamId?: string,
+    limit = 10,
+    organizationId?: string,
+    caller?: { id: string; role?: string },
+  ) {
     if (teamId && organizationId) {
-      const team = await this.prisma.team.findFirst({
-        where: { id: teamId, organizationId },
-      });
-      if (!team) {
-        throw new NotFoundException(`Team with ID ${teamId} not found in organization`);
+      if (caller && this.dataFilterService) {
+        await this.dataFilterService.verifyTeamAccess(teamId, organizationId, caller);
+      } else {
+        const team = await this.prisma.team.findFirst({
+          where: { id: teamId, organizationId },
+        });
+        if (!team) {
+          throw new NotFoundException(`Team with ID ${teamId} not found in organization`);
+        }
       }
     }
 
@@ -498,6 +519,18 @@ export class CodeIntelligenceService {
     }
     if (teamId) {
       where.teamId = teamId;
+    } else if (organizationId && caller && this.dataFilterService) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        caller.id,
+        organizationId,
+        caller.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.teamIds.length === 0) {
+          return [];
+        }
+        where.teamId = { in: scope.teamIds };
+      }
     }
 
     return this.prisma.teamBusFactorSnapshot.findMany({
@@ -510,8 +543,12 @@ export class CodeIntelligenceService {
   /**
    * Retrieve repository code intelligence telemetry summary stats (true database totals).
    */
-  async getRepositoryStats(repositoryId: string, organizationId?: string) {
-    await this.verifyRepositoryAccess(repositoryId, organizationId);
+  async getRepositoryStats(
+    repositoryId: string,
+    organizationId?: string,
+    caller?: { id: string; role?: string },
+  ) {
+    await this.verifyRepositoryAccess(repositoryId, organizationId, caller);
     const [
       analyzedFiles,
       criticalHotspots,
@@ -555,8 +592,13 @@ export class CodeIntelligenceService {
   /**
    * Retrieve complexity and defect hotspots for a repository.
    */
-  async getRepositoryHotspots(repositoryId: string, limit = 20, organizationId?: string) {
-    await this.verifyRepositoryAccess(repositoryId, organizationId);
+  async getRepositoryHotspots(
+    repositoryId: string,
+    limit = 20,
+    organizationId?: string,
+    caller?: { id: string; role?: string },
+  ) {
+    await this.verifyRepositoryAccess(repositoryId, organizationId, caller);
     const fileMetrics = await this.prisma.fileASTMetric.findMany({
       where: { repositoryId },
       orderBy: { cyclomaticComplexity: 'desc' },
@@ -598,8 +640,13 @@ export class CodeIntelligenceService {
   /**
    * Retrieve recent commits with their Kamei JIT defect risk predictions.
    */
-  async getRepositoryCommitsRisk(repositoryId: string, limit = 20, organizationId?: string) {
-    await this.verifyRepositoryAccess(repositoryId, organizationId);
+  async getRepositoryCommitsRisk(
+    repositoryId: string,
+    limit = 20,
+    organizationId?: string,
+    caller?: { id: string; role?: string },
+  ) {
+    await this.verifyRepositoryAccess(repositoryId, organizationId, caller);
     const predictions = await this.prisma.defectPrediction.findMany({
       where: { repositoryId, benchmark: 'Kamei JIT' },
       orderBy: { createdAt: 'desc' },
@@ -645,8 +692,13 @@ export class CodeIntelligenceService {
   /**
    * Execute Test Impact Analysis (TIA) for PR modified files against repository DAG.
    */
-  async getPullRequestTestImpact(repositoryId: string, changedFiles: string[], organizationId?: string) {
-    await this.verifyRepositoryAccess(repositoryId, organizationId);
+  async getPullRequestTestImpact(
+    repositoryId: string,
+    changedFiles: string[],
+    organizationId?: string,
+    caller?: { id: string; role?: string },
+  ) {
+    await this.verifyRepositoryAccess(repositoryId, organizationId, caller);
     return this.analyzeTestImpact({
       repositoryId,
       changedFiles: changedFiles || [],
@@ -661,8 +713,9 @@ export class CodeIntelligenceService {
     sizeBy: 'loc' | 'churn' = 'loc',
     colorBy: 'complexity' | 'defectRisk' | 'debtCount' = 'complexity',
     organizationId?: string,
+    caller?: { id: string; role?: string },
   ): Promise<RepositoryTreemapResponseDto> {
-    await this.verifyRepositoryAccess(repositoryId, organizationId);
+    await this.verifyRepositoryAccess(repositoryId, organizationId, caller);
     const [fileMetrics, openDebt, defectPredictions, fileStats, repoHotspotsCount, commitLines] =
       await Promise.all([
         this.prisma.fileASTMetric.findMany({

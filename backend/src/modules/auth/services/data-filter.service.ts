@@ -1,5 +1,5 @@
 /* eslint-disable */
-import { Injectable } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { Prisma, Role } from '@prisma/client';
 import { PrismaService } from '../../../prisma/prisma.service';
 
@@ -258,5 +258,273 @@ export class DataFilterService {
     });
 
     return teams.map((t) => t.id);
+  }
+
+  /**
+   * Resolve assigned project, repository, and team IDs for a user in an organization.
+   * - OWNER/ADMIN: Returns isOrgScoped: true (all resources in organization).
+   * - TEAM_LEAD/DEVELOPER: Returns isOrgScoped: false and exact assigned projectIds, repositoryIds, teamIds.
+   */
+  async getScopedProjectAndRepoIds(
+    userId: string,
+    organizationId: string,
+    callerRole?: Role,
+  ): Promise<{
+    isOrgScoped: boolean;
+    effectiveRole: Role;
+    projectIds: string[];
+    repositoryIds: string[];
+    teamIds: string[];
+  }> {
+    let effectiveRole = callerRole;
+    if (this.prisma.organizationMember) {
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId,
+          },
+        },
+      });
+      if (membership?.role) {
+        effectiveRole = membership.role;
+      }
+    }
+
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return {
+        isOrgScoped: true,
+        effectiveRole: effectiveRole || Role.OWNER,
+        projectIds: [],
+        repositoryIds: [],
+        teamIds: [],
+      };
+    }
+
+    // TEAM_LEAD / DEVELOPER: find active teams
+    const teams = await this.prisma.team.findMany({
+      where: {
+        organizationId,
+        isActive: true,
+        OR: [
+          { leadId: userId },
+          {
+            memberships: {
+              some: {
+                userId,
+                leftAt: null,
+              },
+            },
+          },
+        ],
+      },
+      select: { id: true },
+    });
+    const teamIds = teams.map((t) => t.id);
+
+    if (teamIds.length === 0) {
+      return {
+        isOrgScoped: false,
+        effectiveRole: effectiveRole || Role.DEVELOPER,
+        projectIds: [],
+        repositoryIds: [],
+        teamIds: [],
+      };
+    }
+
+    // Find active project assignments
+    const assignments = await this.prisma.teamProjectAssignment.findMany({
+      where: {
+        teamId: { in: teamIds },
+        endDate: null,
+        project: {
+          organizationId,
+          isActive: true,
+        },
+      },
+      select: { projectId: true },
+    });
+    const projectIds = Array.from(new Set(assignments.map((a) => a.projectId)));
+
+    if (projectIds.length === 0) {
+      return {
+        isOrgScoped: false,
+        effectiveRole: effectiveRole || Role.DEVELOPER,
+        projectIds: [],
+        repositoryIds: [],
+        teamIds,
+      };
+    }
+
+    // Find linked repositories
+    const projectRepos = await this.prisma.projectRepository.findMany({
+      where: {
+        projectId: { in: projectIds },
+        repository: {
+          organizationId,
+          isEnabled: true,
+        },
+      },
+      select: { repositoryId: true },
+    });
+    const repositoryIds = Array.from(new Set(projectRepos.map((pr) => pr.repositoryId)));
+
+    return {
+      isOrgScoped: false,
+      effectiveRole: effectiveRole || Role.DEVELOPER,
+      projectIds,
+      repositoryIds,
+      teamIds,
+    };
+  }
+
+  /**
+   * Verify repository access for caller.
+   * OWNER/ADMIN: verified if repository belongs to organizationId.
+   * TEAM_LEAD/DEVELOPER: verified if repository is linked to an assigned project.
+   */
+  async verifyRepositoryAccess(
+    repositoryId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<{ repositoryId: string; organizationId: string }> {
+    const repository = await this.prisma.repository.findFirst({
+      where: { id: repositoryId, organizationId },
+    });
+
+    if (!repository) {
+      throw new NotFoundException(`Repository with ID ${repositoryId} not found in organization`);
+    }
+
+    if (!caller) {
+      return { repositoryId, organizationId };
+    }
+
+    let effectiveRole = caller.role as Role | undefined;
+    if (this.prisma.organizationMember) {
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: caller.id,
+          },
+        },
+      });
+      if (membership?.role) {
+        effectiveRole = membership.role;
+      }
+    }
+
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return { repositoryId, organizationId };
+    }
+
+    // Check project assignment for TEAM_LEAD and DEVELOPER
+    const hasAssignment = await this.prisma.projectRepository.findFirst({
+      where: {
+        repositoryId,
+        project: {
+          organizationId,
+          isActive: true,
+          teamAssignments: {
+            some: {
+              endDate: null,
+              team: {
+                organizationId,
+                isActive: true,
+                OR: [
+                  { leadId: caller.id },
+                  {
+                    memberships: {
+                      some: {
+                        userId: caller.id,
+                        leftAt: null,
+                      },
+                    },
+                  },
+                ],
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!hasAssignment) {
+      throw new ForbiddenException(
+        'Access denied: This repository is not part of any project assigned to your active teams.',
+      );
+    }
+
+    return { repositoryId, organizationId };
+  }
+
+  /**
+   * Verify team access for caller.
+   * OWNER/ADMIN: verified if team belongs to organizationId.
+   * TEAM_LEAD/DEVELOPER: verified if user is lead or active member of teamId.
+   */
+  async verifyTeamAccess(
+    teamId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<{ teamId: string; organizationId: string }> {
+    const team = await this.prisma.team.findFirst({
+      where: { id: teamId, organizationId },
+    });
+
+    if (!team) {
+      throw new NotFoundException(`Team with ID ${teamId} not found in organization`);
+    }
+
+    if (!caller) {
+      return { teamId, organizationId };
+    }
+
+    let effectiveRole = caller.role as Role | undefined;
+    if (this.prisma.organizationMember) {
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: caller.id,
+          },
+        },
+      });
+      if (membership?.role) {
+        effectiveRole = membership.role;
+      }
+    }
+
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return { teamId, organizationId };
+    }
+
+    const isMemberOrLead = await this.prisma.team.findFirst({
+      where: {
+        id: teamId,
+        organizationId,
+        isActive: true,
+        OR: [
+          { leadId: caller.id },
+          {
+            memberships: {
+              some: {
+                userId: caller.id,
+                leftAt: null,
+              },
+            },
+          },
+        ],
+      },
+    });
+
+    if (!isMemberOrLead) {
+      throw new ForbiddenException(
+        'Access denied: You are not an active member or leader of this team.',
+      );
+    }
+
+    return { teamId, organizationId };
   }
 }
