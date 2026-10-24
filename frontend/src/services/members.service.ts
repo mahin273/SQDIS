@@ -1,5 +1,13 @@
 import { api } from './api';
-import type { OrganizationMember, Invitation, UnmappedEmail, AssignEmailRequest, UserRole } from '@/types';
+import type {
+  OrganizationMember,
+  Invitation,
+  UnmappedEmail,
+  AssignEmailRequest,
+  UserRole,
+  MemberRemovalRequest,
+  RemovalRequestStatus,
+} from '@/types';
 
 export const membersService = {
   /**
@@ -59,8 +67,70 @@ export const membersService = {
   /**
    * Remove member from organization
    */
-  async remove(userId: string): Promise<void> {
-    await api.delete(`/organizations/members/${userId}`);
+  async remove(userId: string): Promise<{ status?: string; message?: string } | void> {
+    const response = await api.delete(`/organizations/members/${userId}`);
+    return response.data;
+  },
+
+  /**
+   * Submit a member removal request for Owner approval (Admin workflow)
+   */
+  async createRemovalRequest(
+    targetUserId: string,
+    reason?: string,
+  ): Promise<MemberRemovalRequest> {
+    const response = await api.post<MemberRemovalRequest>('/organizations/removal-requests', {
+      targetUserId,
+      reason,
+    });
+    return response.data;
+  },
+
+  /**
+   * Get member removal requests
+   */
+  async getRemovalRequests(
+    status?: RemovalRequestStatus,
+  ): Promise<MemberRemovalRequest[]> {
+    const response = await api.get<MemberRemovalRequest[]>('/organizations/removal-requests', {
+      params: status ? { status } : undefined,
+    });
+    return response.data;
+  },
+
+  /**
+   * Approve member removal request (Owner only)
+   */
+  async approveRemovalRequest(
+    requestId: string,
+    decisionReason?: string,
+  ): Promise<MemberRemovalRequest> {
+    const response = await api.post<MemberRemovalRequest>(
+      `/organizations/removal-requests/${requestId}/approve`,
+      { decisionReason },
+    );
+    return response.data;
+  },
+
+  /**
+   * Reject member removal request (Owner only)
+   */
+  async rejectRemovalRequest(
+    requestId: string,
+    decisionReason?: string,
+  ): Promise<MemberRemovalRequest> {
+    const response = await api.post<MemberRemovalRequest>(
+      `/organizations/removal-requests/${requestId}/reject`,
+      { decisionReason },
+    );
+    return response.data;
+  },
+
+  /**
+   * Cancel a pending member removal request
+   */
+  async cancelRemovalRequest(requestId: string): Promise<void> {
+    await api.delete(`/organizations/removal-requests/${requestId}`);
   },
 };
 

@@ -395,7 +395,7 @@ export class DashboardService {
             leftAt: null,
             team: {
               organizationId,
-              members: {
+              memberships: {
                 some: {
                   userId: caller.id,
                   leftAt: null,

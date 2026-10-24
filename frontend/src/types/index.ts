@@ -166,6 +166,25 @@ export interface Invitation {
   createdAt: string;
 }
 
+export type RemovalRequestStatus = 'PENDING' | 'APPROVED' | 'REJECTED' | 'CANCELLED';
+
+export interface MemberRemovalRequest {
+  id: string;
+  organizationId: string;
+  requesterId: string;
+  targetUserId: string;
+  reason?: string | null;
+  status: RemovalRequestStatus;
+  approverId?: string | null;
+  decisionReason?: string | null;
+  decidedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  requester?: { id: string; name?: string | null; email: string };
+  targetUser?: { id: string; name?: string | null; email: string };
+  approver?: { id: string; name?: string | null; email: string } | null;
+}
+
 export interface AcceptInvitationRequest {
   token: string;
 }

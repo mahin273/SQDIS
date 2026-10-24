@@ -90,9 +90,6 @@ export const routes: RouteObject[] = [
         children: [
           { path: '/dashboard', element: <DashboardPage /> },
           { path: '/scores', element: <ScoresPage /> },
-          { path: '/code-intelligence', element: <CodeIntelligencePage /> },
-          { path: '/teams', element: <TeamsPage /> },
-          { path: '/teams/:id', element: <TeamDetailPage /> },
           { path: '/projects', element: <ProjectsPage /> },
           { path: '/projects/:id', element: <ProjectDetailPage /> },
           { path: '/sprints', element: <SprintsPage /> },
@@ -100,15 +97,28 @@ export const routes: RouteObject[] = [
           { path: '/releases', element: <ReleasesPage /> },
           { path: '/releases/:id', element: <ReleaseDetailPage /> },
           { path: '/reviews', element: <ReviewsPage /> },
-          { path: '/reviews/debt', element: <ReviewDebtPage /> },
           { path: '/goals', element: <GoalsPage /> },
-          { path: '/reports', element: <ReportsPage /> },
           { path: '/debt', element: <DebtPage /> },
           { path: '/alerts', element: <AlertsPage /> },
           { path: '/settings', element: <SettingsPage /> },
           { path: '/settings/profile', element: <SettingsPage initialTab="profile" /> },
           { path: '/settings/email-aliases', element: <SettingsPage initialTab="email-aliases" /> },
           { path: '/settings/notifications', element: <SettingsPage initialTab="notifications" /> },
+
+          // Leadership & Management routes (Owner, Admin, Team Lead)
+          {
+            element: <ProtectedRoute requiredRoles={['OWNER', 'ADMIN', 'TEAM_LEAD']} />,
+            children: [
+              { path: '/code-intelligence', element: <CodeIntelligencePage /> },
+              { path: '/teams', element: <TeamsPage /> },
+              { path: '/teams/:id', element: <TeamDetailPage /> },
+              { path: '/reviews/debt', element: <ReviewDebtPage /> },
+              { path: '/reports', element: <ReportsPage /> },
+              { path: '/developers', element: <DevelopersPage /> },
+              { path: '/dashboard/teams', element: <Navigate to="/teams" replace /> },
+              { path: '/dashboard/reports', element: <Navigate to="/reports" replace /> },
+            ],
+          },
 
           // Owner-only GitHub integration routes
           {
@@ -149,12 +159,10 @@ export const routes: RouteObject[] = [
           { path: '/notifications', element: <NotificationsPage /> },
           { path: '/commits', element: <CommitsPage /> },
           { path: '/coverage', element: <CoveragePage /> },
-          { path: '/developers', element: <DevelopersPage /> },
           { path: '/developers/:id', element: <DeveloperProfilePage /> },
           { path: '/leaderboard', element: <LeaderboardPage /> },
           { path: '/onboarding', element: <OnboardingPage /> },
           // Dashboard route redirects/aliases
-          { path: '/dashboard/teams', element: <Navigate to="/teams" replace /> },
           { path: '/dashboard/onboarding', element: <Navigate to="/onboarding" replace /> },
           { path: '/dashboard/repositories', element: <Navigate to="/settings/repositories" replace /> },
           { path: '/dashboard/projects', element: <Navigate to="/projects" replace /> },

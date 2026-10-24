@@ -81,7 +81,7 @@ export class ScoresService {
           leftAt: null,
           team: {
             organizationId,
-            members: {
+            memberships: {
               some: {
                 userId: caller.id,
                 leftAt: null,
@@ -163,7 +163,7 @@ export class ScoresService {
         endDate: null,
         team: {
           organizationId,
-          members: {
+          memberships: {
             some: {
               userId: caller.id,
               leftAt: null,

@@ -14,7 +14,7 @@ export class BullBoardAuthMiddleware implements NestMiddleware {
   ) {}
 
   async use(req: Request, res: Response, next: NextFunction) {
-    const isEnabled = this.configService.get<string>('BULL_BOARD_ENABLED', 'true') !== 'false';
+    const isEnabled = this.configService.get<string>('BULL_BOARD_ENABLED', 'false') === 'true';
     if (!isEnabled) {
       this.logger.warn('Blocked access to disabled Bull Board queue dashboard');
       return res.status(403).json({
@@ -35,10 +35,20 @@ export class BullBoardAuthMiddleware implements NestMiddleware {
         const username = decoded.substring(0, colonIndex);
         const password = decoded.substring(colonIndex + 1);
 
-        const expectedUser = this.configService.get<string>('BULL_BOARD_USER', 'admin');
-        const expectedPass = this.configService.get<string>('BULL_BOARD_PASSWORD', 'sqdis-admin-secret');
+        const nodeEnv = this.configService.get<string>('NODE_ENV', 'development');
+        const isProduction = nodeEnv === 'production';
+        const expectedUser = this.configService.get<string>('BULL_BOARD_USER', isProduction ? '' : 'admin');
+        const expectedPass = this.configService.get<string>('BULL_BOARD_PASSWORD', isProduction ? '' : 'sqdis-admin-secret');
 
-        if (username === expectedUser && password === expectedPass) {
+        if (isProduction && (!expectedPass || expectedPass === 'sqdis-admin-secret')) {
+          this.logger.error('Insecure or default Bull Board password in production');
+          return res.status(500).json({
+            statusCode: 500,
+            message: 'Insecure Bull Board configuration in production',
+          });
+        }
+
+        if (expectedUser && expectedPass && username === expectedUser && password === expectedPass) {
           return next();
         }
       }

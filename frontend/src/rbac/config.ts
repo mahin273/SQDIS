@@ -15,7 +15,7 @@ export const PERMISSION_MATRIX: Record<UserRole, PermissionString[]> = {
     'members:view',
     'members:create',
     'members:edit',
-    'members:delete',
+    'members:remove-request',
     'members:assign',
     'teams:view',
     'teams:create',

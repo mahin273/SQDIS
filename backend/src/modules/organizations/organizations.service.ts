@@ -8,15 +8,18 @@ import {
   GoneException,
   Logger,
   Optional,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
-import { Role } from '@prisma/client';
+import { Role, RemovalRequestStatus } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { AuditLogService } from '../audit/services/audit-log.service';
 import { EmailQueueService } from '../notifications/email';
+import { PermissionCacheService } from '../auth/services/permission-cache.service';
 
 /**
  * Response type for organization data
@@ -57,6 +60,40 @@ export interface OrganizationMemberResponse {
 }
 
 /**
+ * Response type for member removal request
+ */
+export interface MemberRemovalRequestResponse {
+  id: string;
+  organizationId: string;
+  requesterId: string;
+  targetUserId: string;
+  reason: string | null;
+  status: RemovalRequestStatus;
+  approverId: string | null;
+  decisionReason: string | null;
+  decidedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+  requester?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  };
+  targetUser?: {
+    id: string;
+    name: string;
+    email: string;
+    avatarUrl?: string | null;
+  };
+  approver?: {
+    id: string;
+    name: string;
+    email: string;
+  } | null;
+}
+
+/**
  * Response type for invitation
  */
 export interface InvitationResponse {
@@ -94,6 +131,9 @@ export class OrganizationsService {
     private readonly auditLogService: AuditLogService,
     @Optional() private readonly emailQueueService?: EmailQueueService,
     @Optional() private readonly configService?: ConfigService,
+    @Optional()
+    @Inject(forwardRef(() => PermissionCacheService))
+    private readonly permissionCacheService?: PermissionCacheService,
   ) {}
 
   /**
@@ -208,6 +248,8 @@ export class OrganizationsService {
     await this.prisma.organization.delete({
       where: { id },
     });
+
+    await this.permissionCacheService?.invalidateOrganizationPermissions(id);
   }
 
   /**
@@ -642,6 +684,8 @@ export class OrganizationsService {
       this.logger.warn(`Commit attribution skipped during invitation accept: ${attributionErr}`);
     }
 
+    await this.permissionCacheService?.invalidateUserPermissions(userId, invitation.organizationId);
+
     return {
       id: membership.id,
       userId: membership.userId,
@@ -843,6 +887,8 @@ export class OrganizationsService {
       newRole,
     });
 
+    await this.permissionCacheService?.invalidateUserPermissions(targetMembership.userId, organizationId);
+
     return {
       id: updatedMembership.id,
       userId: updatedMembership.userId,
@@ -854,13 +900,312 @@ export class OrganizationsService {
   }
 
   /**
+   * Submit a member removal request for Owner approval
+   */
+  async createRemovalRequest(
+    organizationId: string,
+    targetUserId: string,
+    requesterUserId: string,
+    reason?: string,
+  ): Promise<MemberRemovalRequestResponse> {
+    const existingOrg = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+    if (!existingOrg) {
+      throw new NotFoundException(`Organization with ID '${organizationId}' not found`);
+    }
+
+    if (targetUserId === requesterUserId) {
+      throw new ForbiddenException('You cannot request your own removal. Use leave organization instead.');
+    }
+
+    // Verify requester membership
+    const requesterMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: requesterUserId,
+        },
+      },
+    });
+    if (
+      requesterMembership &&
+      requesterMembership.role !== Role.OWNER &&
+      requesterMembership.role !== Role.ADMIN
+    ) {
+      throw new ForbiddenException('Only administrators and owners can submit member removal requests.');
+    }
+
+    // Find target membership
+    let targetMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: targetUserId,
+        },
+      },
+    });
+
+    if (!targetMembership) {
+      targetMembership = await this.prisma.organizationMember.findFirst({
+        where: {
+          id: targetUserId,
+          organizationId,
+        },
+      });
+    }
+
+    if (!targetMembership) {
+      throw new NotFoundException('Member not found in this organization');
+    }
+
+    // Owner and Admin boundary protection
+    if (requesterMembership?.role === Role.ADMIN) {
+      if (targetMembership.role === Role.OWNER) {
+        throw new ForbiddenException('Administrators cannot request the removal of an organization owner.');
+      }
+      if (targetMembership.role === Role.ADMIN) {
+        throw new ForbiddenException('Administrators cannot request the removal of another administrator.');
+      }
+    }
+
+    // Check if there is already a pending request
+    const existingPending = await this.prisma.memberRemovalRequest.findFirst({
+      where: {
+        organizationId,
+        targetUserId: targetMembership.userId,
+        status: RemovalRequestStatus.PENDING,
+      },
+    });
+    if (existingPending) {
+      throw new ConflictException('A removal request is already pending for this member.');
+    }
+
+    const created = await this.prisma.memberRemovalRequest.create({
+      data: {
+        organizationId,
+        requesterId: requesterUserId,
+        targetUserId: targetMembership.userId,
+        reason: reason?.trim() || null,
+        status: RemovalRequestStatus.PENDING,
+      },
+      include: {
+        requester: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        targetUser: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        approver: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    this.logger.log(
+      `Created member removal request ${created.id} by ${requesterUserId} for target ${targetMembership.userId} in org ${organizationId}`,
+    );
+
+    return created;
+  }
+
+  /**
+   * List removal requests for organization
+   */
+  async getRemovalRequests(
+    organizationId: string,
+    status?: RemovalRequestStatus,
+  ): Promise<MemberRemovalRequestResponse[]> {
+    const where: any = { organizationId };
+    if (status) {
+      where.status = status;
+    }
+
+    return this.prisma.memberRemovalRequest.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+      include: {
+        requester: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        targetUser: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        approver: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+  }
+
+  /**
+   * Approve a removal request (Strictly OWNER)
+   */
+  async approveRemovalRequest(
+    organizationId: string,
+    requestId: string,
+    ownerUserId: string,
+    decisionReason?: string,
+  ): Promise<MemberRemovalRequestResponse> {
+    await this.verifyUserRole(organizationId, ownerUserId, [Role.OWNER]);
+
+    const request = await this.prisma.memberRemovalRequest.findFirst({
+      where: { id: requestId, organizationId },
+    });
+    if (!request) {
+      throw new NotFoundException(`Removal request with ID '${requestId}' not found`);
+    }
+
+    if (request.status !== RemovalRequestStatus.PENDING) {
+      throw new BadRequestException(`Cannot approve a removal request with status '${request.status}'`);
+    }
+
+    // Find target membership to delete
+    const targetMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: request.targetUserId,
+        },
+      },
+    });
+
+    if (targetMembership) {
+      if (targetMembership.role === Role.OWNER) {
+        const ownerCount = await this.prisma.organizationMember.count({
+          where: { organizationId, role: Role.OWNER },
+        });
+        if (ownerCount <= 1) {
+          throw new BadRequestException('Cannot remove the last owner. Assign another owner first.');
+        }
+      }
+    }
+
+    if (targetMembership) {
+      await this.prisma.organizationMember.delete({
+        where: { id: targetMembership.id },
+      });
+    }
+
+    const updatedRequest = await this.prisma.memberRemovalRequest.update({
+      where: { id: requestId },
+      data: {
+        status: RemovalRequestStatus.APPROVED,
+        approverId: ownerUserId,
+        decisionReason: decisionReason?.trim() || null,
+        decidedAt: new Date(),
+      },
+      include: {
+        requester: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        targetUser: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        approver: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    await this.permissionCacheService?.invalidateUserPermissions(request.targetUserId, organizationId);
+
+    this.logger.log(
+      `Owner ${ownerUserId} approved removal request ${requestId} for member ${request.targetUserId}`,
+    );
+
+    return updatedRequest;
+  }
+
+  /**
+   * Reject a removal request (Strictly OWNER)
+   */
+  async rejectRemovalRequest(
+    organizationId: string,
+    requestId: string,
+    ownerUserId: string,
+    decisionReason?: string,
+  ): Promise<MemberRemovalRequestResponse> {
+    await this.verifyUserRole(organizationId, ownerUserId, [Role.OWNER]);
+
+    const request = await this.prisma.memberRemovalRequest.findFirst({
+      where: { id: requestId, organizationId },
+    });
+    if (!request) {
+      throw new NotFoundException(`Removal request with ID '${requestId}' not found`);
+    }
+
+    if (request.status !== RemovalRequestStatus.PENDING) {
+      throw new BadRequestException(`Cannot reject a removal request with status '${request.status}'`);
+    }
+
+    const updated = await this.prisma.memberRemovalRequest.update({
+      where: { id: requestId },
+      data: {
+        status: RemovalRequestStatus.REJECTED,
+        approverId: ownerUserId,
+        decisionReason: decisionReason?.trim() || null,
+        decidedAt: new Date(),
+      },
+      include: {
+        requester: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        targetUser: {
+          select: { id: true, name: true, email: true, avatarUrl: true },
+        },
+        approver: {
+          select: { id: true, name: true, email: true },
+        },
+      },
+    });
+
+    this.logger.log(`Owner ${ownerUserId} rejected removal request ${requestId}`);
+    return updated;
+  }
+
+  /**
+   * Cancel a pending removal request
+   */
+  async cancelRemovalRequest(
+    organizationId: string,
+    requestId: string,
+    requesterUserId: string,
+  ): Promise<void> {
+    const request = await this.prisma.memberRemovalRequest.findFirst({
+      where: { id: requestId, organizationId },
+    });
+    if (!request) {
+      throw new NotFoundException(`Removal request with ID '${requestId}' not found`);
+    }
+
+    if (request.requesterId !== requesterUserId) {
+      const isOwner = await this.prisma.organizationMember.findFirst({
+        where: { organizationId, userId: requesterUserId, role: Role.OWNER },
+      });
+      if (!isOwner) {
+        throw new ForbiddenException('Only the requester or an owner can cancel this request.');
+      }
+    }
+
+    if (request.status !== RemovalRequestStatus.PENDING) {
+      throw new BadRequestException('Only pending removal requests can be cancelled.');
+    }
+
+    await this.prisma.memberRemovalRequest.update({
+      where: { id: requestId },
+      data: { status: RemovalRequestStatus.CANCELLED },
+    });
+  }
+
+  /**
    * Remove member from organization
    */
   async removeMember(
     organizationId: string,
     targetUserId: string,
     requestingUserId: string,
-  ): Promise<void> {
+  ): Promise<{ status?: string; requestId?: string; message?: string } | void> {
     // Check if organization exists
     const existingOrg = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -898,6 +1243,36 @@ export class OrganizationsService {
       throw new ForbiddenException('You cannot remove yourself. Use leave organization instead.');
     }
 
+    // Check requester membership if exists
+    const requestingMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId: requestingUserId,
+        },
+      },
+    });
+
+    // If requester is an ADMIN, enforce Owner-approval workflow
+    if (requestingMembership && requestingMembership.role === Role.ADMIN) {
+      if (targetMembership.role === Role.OWNER || targetMembership.role === Role.ADMIN) {
+        throw new ForbiddenException('Administrators cannot remove or request the removal of owners or other administrators.');
+      }
+
+      const request = await this.createRemovalRequest(
+        organizationId,
+        targetMembership.userId,
+        requestingUserId,
+        'Direct removal requested by administrator',
+      );
+
+      return {
+        status: 'PENDING_APPROVAL',
+        requestId: request.id,
+        message: 'Member removal request created and awaiting Owner approval.',
+      };
+    }
+
     // Prevent removing the last OWNER
     if (targetMembership.role === Role.OWNER) {
       const ownerCount = await this.prisma.organizationMember.count({
@@ -916,6 +1291,28 @@ export class OrganizationsService {
     await this.prisma.organizationMember.delete({
       where: { id: targetMembership.id },
     });
+
+    // Invalidate permission cache
+    await this.permissionCacheService?.invalidateUserPermissions(targetMembership.userId, organizationId);
+
+    // If there were pending removal requests for this member, mark them approved
+    try {
+      await this.prisma.memberRemovalRequest.updateMany({
+        where: {
+          organizationId,
+          targetUserId: targetMembership.userId,
+          status: RemovalRequestStatus.PENDING,
+        },
+        data: {
+          status: RemovalRequestStatus.APPROVED,
+          approverId: requestingUserId,
+          decidedAt: new Date(),
+          decisionReason: 'Direct removal executed by owner',
+        },
+      });
+    } catch (err: any) {
+      this.logger.debug(`Could not update pending removal requests: ${err?.message}`);
+    }
   }
 
   /**

@@ -4,3 +4,5 @@ export * from './create-organization.dto.js';
 export * from './update-organization.dto.js';
 export * from './invite-member.dto.js';
 export * from './update-member-role.dto.js';
+export * from './create-removal-request.dto.js';
+export * from './decide-removal-request.dto.js';

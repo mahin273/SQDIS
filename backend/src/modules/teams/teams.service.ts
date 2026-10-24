@@ -4,10 +4,14 @@ import {
   ConflictException,
   BadRequestException,
   Logger,
+  Optional,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
 import { CacheService, CACHE_TTL, CACHE_PREFIX } from '../cache';
 import { DataFilterService } from '../auth/services/data-filter.service';
+import { PermissionCacheService } from '../auth/services/permission-cache.service';
 import { CreateTeamDto } from './dto/create-team.dto';
 import { UpdateTeamDto } from './dto/update-team.dto';
 import { AddMemberDto } from './dto/add-member.dto';
@@ -34,6 +38,9 @@ export class TeamsService {
     private readonly prisma: PrismaService,
     private readonly cacheService: CacheService,
     private readonly dataFilterService: DataFilterService,
+    @Optional()
+    @Inject(forwardRef(() => PermissionCacheService))
+    private readonly permissionCacheService?: PermissionCacheService,
   ) {}
 
   /**
@@ -559,6 +566,7 @@ export class TeamsService {
 
     // Invalidate leaderboard cache on member addition
     await this.invalidateLeaderboardCache(team.organizationId);
+    await this.permissionCacheService?.invalidateUserPermissions(dto.userId, team.organizationId);
 
     return membership;
   }
@@ -599,6 +607,7 @@ export class TeamsService {
     // Invalidate leaderboard cache on member removal
     if (team) {
       await this.invalidateLeaderboardCache(team.organizationId);
+      await this.permissionCacheService?.invalidateUserPermissions(userId, team.organizationId);
     }
 
     return result;
@@ -629,7 +638,7 @@ export class TeamsService {
       throw new BadRequestException('User must be a team member to be assigned as lead');
     }
 
-    return this.prisma.team.update({
+    const updated = await this.prisma.team.update({
       where: { id: teamId },
       data: {
         leadId: userId,
@@ -645,6 +654,10 @@ export class TeamsService {
         },
       },
     });
+
+    await this.permissionCacheService?.invalidateUserPermissions(userId, team.organizationId);
+
+    return updated;
   }
 
   /**

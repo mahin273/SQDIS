@@ -10,25 +10,24 @@ export function useUserRole(): UserRole | null {
   const user = useAuthStore((state) => state.user)
   const currentOrganization = useOrganizationStore((state) => state.currentOrganization)
 
-  if (currentOrganization?.role && VALID_ROLES.includes(currentOrganization.role)) {
+  if (!currentOrganization?.id || !user) {
+    return null
+  }
+
+  // 1. Authoritative active organization context role
+  if (currentOrganization.role && VALID_ROLES.includes(currentOrganization.role)) {
     return currentOrganization.role
   }
-  if (user?.role && VALID_ROLES.includes(user.role)) {
-    return user.role
-  }
-  if (user?.memberships && user.memberships.length > 0) {
-    if (currentOrganization) {
-      const membership = user.memberships.find((m) => m.organizationId === currentOrganization.id)
-      if (membership?.role && VALID_ROLES.includes(membership.role)) {
-        return membership.role
-      }
-    }
-    const firstRole = user.memberships[0]?.role
-    if (firstRole && VALID_ROLES.includes(firstRole)) {
-      return firstRole
+
+  // 2. Verified membership in the specific active organization
+  if (user.memberships && user.memberships.length > 0) {
+    const activeMembership = user.memberships.find((m) => m.organizationId === currentOrganization.id)
+    if (activeMembership?.role && VALID_ROLES.includes(activeMembership.role)) {
+      return activeMembership.role
     }
   }
-  // Fail-closed: Never default to OWNER or privileged role
+
+  // Fail-closed: Never default to another organization's role or unverified role
   return null
 }
 

@@ -654,8 +654,14 @@ export function ReviewsPage() {
                   const avatarUrl = reviewer.avatarUrl || reviewer.reviewer?.avatarUrl
                   const reviewsCount =
                     reviewer.reviewsCompleted ?? reviewer.reviewCount ?? 0
-                  const approvalRate = reviewer.approvalRate ?? 100
-                  const avgTurnaround = reviewer.avgReviewTurnaround ?? 0.1
+                  const approvalRateText =
+                    reviewer.approvalRate !== null && reviewer.approvalRate !== undefined
+                      ? `${Math.round(reviewer.approvalRate)}% approvals`
+                      : 'N/A'
+                  const avgTurnaroundText =
+                    reviewer.avgReviewTurnaround !== null && reviewer.avgReviewTurnaround !== undefined
+                      ? `${reviewer.avgReviewTurnaround}h`
+                      : 'N/A'
 
                   return (
                     <div
@@ -674,7 +680,7 @@ export function ReviewsPage() {
                             {name}
                           </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {reviewsCount} reviews &bull; {approvalRate}% approvals &bull; {avgTurnaround}h
+                            {reviewsCount} reviews &bull; {approvalRateText} &bull; {avgTurnaroundText}
                           </p>
                         </div>
                       </div>

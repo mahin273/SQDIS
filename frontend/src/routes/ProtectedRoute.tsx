@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import type { UserRole } from '@/types'
 import { useAuthStore, useOrganizationStore } from '@/stores'
+import { useUserRole } from '@/rbac/hooks'
 import { PageLoader } from '@/components/common/PageLoader'
 import { logAuthzFailure } from '@/rbac/errors'
 
@@ -18,10 +19,6 @@ interface ProtectedRouteProps {
   redirectTo?: string
   setupPath?: string
   forbiddenPath?: string
-}
-
-function getEffectiveRole(userRole?: UserRole, organizationRole?: UserRole): UserRole | undefined {
-  return organizationRole ?? userRole
 }
 
 function hasRequiredRole(role: UserRole | undefined, requiredRole?: UserRole, requiredRoles?: UserRole[]) {
@@ -53,6 +50,7 @@ export function ProtectedRoute({
   const organizations = useOrganizationStore((state) => state.organizations)
   const fetchOrganizations = useOrganizationStore((state) => state.fetchOrganizations)
   const isHydrated = useOrganizationStore((state) => state.isHydrated)
+  const userRole = useUserRole()
   const [isLoading, setIsLoading] = useState(true)
   const location = useLocation()
 
@@ -71,8 +69,12 @@ export function ProtectedRoute({
         return
       }
 
-      if (!currentOrganization || !currentOrganization.role) {
-        await fetchOrganizations()
+      if ((!currentOrganization || !currentOrganization.role) && typeof fetchOrganizations === 'function') {
+        try {
+          await fetchOrganizations()
+        } catch {
+          // Ignore hydration fetch error and proceed
+        }
       }
 
       if (isMounted) {
@@ -101,7 +103,7 @@ export function ProtectedRoute({
     return <Navigate to={setupPath} replace />
   }
 
-  const role = getEffectiveRole(user?.role, currentOrganization?.role)
+  const role = userRole ?? undefined
 
   if (!hasRequiredRole(role, requiredRole, requiredRoles)) {
     logAuthzFailure({

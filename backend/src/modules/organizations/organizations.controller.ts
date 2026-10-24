@@ -6,23 +6,28 @@ import {
   Delete,
   Body,
   Param,
+  Query,
+  Res,
   UseGuards,
   HttpCode,
   HttpStatus,
   ForbiddenException,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam } from '@nestjs/swagger';
+import type { Response } from 'express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { OrganizationsService } from './organizations.service';
 import { CreateOrganizationDto } from './dto/create-organization.dto';
 import { UpdateOrganizationDto } from './dto/update-organization.dto';
 import { InviteMemberDto } from './dto/invite-member.dto';
 import { UpdateMemberRoleDto } from './dto/update-member-role.dto';
+import { CreateRemovalRequestDto } from './dto/create-removal-request.dto';
+import { DecideRemovalRequestDto } from './dto/decide-removal-request.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
-import { Role } from '@prisma/client';
+import { Role, RemovalRequestStatus } from '@prisma/client';
 import { AuditLog } from '../audit/decorators/audit-log.decorator';
 
 /**
@@ -152,12 +157,12 @@ export class OrganizationsController {
     captureSnapshot: true,
     includeResponseBody: true,
   })
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiOperation({ summary: 'Remove member from current organization' })
+  @ApiOperation({ summary: 'Remove member or submit removal request from current organization' })
   async removeMemberFromCurrentOrg(
     @Param('userId') targetUserId: string,
     @GetOrganization() organizationId: string | undefined,
     @GetUser('id') requestingUserId: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
     let orgId = organizationId;
     if (!orgId) {
@@ -170,7 +175,152 @@ export class OrganizationsController {
       throw new ForbiddenException('Organization context required.');
     }
     await this.organizationsService.verifyUserRole(orgId, requestingUserId, [Role.OWNER, Role.ADMIN]);
-    await this.organizationsService.removeMember(orgId, targetUserId, requestingUserId);
+    const result = await this.organizationsService.removeMember(orgId, targetUserId, requestingUserId);
+    if (result && result.status === 'PENDING_APPROVAL') {
+      res.status(HttpStatus.ACCEPTED);
+      return result;
+    }
+    res.status(HttpStatus.NO_CONTENT);
+    return;
+  }
+
+  /**
+   * Submit a member removal request for Owner approval
+   */
+  @Post('removal-requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.OWNER)
+  @HttpCode(HttpStatus.ACCEPTED)
+  @ApiOperation({ summary: 'Submit a member removal request for Owner approval' })
+  async createRemovalRequest(
+    @Body() dto: CreateRemovalRequestDto,
+    @GetOrganization() organizationId: string | undefined,
+    @GetUser('id') userId: string,
+  ) {
+    let orgId = organizationId;
+    if (!orgId) {
+      const userOrgs = await this.organizationsService.findAllForUser(userId);
+      if (userOrgs.length > 0) orgId = userOrgs[0].id;
+    }
+    if (!orgId) throw new ForbiddenException('Organization context required.');
+    await this.organizationsService.verifyUserRole(orgId, userId, [Role.OWNER, Role.ADMIN]);
+    return this.organizationsService.createRemovalRequest(
+      orgId,
+      dto.targetUserId,
+      userId,
+      dto.reason,
+    );
+  }
+
+  /**
+   * Get member removal requests for current organization context
+   */
+  @Get('removal-requests')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.OWNER)
+  @ApiOperation({ summary: 'Get member removal requests for current organization' })
+  @ApiQuery({ name: 'status', required: false, enum: RemovalRequestStatus })
+  async getRemovalRequests(
+    @GetOrganization() organizationId: string | undefined,
+    @GetUser('id') userId: string,
+    @Query('status') status?: RemovalRequestStatus,
+  ) {
+    let orgId = organizationId;
+    if (!orgId) {
+      const userOrgs = await this.organizationsService.findAllForUser(userId);
+      if (userOrgs.length > 0) orgId = userOrgs[0].id;
+    }
+    if (!orgId) throw new ForbiddenException('Organization context required.');
+    await this.organizationsService.verifyUserRole(orgId, userId, [Role.OWNER, Role.ADMIN]);
+    return this.organizationsService.getRemovalRequests(orgId, status);
+  }
+
+  /**
+   * Approve a member removal request (strictly OWNER)
+   */
+  @Post('removal-requests/:id/approve')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER)
+  @AuditLog({
+    action: 'APPROVE',
+    resourceType: 'MemberRemovalRequest',
+    resourceIdParam: 'id',
+    captureSnapshot: true,
+  })
+  @ApiOperation({ summary: 'Approve a member removal request (Owner only)' })
+  async approveRemovalRequest(
+    @Param('id') requestId: string,
+    @Body() dto: DecideRemovalRequestDto,
+    @GetOrganization() organizationId: string | undefined,
+    @GetUser('id') userId: string,
+  ) {
+    let orgId = organizationId;
+    if (!orgId) {
+      const userOrgs = await this.organizationsService.findAllForUser(userId);
+      if (userOrgs.length > 0) orgId = userOrgs[0].id;
+    }
+    if (!orgId) throw new ForbiddenException('Organization context required.');
+    return this.organizationsService.approveRemovalRequest(
+      orgId,
+      requestId,
+      userId,
+      dto.decisionReason,
+    );
+  }
+
+  /**
+   * Reject a member removal request (strictly OWNER)
+   */
+  @Post('removal-requests/:id/reject')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.OWNER)
+  @AuditLog({
+    action: 'REJECT',
+    resourceType: 'MemberRemovalRequest',
+    resourceIdParam: 'id',
+    captureSnapshot: true,
+  })
+  @ApiOperation({ summary: 'Reject a member removal request (Owner only)' })
+  async rejectRemovalRequest(
+    @Param('id') requestId: string,
+    @Body() dto: DecideRemovalRequestDto,
+    @GetOrganization() organizationId: string | undefined,
+    @GetUser('id') userId: string,
+  ) {
+    let orgId = organizationId;
+    if (!orgId) {
+      const userOrgs = await this.organizationsService.findAllForUser(userId);
+      if (userOrgs.length > 0) orgId = userOrgs[0].id;
+    }
+    if (!orgId) throw new ForbiddenException('Organization context required.');
+    return this.organizationsService.rejectRemovalRequest(
+      orgId,
+      requestId,
+      userId,
+      dto.decisionReason,
+    );
+  }
+
+  /**
+   * Cancel a pending member removal request
+   */
+  @Delete('removal-requests/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.ADMIN, Role.OWNER)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Cancel a pending member removal request' })
+  async cancelRemovalRequest(
+    @Param('id') requestId: string,
+    @GetOrganization() organizationId: string | undefined,
+    @GetUser('id') userId: string,
+  ) {
+    let orgId = organizationId;
+    if (!orgId) {
+      const userOrgs = await this.organizationsService.findAllForUser(userId);
+      if (userOrgs.length > 0) orgId = userOrgs[0].id;
+    }
+    if (!orgId) throw new ForbiddenException('Organization context required.');
+    await this.organizationsService.cancelRemovalRequest(orgId, requestId, userId);
   }
 
   /**
@@ -658,10 +808,17 @@ export class OrganizationsController {
     @Param('id') id: string,
     @Param('userId') targetUserId: string,
     @GetUser('id') requestingUserId: string,
+    @Res({ passthrough: true }) res: Response,
   ) {
     // Only OWNER and ADMIN can remove members
     await this.organizationsService.verifyUserRole(id, requestingUserId, [Role.OWNER, Role.ADMIN]);
 
-    return this.organizationsService.removeMember(id, targetUserId, requestingUserId);
+    const result = await this.organizationsService.removeMember(id, targetUserId, requestingUserId);
+    if (result && result.status === 'PENDING_APPROVAL') {
+      res.status(HttpStatus.ACCEPTED);
+      return result;
+    }
+    res.status(HttpStatus.NO_CONTENT);
+    return;
   }
 }
