@@ -4,9 +4,15 @@ import { DashboardService } from './dashboard.service';
 import { PrismaModule } from '../../prisma';
 import { ScoresModule } from '../scores/scores.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PrismaModule, ScoresModule, forwardRef(() => OrganizationsModule)],
+  imports: [
+    PrismaModule,
+    ScoresModule,
+    forwardRef(() => OrganizationsModule),
+    forwardRef(() => AuthModule),
+  ],
   controllers: [DashboardController],
   providers: [DashboardService],
   exports: [DashboardService],

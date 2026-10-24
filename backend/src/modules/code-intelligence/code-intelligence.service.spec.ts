@@ -2,14 +2,37 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { CodeIntelligenceService } from './code-intelligence.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { createMockPrismaService, MockPrismaService } from '../../../test/mocks/prisma.mock';
 
 describe('CodeIntelligenceService', () => {
   let service: CodeIntelligenceService;
   let prisma: MockPrismaService;
+  let mockDataFilterService: {
+    getScopedProjectAndRepoIds: jest.Mock;
+    verifyRepositoryAccess: jest.Mock;
+    verifyTeamAccess: jest.Mock;
+  };
 
   beforeEach(async () => {
     const mockPrisma = createMockPrismaService();
+    mockDataFilterService = {
+      getScopedProjectAndRepoIds: jest.fn().mockResolvedValue({
+        isOrgScoped: true,
+        effectiveRole: 'OWNER',
+        projectIds: [],
+        repositoryIds: [],
+        teamIds: [],
+      }),
+      verifyRepositoryAccess: jest.fn().mockImplementation(async (repoId, orgId) => ({
+        repositoryId: repoId,
+        organizationId: orgId,
+      })),
+      verifyTeamAccess: jest.fn().mockImplementation(async (teamId, orgId) => ({
+        teamId,
+        organizationId: orgId,
+      })),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -26,6 +49,10 @@ describe('CodeIntelligenceService', () => {
         {
           provide: PrismaService,
           useValue: mockPrisma,
+        },
+        {
+          provide: DataFilterService,
+          useValue: mockDataFilterService,
         },
       ],
     }).compile();

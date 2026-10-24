@@ -37,6 +37,14 @@ import { ReportsController } from '../src/modules/reports/reports.controller';
 import { ReportsService } from '../src/modules/reports/reports.service';
 import { LeaderboardService } from '../src/modules/reports/services/leaderboard.service';
 import { FileStorageService } from '../src/modules/reports/services/file-storage.service';
+import { DashboardController } from '../src/modules/dashboard/dashboard.controller';
+import { DashboardService } from '../src/modules/dashboard/dashboard.service';
+import { CodeIntelligenceController } from '../src/modules/code-intelligence/code-intelligence.controller';
+import { CodeIntelligenceService } from '../src/modules/code-intelligence/code-intelligence.service';
+import { CodeRemediationService } from '../src/modules/code-intelligence/services/code-remediation.service';
+import { CommitsController } from '../src/modules/commits/commits.controller';
+import { CommitsService } from '../src/modules/commits/commits.service';
+import { DataFilterService } from '../src/modules/auth/services/data-filter.service';
 import { PrismaService } from '../src/prisma';
 
 describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
@@ -69,6 +77,10 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
   let scoresServiceMock: Record<string, jest.Mock>;
   let enhancedAuditLogServiceMock: Record<string, jest.Mock>;
   let reportsServiceMock: Record<string, jest.Mock>;
+  let dashboardServiceMock: Record<string, jest.Mock>;
+  let codeIntelligenceServiceMock: Record<string, jest.Mock>;
+  let commitsServiceMock: Record<string, jest.Mock>;
+  let dataFilterServiceMock: Record<string, jest.Mock>;
   let prismaServiceMock: Record<string, any>;
 
   beforeAll(async () => {
@@ -105,6 +117,84 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
       findById: jest.fn().mockResolvedValue({ id: 'report-1', status: 'COMPLETED' }),
     };
 
+    dashboardServiceMock = {
+      getOrganizationStats: jest.fn().mockImplementation(async (orgId, user) => {
+        if (user?.role === Role.DEVELOPER) {
+          return { totalRepositories: 1, totalTeams: 1, totalDevelopers: 1, totalProjects: 1 };
+        }
+        return { totalRepositories: 10, totalTeams: 5, totalDevelopers: 20, totalProjects: 8 };
+      }),
+      getSQSTrend: jest.fn().mockResolvedValue([]),
+      getCommitTrend: jest.fn().mockResolvedValue([]),
+      getTopRepositories: jest.fn().mockResolvedValue([]),
+      getBottomRepositories: jest.fn().mockResolvedValue([]),
+      getTopDevelopers: jest.fn().mockResolvedValue([]),
+      getTopTeams: jest.fn().mockResolvedValue([]),
+      getRecentActivity: jest.fn().mockResolvedValue({ data: [], total: 0 }),
+      getAlerts: jest.fn().mockResolvedValue([]),
+    };
+
+    codeIntelligenceServiceMock = {
+      getRepositoryStats: jest.fn().mockImplementation(async (repoId, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && repoId === 'unassigned-repo') {
+          throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
+        }
+        return { analyzedFiles: 10, hotspots: { total: 0 } };
+      }),
+      calculateTeamBusFactor: jest.fn().mockImplementation(async (teamId, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && teamId === 'other-team') {
+          throw new ForbiddenException('Access denied: You are not an active member or leader of this team.');
+        }
+        return { teamId, overall_bus_factor: 2 };
+      }),
+      getBusFactorSnapshots: jest.fn().mockResolvedValue([]),
+      getRepositoryHotspots: jest.fn().mockResolvedValue([]),
+      getRepositoryCommitsRisk: jest.fn().mockResolvedValue([]),
+      getPullRequestTestImpact: jest.fn().mockResolvedValue({}),
+      getRepositoryTreemap: jest.fn().mockImplementation(async (repoId, sizeBy, colorBy, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && repoId === 'unassigned-repo') {
+          throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
+        }
+        return { repositoryId: repoId, nodes: [] };
+      }),
+    };
+
+    commitsServiceMock = {
+      findAll: jest.fn().mockImplementation(async (filters, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) {
+          return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+        }
+        return { data: [{ id: 'commit-1' }], total: 1, page: 1, limit: 20, totalPages: 1 };
+      }),
+      getStatistics: jest.fn().mockResolvedValue({ totalCommits: 5 }),
+      getHeatmapData: jest.fn().mockResolvedValue([]),
+      findById: jest.fn().mockResolvedValue({ id: 'commit-1', repositoryId: 'repo-1', repository: { organizationId: 'org-1' } }),
+    };
+
+    dataFilterServiceMock = {
+      getScopedProjectAndRepoIds: jest.fn().mockImplementation(async (userId, orgId, role) => {
+        if (role === Role.DEVELOPER && userId === 'dev-unassigned') {
+          return { isOrgScoped: false, projectIds: [], repositoryIds: [], teamIds: [] };
+        }
+        if (role === Role.DEVELOPER) {
+          return { isOrgScoped: false, projectIds: ['proj-1'], repositoryIds: ['repo-1'], teamIds: ['team-1'] };
+        }
+        return { isOrgScoped: true, projectIds: [], repositoryIds: [], teamIds: [] };
+      }),
+      verifyRepositoryAccess: jest.fn().mockImplementation(async (repoId, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && (repoId === 'unassigned-repo' || repoId === 'a0000000-0000-4000-8000-000000000002')) {
+          throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
+        }
+        return { repositoryId: repoId, organizationId: orgId };
+      }),
+      verifyTeamAccess: jest.fn().mockImplementation(async (teamId, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && teamId === 'other-team') {
+          throw new ForbiddenException('Access denied: You are not an active member or leader of this team.');
+        }
+        return { teamId, organizationId: orgId };
+      }),
+    };
+
     prismaServiceMock = {
       organizationMember: {
         findFirst: jest.fn().mockImplementation(async () => ({
@@ -113,6 +203,16 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         findUnique: jest.fn().mockImplementation(async () => ({
           role: currentAuthUser?.role || Role.DEVELOPER,
           organizationId: currentAuthUser?.organizationId || 'org-1',
+        })),
+      },
+      repository: {
+        findUnique: jest.fn().mockImplementation(async ({ where }) => ({
+          id: where?.id || 'repo-1',
+          organizationId: 'org-1',
+        })),
+        findFirst: jest.fn().mockImplementation(async ({ where }) => ({
+          id: where?.id || 'repo-1',
+          organizationId: 'org-1',
         })),
       },
     };
@@ -124,6 +224,9 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         ScoresController,
         AuditLogController,
         ReportsController,
+        DashboardController,
+        CodeIntelligenceController,
+        CommitsController,
       ],
       providers: [
         Reflector,
@@ -161,6 +264,11 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         { provide: ReportsService, useValue: reportsServiceMock },
         { provide: LeaderboardService, useValue: {} },
         { provide: FileStorageService, useValue: {} },
+        { provide: DashboardService, useValue: dashboardServiceMock },
+        { provide: CodeIntelligenceService, useValue: codeIntelligenceServiceMock },
+        { provide: CodeRemediationService, useValue: {} },
+        { provide: CommitsService, useValue: commitsServiceMock },
+        { provide: DataFilterService, useValue: dataFilterServiceMock },
         { provide: PrismaService, useValue: prismaServiceMock },
       ],
     })
@@ -551,6 +659,76 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         .post('/scores/recalculate')
         .send({ entityId: validEntityId, type: 'sqs' })
         .expect(403);
+    });
+
+    it('Dashboard stats are scoped to assigned projects for Developer', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      const res = await request(app.getHttpServer())
+        .get('/dashboard/stats')
+        .expect(200);
+
+      expect(res.body.totalRepositories).toBe(1);
+      expect(res.body.totalDevelopers).toBe(1);
+
+      currentAuthUser.role = Role.OWNER;
+      const ownerRes = await request(app.getHttpServer())
+        .get('/dashboard/stats')
+        .expect(200);
+
+      expect(ownerRes.body.totalRepositories).toBe(10);
+      expect(ownerRes.body.totalDevelopers).toBe(20);
+    });
+
+    it('Code intelligence endpoints reject Developer access to unassigned repositories or teams', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      // Unassigned repository stats rejected with 403
+      await request(app.getHttpServer())
+        .get('/code-intelligence/repositories/unassigned-repo/stats')
+        .expect(403);
+
+      // Other team bus factor rejected with 403
+      await request(app.getHttpServer())
+        .get('/code-intelligence/teams/other-team/bus-factor')
+        .expect(403);
+
+      // Assigned repository stats allowed with 200
+      await request(app.getHttpServer())
+        .get('/code-intelligence/repositories/repo-1/stats')
+        .expect(200);
+    });
+
+    it('Commits endpoint enforces assigned-repository scoping for Developer', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      // Unassigned repository rejected with 403
+      await request(app.getHttpServer())
+        .get('/commits?repositoryId=a0000000-0000-4000-8000-000000000002')
+        .expect(403);
+
+      // Developer with no assigned projects receives empty commits list
+      currentAuthUser.id = 'dev-unassigned';
+      const emptyRes = await request(app.getHttpServer())
+        .get('/commits')
+        .expect(200);
+      expect(emptyRes.body.data).toEqual([]);
+      expect(emptyRes.body.total).toBe(0);
     });
   });
 });
