@@ -1,9 +1,10 @@
-import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, Logger, Optional } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { createHash } from 'crypto';
 import { readFileSync, unlinkSync, existsSync } from 'fs';
 import { PrismaService } from '../../prisma';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import {
   CoverageResponseDto,
   CoverageListResponseDto,
@@ -25,6 +26,7 @@ export class CoverageService {
   constructor(
     private readonly prisma: PrismaService,
     @InjectQueue(COVERAGE_QUEUE) private readonly coverageQueue: Queue,
+    @Optional() private readonly dataFilterService?: DataFilterService,
   ) {}
 
   /**
@@ -137,6 +139,7 @@ export class CoverageService {
   async findAll(
     organizationId: string,
     filters: CoverageFiltersDto,
+    allowedRepositoryIds?: string[],
   ): Promise<CoverageListResponseDto> {
     const page = filters.page || 1;
     const limit = filters.limit || 20;
@@ -148,6 +151,19 @@ export class CoverageService {
         organizationId,
       },
     };
+
+    if (allowedRepositoryIds !== undefined) {
+      if (allowedRepositoryIds.length === 0) {
+        return {
+          reports: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
+      }
+      where.repositoryId = { in: allowedRepositoryIds };
+    }
 
     if (filters.repositoryId) {
       where.repositoryId = filters.repositoryId;
@@ -211,7 +227,11 @@ export class CoverageService {
   /**
    * Get coverage report by ID
    */
-  async findById(id: string, organizationId: string): Promise<CoverageResponseDto> {
+  async findById(
+    id: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<CoverageResponseDto> {
     const report = await this.prisma.coverageReport.findFirst({
       where: {
         id,
@@ -233,6 +253,10 @@ export class CoverageService {
 
     if (!report) {
       throw new NotFoundException('Coverage report not found');
+    }
+
+    if (caller && this.dataFilterService && typeof caller === 'object' && caller.id) {
+      await this.dataFilterService.verifyRepositoryAccess(report.repositoryId, organizationId, caller);
     }
 
     return this.formatResponse(report);

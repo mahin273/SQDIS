@@ -44,6 +44,10 @@ import { CodeIntelligenceService } from '../src/modules/code-intelligence/code-i
 import { CodeRemediationService } from '../src/modules/code-intelligence/services/code-remediation.service';
 import { CommitsController } from '../src/modules/commits/commits.controller';
 import { CommitsService } from '../src/modules/commits/commits.service';
+import { CoverageController } from '../src/modules/coverage/coverage.controller';
+import { CoverageService } from '../src/modules/coverage/coverage.service';
+import { ReviewsController } from '../src/modules/reviews/reviews.controller';
+import { ReviewsService } from '../src/modules/reviews/reviews.service';
 import { DataFilterService } from '../src/modules/auth/services/data-filter.service';
 import { PrismaService } from '../src/prisma';
 
@@ -80,6 +84,8 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
   let dashboardServiceMock: Record<string, jest.Mock>;
   let codeIntelligenceServiceMock: Record<string, jest.Mock>;
   let commitsServiceMock: Record<string, jest.Mock>;
+  let coverageServiceMock: Record<string, jest.Mock>;
+  let reviewsServiceMock: Record<string, jest.Mock>;
   let dataFilterServiceMock: Record<string, jest.Mock>;
   let prismaServiceMock: Record<string, any>;
 
@@ -157,6 +163,24 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         }
         return { repositoryId: repoId, nodes: [] };
       }),
+      predictCommitRisk: jest.fn().mockImplementation(async (dto, orgId) => {
+        return { id: 'pred-1', defectProbability: 0.2, riskLevel: 'LOW' };
+      }),
+      analyzeTestImpact: jest.fn().mockImplementation(async (dto) => {
+        return { impacted_tests_count: 1 };
+      }),
+      predictAstDefect: jest.fn().mockImplementation(async (dto, orgId) => {
+        return { id: 'pred-ast-1', riskLevel: 'LOW' };
+      }),
+      getDefectHistory: jest.fn().mockImplementation(async (orgId, limit, user) => {
+        if (user?.role === Role.DEVELOPER && user.id === 'dev-unassigned') {
+          return [];
+        }
+        return [{ id: 'pred-1', repositoryId: 'repo-1', riskLevel: 'LOW' }];
+      }),
+      verifyRepositoryAccess: jest.fn().mockImplementation(async (repoId, orgId, user) => {
+        return dataFilterServiceMock.verifyRepositoryAccess(repoId, orgId, user);
+      }),
     };
 
     commitsServiceMock = {
@@ -169,6 +193,47 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
       getStatistics: jest.fn().mockResolvedValue({ totalCommits: 5 }),
       getHeatmapData: jest.fn().mockResolvedValue([]),
       findById: jest.fn().mockResolvedValue({ id: 'commit-1', repositoryId: 'repo-1', repository: { organizationId: 'org-1' } }),
+    };
+
+    coverageServiceMock = {
+      uploadCoverage: jest.fn().mockResolvedValue({ id: 'cov-1', repositoryId: 'repo-1' }),
+      findAll: jest.fn().mockImplementation(async (orgId, filters, allowedRepoIds) => {
+        if (allowedRepoIds && allowedRepoIds.length === 0) {
+          return { reports: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+        }
+        return { reports: [{ id: 'cov-1', repositoryId: 'repo-1' }], total: 1, page: 1, limit: 20, totalPages: 1 };
+      }),
+      findById: jest.fn().mockImplementation(async (id, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && id === 'unassigned-report') {
+          throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
+        }
+        return { id, repositoryId: 'repo-1', coveragePercentage: 85.0 };
+      }),
+      findLatest: jest.fn().mockResolvedValue({ id: 'cov-1', repositoryId: 'repo-1' }),
+      getCoverageTrends: jest.fn().mockResolvedValue({ repositoryId: 'repo-1', trends: [] }),
+    };
+
+    reviewsServiceMock = {
+      findAll: jest.fn().mockImplementation(async (orgId, filters, currentUserId, user) => {
+        if (user?.role === Role.DEVELOPER && filters.repositoryId === 'unassigned-repo') {
+          throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
+        }
+        return { data: [{ id: 'review-1' }], total: 1, page: 1, limit: 20, totalPages: 1 };
+      }),
+      findById: jest.fn().mockImplementation(async (id, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && id === 'unassigned-review') {
+          throw new ForbiddenException('Access denied: This repository is not part of any project assigned to your active teams.');
+        }
+        return { id, repositoryId: 'repo-1' };
+      }),
+      getTeamDebt: jest.fn().mockResolvedValue({ debtScore: 10 }),
+      getDeveloperStats: jest.fn().mockImplementation(async (devId, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && user.id !== devId) {
+          throw new ForbiddenException('Access denied: You can only view your own review statistics.');
+        }
+        return { totalReviews: 5, approvedReviews: 4 };
+      }),
+      exportReviews: jest.fn().mockResolvedValue('ID,Title\n1,Test'),
     };
 
     dataFilterServiceMock = {
@@ -227,6 +292,8 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         DashboardController,
         CodeIntelligenceController,
         CommitsController,
+        CoverageController,
+        ReviewsController,
       ],
       providers: [
         Reflector,
@@ -268,6 +335,8 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         { provide: CodeIntelligenceService, useValue: codeIntelligenceServiceMock },
         { provide: CodeRemediationService, useValue: {} },
         { provide: CommitsService, useValue: commitsServiceMock },
+        { provide: CoverageService, useValue: coverageServiceMock },
+        { provide: ReviewsService, useValue: reviewsServiceMock },
         { provide: DataFilterService, useValue: dataFilterServiceMock },
         { provide: PrismaService, useValue: prismaServiceMock },
       ],
@@ -729,6 +798,119 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
         .expect(200);
       expect(emptyRes.body.data).toEqual([]);
       expect(emptyRes.body.total).toBe(0);
+    });
+  });
+
+  describe('6. Coverage, Reviews and Code Intelligence Scoping Boundary', () => {
+    it('Coverage endpoints reject Developer access to unassigned repositories', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      // Unassigned repository trends rejected with 403
+      await request(app.getHttpServer())
+        .get('/coverage/trends/unassigned-repo')
+        .expect(403);
+
+      // Unassigned repository latest report rejected with 403
+      await request(app.getHttpServer())
+        .get('/coverage/latest/unassigned-repo')
+        .expect(403);
+
+      // Unassigned repository report details rejected with 403
+      await request(app.getHttpServer())
+        .get('/coverage/unassigned-report')
+        .expect(403);
+
+      // Assigned repository trends allowed with 200
+      await request(app.getHttpServer())
+        .get('/coverage/trends/repo-1')
+        .expect(200);
+
+      // Developer with no assigned projects gets empty reports list
+      currentAuthUser.id = 'dev-unassigned';
+      const emptyRes = await request(app.getHttpServer())
+        .get('/coverage')
+        .expect(200);
+      expect(emptyRes.body.reports).toEqual([]);
+      expect(emptyRes.body.total).toBe(0);
+    });
+
+    it('Review endpoints enforce repository and developer privacy scoping', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      // Querying unassigned repository reviews rejected with 403
+      await request(app.getHttpServer())
+        .get('/reviews?repositoryId=unassigned-repo')
+        .expect(403);
+
+      // Querying unassigned team debt rejected with 403
+      await request(app.getHttpServer())
+        .get('/reviews/debt?teamId=other-team')
+        .expect(403);
+
+      // Querying peer developer review statistics rejected with 403
+      await request(app.getHttpServer())
+        .get('/reviews/stats/other-dev-id')
+        .expect(403);
+
+      // Querying own developer review statistics allowed with 200
+      await request(app.getHttpServer())
+        .get('/reviews/stats/dev-1')
+        .expect(200);
+    });
+
+    it('Code intelligence operations validate repository access and scope defect history', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      // Commit risk with unassigned repository rejected with 403
+      await request(app.getHttpServer())
+        .post('/code-intelligence/commit-risk')
+        .send({
+          repositoryId: 'unassigned-repo',
+          addedLines: 10,
+          deletedLines: 5,
+          modifiedFilesCount: 1,
+        })
+        .expect(403);
+
+      // Test impact with unassigned repository rejected with 403
+      await request(app.getHttpServer())
+        .post('/code-intelligence/test-impact')
+        .send({
+          repositoryId: 'unassigned-repo',
+          changedFiles: ['src/file.ts'],
+        })
+        .expect(403);
+
+      // Remediation advice with unassigned repository rejected with 403
+      await request(app.getHttpServer())
+        .post('/code-intelligence/remediation/advise')
+        .send({
+          repositoryId: 'unassigned-repo',
+          code: 'function test() {}',
+        })
+        .expect(403);
+
+      // Defect history returns empty list for unassigned developer
+      currentAuthUser.id = 'dev-unassigned';
+      const historyRes = await request(app.getHttpServer())
+        .get('/code-intelligence/history')
+        .expect(200);
+      expect(historyRes.body).toEqual([]);
     });
   });
 });

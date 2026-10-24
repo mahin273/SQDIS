@@ -11,6 +11,7 @@ import {
   BadRequestException,
   ParseFilePipe,
   MaxFileSizeValidator,
+  Optional,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import {
@@ -27,6 +28,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { CoverageService } from './coverage.service';
 import {
   CoverageFiltersDto,
@@ -45,7 +47,10 @@ import { MAX_COVERAGE_FILE_SIZE, COVERAGE_UPLOAD_CONFIG } from './constants';
 @Controller('coverage')
 @UseGuards(JwtAuthGuard, OrganizationGuard)
 export class CoverageController {
-  constructor(private readonly coverageService: CoverageService) {}
+  constructor(
+    private readonly coverageService: CoverageService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
+  ) {}
 
   /**
    * Upload a coverage report
@@ -205,17 +210,22 @@ export class CoverageController {
     @Body('commitSha') commitSha: string,
     @Body('branch') branch: string,
     @GetOrganization() organizationId: string,
-    @GetUser('id') userId: string,
+    @GetUser() user: any,
   ): Promise<CoverageResponseDto> {
     if (!repositoryId) {
       throw new BadRequestException('Repository ID is required');
+    }
+
+    const effectiveUserId = typeof user === 'string' ? user : user?.id;
+    if (this.dataFilterService && user && typeof user === 'object') {
+      await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, user);
     }
 
     return this.coverageService.uploadCoverage(
       file,
       repositoryId,
       organizationId,
-      userId,
+      effectiveUserId,
       commitSha,
       branch,
     );
@@ -380,8 +390,33 @@ export class CoverageController {
   async findAll(
     @Query() filters: CoverageFiltersDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ): Promise<CoverageListResponseDto> {
-    return this.coverageService.findAll(organizationId, filters);
+    let allowedRepositoryIds: string[] | undefined;
+    if (filters.repositoryId) {
+      if (this.dataFilterService && user && typeof user === 'object') {
+        await this.dataFilterService.verifyRepositoryAccess(filters.repositoryId, organizationId, user);
+      }
+    } else if (this.dataFilterService && user && typeof user === 'object') {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        user.id,
+        organizationId,
+        user.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return {
+            reports: [],
+            total: 0,
+            page: filters.page || 1,
+            limit: filters.limit || 20,
+            totalPages: 0,
+          };
+        }
+        allowedRepositoryIds = scope.repositoryIds;
+      }
+    }
+    return this.coverageService.findAll(organizationId, filters, allowedRepositoryIds);
   }
 
   /**
@@ -491,8 +526,9 @@ export class CoverageController {
   async findById(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ): Promise<CoverageResponseDto> {
-    return this.coverageService.findById(id, organizationId);
+    return this.coverageService.findById(id, organizationId, user);
   }
 
   /**
@@ -602,7 +638,11 @@ export class CoverageController {
   async findLatest(
     @Param('repositoryId') repositoryId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ): Promise<CoverageResponseDto> {
+    if (this.dataFilterService && user && typeof user === 'object') {
+      await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, user);
+    }
     return this.coverageService.findLatest(repositoryId, organizationId);
   }
 
@@ -739,7 +779,11 @@ export class CoverageController {
     @Param('repositoryId') repositoryId: string,
     @Query() filters: CoverageTrendFiltersDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ): Promise<CoverageTrendResponseDto> {
+    if (this.dataFilterService && user && typeof user === 'object') {
+      await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, user);
+    }
     return this.coverageService.getCoverageTrends(repositoryId, organizationId, filters);
   }
 }

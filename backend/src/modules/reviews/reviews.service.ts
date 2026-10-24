@@ -1,7 +1,8 @@
 // Reviews Service - Fixed mergedAt null error
-import { Injectable, Logger, Inject, forwardRef, Optional } from '@nestjs/common';
+import { Injectable, Logger, Inject, forwardRef, Optional, ForbiddenException } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { PrismaService } from '../../prisma';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import {
   ReviewFilters,
   ReviewStats,
@@ -59,6 +60,8 @@ export class ReviewsService {
     @Optional()
     @Inject(forwardRef(() => NotificationsService))
     private readonly notificationsService?: NotificationsService,
+    @Optional()
+    private readonly dataFilterService?: DataFilterService,
   ) {}
 
   /**
@@ -68,6 +71,7 @@ export class ReviewsService {
     organizationId: string,
     filters: ReviewFilters,
     currentUserId?: string,
+    caller?: { id: string; role?: string },
   ): Promise<PaginatedResult<Review>> {
     const {
       page = 1,
@@ -88,20 +92,39 @@ export class ReviewsService {
       repository: { organizationId },
     };
 
-    // Apply view type filters
-    if (viewType === 'my_reviews' && currentUserId) {
+    // Scoping & validation
+    if (repositoryId) {
+      if (caller && this.dataFilterService && typeof caller === 'object' && caller.id) {
+        await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, caller);
+      }
+      where.repositoryId = repositoryId;
+    } else if (viewType === 'my_reviews' && currentUserId) {
       where.reviewerId = currentUserId;
     } else if (viewType === 'reviews_on_my_prs' && currentUserId) {
       where.prAuthorId = currentUserId;
     } else if (viewType === 'team' && teamId) {
+      if (caller && this.dataFilterService && typeof caller === 'object' && caller.id) {
+        await this.dataFilterService.verifyTeamAccess(teamId, organizationId, caller);
+      }
       where.reviewer = {
         teamMemberships: {
           some: { teamId, leftAt: null },
         },
       };
+    } else if (caller && this.dataFilterService && typeof caller === 'object' && caller.id) {
+      // General review listing with no viewType: scope for non-org-scoped roles (DEVELOPER, TEAM_LEAD)
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        caller.id,
+        organizationId,
+        caller.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return { data: [], total: 0, page, limit, totalPages: 0 };
+        }
+        where.repositoryId = { in: scope.repositoryIds };
+      }
     }
-
-    if (repositoryId) where.repositoryId = repositoryId;
     if (reviewerId && viewType !== 'my_reviews') where.reviewerId = reviewerId;
     if (prAuthorId && viewType !== 'reviews_on_my_prs') where.prAuthorId = prAuthorId;
     if (state) where.state = state;
@@ -677,10 +700,11 @@ export class ReviewsService {
     organizationId: string,
     filters: ReviewFilters,
     currentUserId?: string,
+    caller?: { id: string; role?: string },
   ): Promise<string> {
     // Get all reviews without pagination for export
     const exportFilters = { ...filters, page: 1, limit: 10000 };
-    const result = await this.findAll(organizationId, exportFilters, currentUserId);
+    const result = await this.findAll(organizationId, exportFilters, currentUserId, caller);
 
     const headers = [
       'ID',
@@ -736,12 +760,16 @@ export class ReviewsService {
   /**
    * Find a review by ID with optional organization boundary scoping
    */
-  async findById(id: string, organizationId?: string): Promise<Review | null> {
+  async findById(
+    id: string,
+    organizationId?: string,
+    caller?: { id: string; role?: string },
+  ): Promise<Review | null> {
     const where: any = { id };
     if (organizationId) {
       where.repository = { organizationId };
     }
-    return this.prisma.review.findFirst({
+    const review = await this.prisma.review.findFirst({
       where,
       include: {
         reviewer: { select: { id: true, name: true, email: true, avatarUrl: true } },
@@ -754,6 +782,12 @@ export class ReviewsService {
         },
       },
     });
+
+    if (review && caller && organizationId && this.dataFilterService && typeof caller === 'object' && caller.id) {
+      await this.dataFilterService.verifyRepositoryAccess(review.repositoryId, organizationId, caller);
+    }
+
+    return review;
   }
 
   /**
@@ -776,7 +810,14 @@ export class ReviewsService {
   /**
    * Get developer review statistics
    */
-  async getDeveloperStats(developerId: string, organizationId: string): Promise<ReviewStats> {
+  async getDeveloperStats(
+    developerId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<ReviewStats> {
+    if (caller && caller.role === 'DEVELOPER' && caller.id !== developerId) {
+      throw new ForbiddenException('Access denied: You can only view your own review statistics.');
+    }
     const reviews = await this.prisma.review.findMany({
       where: {
         reviewerId: developerId,
