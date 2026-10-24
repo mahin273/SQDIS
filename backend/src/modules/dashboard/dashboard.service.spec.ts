@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '../../prisma';
 import { ScoresService } from '../scores/scores.service';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { DashboardService } from './dashboard.service';
 
 describe('DashboardService', () => {
@@ -83,6 +84,26 @@ describe('DashboardService', () => {
           provide: ScoresService,
           useValue: {
             calculateDQS: jest.fn().mockResolvedValue({ score: null }),
+          },
+        },
+        {
+          provide: DataFilterService,
+          useValue: {
+            getScopedProjectAndRepoIds: jest.fn().mockResolvedValue({
+              isOrgScoped: true,
+              effectiveRole: 'OWNER',
+              projectIds: [],
+              repositoryIds: [],
+              teamIds: [],
+            }),
+            verifyRepositoryAccess: jest.fn().mockImplementation(async (repoId, orgId) => ({
+              repositoryId: repoId,
+              organizationId: orgId,
+            })),
+            verifyTeamAccess: jest.fn().mockImplementation(async (teamId, orgId) => ({
+              teamId,
+              organizationId: orgId,
+            })),
           },
         },
       ],

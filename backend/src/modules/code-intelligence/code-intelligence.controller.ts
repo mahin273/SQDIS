@@ -12,6 +12,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard, OrganizationGuard } from '../auth/guards/index.js';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator.js';
+import { GetUser } from '../auth/decorators/get-user.decorator.js';
 import { CodeIntelligenceService } from './code-intelligence.service.js';
 import { CodeRemediationService } from './services/code-remediation.service.js';
 import {
@@ -76,8 +77,9 @@ export class CodeIntelligenceController {
   async getTeamBusFactor(
     @Param('teamId') teamId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.codeIntelligenceService.calculateTeamBusFactor(teamId, organizationId);
+    return this.codeIntelligenceService.calculateTeamBusFactor(teamId, organizationId, user);
   }
 
   @Get('history')
@@ -95,8 +97,9 @@ export class CodeIntelligenceController {
     @GetOrganization() organizationId: string,
     @Query('teamId') teamId?: string,
     @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit?: number,
+    @GetUser() user?: any,
   ) {
-    return this.codeIntelligenceService.getBusFactorSnapshots(teamId, limit, organizationId);
+    return this.codeIntelligenceService.getBusFactorSnapshots(teamId, limit, organizationId, user);
   }
 
   @Get('repositories/:repositoryId/stats')
@@ -104,8 +107,9 @@ export class CodeIntelligenceController {
   async getRepositoryStats(
     @Param('repositoryId') repositoryId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user?: any,
   ) {
-    return this.codeIntelligenceService.getRepositoryStats(repositoryId, organizationId);
+    return this.codeIntelligenceService.getRepositoryStats(repositoryId, organizationId, user);
   }
 
   @Get('repositories/:repositoryId/hotspots')
@@ -114,8 +118,9 @@ export class CodeIntelligenceController {
     @Param('repositoryId') repositoryId: string,
     @GetOrganization() organizationId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @GetUser() user?: any,
   ) {
-    return this.codeIntelligenceService.getRepositoryHotspots(repositoryId, limit, organizationId);
+    return this.codeIntelligenceService.getRepositoryHotspots(repositoryId, limit, organizationId, user);
   }
 
   @Get('repositories/:repositoryId/commits-risk')
@@ -124,8 +129,9 @@ export class CodeIntelligenceController {
     @Param('repositoryId') repositoryId: string,
     @GetOrganization() organizationId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
+    @GetUser() user?: any,
   ) {
-    return this.codeIntelligenceService.getRepositoryCommitsRisk(repositoryId, limit, organizationId);
+    return this.codeIntelligenceService.getRepositoryCommitsRisk(repositoryId, limit, organizationId, user);
   }
 
   @Post('repositories/:repositoryId/test-impact')
@@ -134,8 +140,9 @@ export class CodeIntelligenceController {
     @Param('repositoryId') repositoryId: string,
     @GetOrganization() organizationId: string,
     @Body('changedFiles') changedFiles: string[],
+    @GetUser() user?: any,
   ) {
-    return this.codeIntelligenceService.getPullRequestTestImpact(repositoryId, changedFiles, organizationId);
+    return this.codeIntelligenceService.getPullRequestTestImpact(repositoryId, changedFiles, organizationId, user);
   }
 
   @Get('repositories/:repositoryId/treemap')
@@ -144,12 +151,14 @@ export class CodeIntelligenceController {
     @Param('repositoryId') repositoryId: string,
     @GetOrganization() organizationId: string,
     @Query() query: TreemapQueryDto,
+    @GetUser() user?: any,
   ): Promise<RepositoryTreemapResponseDto> {
     return this.codeIntelligenceService.getRepositoryTreemap(
       repositoryId,
       query.sizeBy,
       query.colorBy,
       organizationId,
+      user,
     );
   }
 }

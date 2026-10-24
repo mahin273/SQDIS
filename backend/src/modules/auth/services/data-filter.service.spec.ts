@@ -8,6 +8,10 @@ describe('DataFilterService', () => {
   let prisma: {
     teamMembership: Record<string, jest.Mock>;
     team: Record<string, jest.Mock>;
+    organizationMember: Record<string, jest.Mock>;
+    teamProjectAssignment: Record<string, jest.Mock>;
+    projectRepository: Record<string, jest.Mock>;
+    repository: Record<string, jest.Mock>;
   };
 
   beforeEach(async () => {
@@ -17,6 +21,20 @@ describe('DataFilterService', () => {
       },
       team: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
+      },
+      organizationMember: {
+        findUnique: jest.fn(),
+      },
+      teamProjectAssignment: {
+        findMany: jest.fn(),
+      },
+      projectRepository: {
+        findMany: jest.fn(),
+        findFirst: jest.fn(),
+      },
+      repository: {
+        findFirst: jest.fn(),
       },
     };
 
@@ -138,6 +156,72 @@ describe('DataFilterService', () => {
           },
         },
       });
+    });
+  });
+
+  describe('getScopedProjectAndRepoIds', () => {
+    it('returns organization scope for owner or admin', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.ADMIN });
+
+      const result = await service.getScopedProjectAndRepoIds('user-1', 'org-1');
+      expect(result.isOrgScoped).toBe(true);
+      expect(result.effectiveRole).toBe(Role.ADMIN);
+    });
+
+    it('returns assigned projects and repositories for developer', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+      prisma.team.findMany.mockResolvedValue([{ id: 'team-1' }]);
+      prisma.teamProjectAssignment.findMany.mockResolvedValue([{ projectId: 'proj-1' }]);
+      prisma.projectRepository.findMany.mockResolvedValue([{ repositoryId: 'repo-1' }]);
+
+      const result = await service.getScopedProjectAndRepoIds('user-1', 'org-1');
+      expect(result.isOrgScoped).toBe(false);
+      expect(result.projectIds).toEqual(['proj-1']);
+      expect(result.repositoryIds).toEqual(['repo-1']);
+      expect(result.teamIds).toEqual(['team-1']);
+    });
+  });
+
+  describe('verifyRepositoryAccess', () => {
+    it('allows owner access to any repository in organization', async () => {
+      prisma.repository.findFirst.mockResolvedValue({ id: 'repo-1', organizationId: 'org-1' });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.OWNER });
+
+      await expect(
+        service.verifyRepositoryAccess('repo-1', 'org-1', { id: 'user-1' }),
+      ).resolves.toEqual({ repositoryId: 'repo-1', organizationId: 'org-1' });
+    });
+
+    it('throws forbidden exception if developer lacks team project assignment', async () => {
+      prisma.repository.findFirst.mockResolvedValue({ id: 'repo-1', organizationId: 'org-1' });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+      prisma.projectRepository.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.verifyRepositoryAccess('repo-1', 'org-1', { id: 'user-1' }),
+      ).rejects.toThrow('Access denied: This repository is not part of any project assigned to your active teams.');
+    });
+  });
+
+  describe('verifyTeamAccess', () => {
+    it('allows owner access to any team in organization', async () => {
+      prisma.team.findFirst.mockResolvedValue({ id: 'team-1', organizationId: 'org-1' });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.OWNER });
+
+      await expect(
+        service.verifyTeamAccess('team-1', 'org-1', { id: 'user-1' }),
+      ).resolves.toEqual({ teamId: 'team-1', organizationId: 'org-1' });
+    });
+
+    it('throws forbidden if developer does not belong to team', async () => {
+      prisma.team.findFirst
+        .mockResolvedValueOnce({ id: 'team-1', organizationId: 'org-1' })
+        .mockResolvedValueOnce(null);
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+
+      await expect(
+        service.verifyTeamAccess('team-1', 'org-1', { id: 'user-1' }),
+      ).rejects.toThrow('Access denied: You are not an active member or leader of this team.');
     });
   });
 });

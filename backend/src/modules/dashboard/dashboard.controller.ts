@@ -17,8 +17,11 @@ export class DashboardController {
   @Get('stats')
   @ApiOperation({ summary: 'Get organization-wide dashboard statistics' })
   @ApiResponse({ status: 200, description: 'Organization stats retrieved successfully.' })
-  async getStats(@GetOrganization() organizationId: string) {
-    return this.dashboardService.getOrganizationStats(organizationId);
+  async getStats(
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ) {
+    return this.dashboardService.getOrganizationStats(organizationId, user);
   }
 
   /**
@@ -28,8 +31,12 @@ export class DashboardController {
   @ApiOperation({ summary: 'Get SQS trend over time for organization' })
   @ApiQuery({ name: 'days', required: false, type: Number, description: 'Number of days of trend history' })
   @ApiResponse({ status: 200, description: 'SQS trend retrieved successfully.' })
-  async getSQSTrend(@GetOrganization() organizationId: string, @Query('days') days?: string) {
-    return this.dashboardService.getSQSTrend(organizationId, days ? parseInt(days) : 30);
+  async getSQSTrend(
+    @GetOrganization() organizationId: string,
+    @Query('days') days?: string,
+    @GetUser() user?: any,
+  ) {
+    return this.dashboardService.getSQSTrend(organizationId, days ? parseInt(days) : 30, user);
   }
 
   /**
@@ -39,8 +46,12 @@ export class DashboardController {
   @ApiOperation({ summary: 'Get commit activity trend' })
   @ApiQuery({ name: 'days', required: false, type: Number, description: 'Number of days of trend history' })
   @ApiResponse({ status: 200, description: 'Commit trend retrieved successfully.' })
-  async getCommitTrend(@GetOrganization() organizationId: string, @Query('days') days?: string) {
-    return this.dashboardService.getCommitTrend(organizationId, days ? parseInt(days) : 30);
+  async getCommitTrend(
+    @GetOrganization() organizationId: string,
+    @Query('days') days?: string,
+    @GetUser() user?: any,
+  ) {
+    return this.dashboardService.getCommitTrend(organizationId, days ? parseInt(days) : 30, user);
   }
 
   /**
@@ -53,8 +64,9 @@ export class DashboardController {
   async getTopRepositories(
     @GetOrganization() organizationId: string,
     @Query('limit') limit?: string,
+    @GetUser() user?: any,
   ) {
-    return this.dashboardService.getTopRepositories(organizationId, limit ? parseInt(limit) : 5);
+    return this.dashboardService.getTopRepositories(organizationId, limit ? parseInt(limit) : 5, user);
   }
 
   /**
@@ -67,8 +79,9 @@ export class DashboardController {
   async getBottomRepositories(
     @GetOrganization() organizationId: string,
     @Query('limit') limit?: string,
+    @GetUser() user?: any,
   ) {
-    return this.dashboardService.getBottomRepositories(organizationId, limit ? parseInt(limit) : 5);
+    return this.dashboardService.getBottomRepositories(organizationId, limit ? parseInt(limit) : 5, user);
   }
 
   /**
@@ -93,8 +106,12 @@ export class DashboardController {
   @ApiOperation({ summary: 'Get top teams by average DQS' })
   @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Max number of teams to return' })
   @ApiResponse({ status: 200, description: 'Top teams list retrieved successfully.' })
-  async getTopTeams(@GetOrganization() organizationId: string, @Query('limit') limit?: string) {
-    return this.dashboardService.getTopTeams(organizationId, limit ? parseInt(limit) : 5);
+  async getTopTeams(
+    @GetOrganization() organizationId: string,
+    @Query('limit') limit?: string,
+    @GetUser() user?: any,
+  ) {
+    return this.dashboardService.getTopTeams(organizationId, limit ? parseInt(limit) : 5, user);
   }
 
   /**
@@ -111,12 +128,14 @@ export class DashboardController {
     @Query('limit') limit?: string,
     @Query('page') page?: string,
     @Query('type') type?: string,
+    @GetUser() user?: any,
   ) {
     return this.dashboardService.getRecentActivity(
       organizationId,
       limit ? parseInt(limit, 10) : 10,
       type,
       page ? parseInt(page, 10) : 1,
+      user,
     );
   }
 
@@ -126,7 +145,10 @@ export class DashboardController {
   @Get('alerts')
   @ApiOperation({ summary: 'Get open organization alerts' })
   @ApiResponse({ status: 200, description: 'Alerts list retrieved successfully.' })
-  async getAlerts(@GetOrganization() organizationId: string) {
-    return this.dashboardService.getAlerts(organizationId);
+  async getAlerts(
+    @GetOrganization() organizationId: string,
+    @GetUser() user?: any,
+  ) {
+    return this.dashboardService.getAlerts(organizationId, user);
   }
 }

@@ -816,7 +816,7 @@ export class CommitsService {
    * @param filters - Filter and pagination options
    * @returns Paginated list of commits
    */
-  async findAll(filters: CommitFiltersDto) {
+  async findAll(filters: CommitFiltersDto, allowedRepositoryIds?: string[]) {
     const {
       organizationId,
       repositoryId,
@@ -839,6 +839,8 @@ export class CommitsService {
 
     if (repositoryId) {
       where.repositoryId = repositoryId;
+    } else if (allowedRepositoryIds && allowedRepositoryIds.length > 0) {
+      where.repositoryId = { in: allowedRepositoryIds };
     }
 
     if (organizationId) {
@@ -980,9 +982,10 @@ export class CommitsService {
    * Get commit statistics for an organization or repository
    *
    * @param query - Statistics query parameters
+   * @param allowedRepositoryIds - Optional list of allowed repository IDs for scoped access
    * @returns Commit statistics
    */
-  async getStatistics(query: CommitStatsQueryDto) {
+  async getStatistics(query: CommitStatsQueryDto, allowedRepositoryIds?: string[]) {
     const { organizationId, repositoryId, developerId, startDate, endDate } = query;
 
     // Build where clause
@@ -990,6 +993,8 @@ export class CommitsService {
 
     if (repositoryId) {
       where.repositoryId = repositoryId;
+    } else if (allowedRepositoryIds && allowedRepositoryIds.length > 0) {
+      where.repositoryId = { in: allowedRepositoryIds };
     }
 
     if (organizationId) {
