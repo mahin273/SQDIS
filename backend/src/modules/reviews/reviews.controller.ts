@@ -5,8 +5,10 @@ import {
   Query,
   UseGuards,
   NotFoundException,
+  ForbiddenException,
   Res,
   Header,
+  Optional,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ReviewsService } from './reviews.service';
@@ -14,6 +16,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { User } from '@prisma/client';
 import { ReviewFiltersDto } from './dto/review-filters.dto';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
@@ -23,7 +26,10 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery }
 @Controller('reviews')
 @UseGuards(JwtAuthGuard, OrganizationGuard)
 export class ReviewsController {
-  constructor(private readonly reviewsService: ReviewsService) {}
+  constructor(
+    private readonly reviewsService: ReviewsService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
+  ) {}
 
   /**
    * GET /api/reviews - List reviews with pagination and filters
@@ -33,14 +39,14 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'List of reviews retrieved.' })
   async findAll(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
     @Query() filters: ReviewFiltersDto,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) {
       return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
     }
-    return this.reviewsService.findAll(organizationId, filters, user.id);
+    return this.reviewsService.findAll(organizationId, filters, user.id, user);
   }
 
   /**
@@ -210,7 +216,7 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'CSV file returned.' })
   async exportReviews(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
     @Query() filters: ReviewFiltersDto,
     @Res() res: Response,
   ) {
@@ -219,7 +225,7 @@ export class ReviewsController {
       res.send('');
       return;
     }
-    const csv = await this.reviewsService.exportReviews(organizationId, filters, user.id);
+    const csv = await this.reviewsService.exportReviews(organizationId, filters, user.id, user);
     res.send(csv);
   }
 
@@ -230,9 +236,17 @@ export class ReviewsController {
   @ApiOperation({ summary: 'Get team review debt' })
   @ApiQuery({ name: 'teamId', required: true })
   @ApiResponse({ status: 200, description: 'Team review debt info retrieved.' })
-  async getTeamDebt(@Query('teamId') teamId: string) {
+  async getTeamDebt(
+    @Query('teamId') teamId: string,
+    @GetOrganization() orgId: string | undefined,
+    @GetUser() user: User & { organizationId?: string },
+  ) {
     if (!teamId) {
       throw new NotFoundException('Team ID is required');
+    }
+    const organizationId = orgId || user.organizationId;
+    if (this.dataFilterService && organizationId) {
+      await this.dataFilterService.verifyTeamAccess(teamId, organizationId, user);
     }
     return this.reviewsService.getTeamDebt(teamId);
   }
@@ -246,12 +260,12 @@ export class ReviewsController {
   @ApiResponse({ status: 200, description: 'Developer review stats retrieved.' })
   async getDeveloperStats(
     @GetOrganization() orgId: string | undefined,
-    @GetUser() user: User & { organizationId?: string },
+    @GetUser() user: User & { organizationId?: string; role?: string },
     @Param('developerId') developerId: string,
   ) {
     const organizationId = orgId || user.organizationId;
     if (!organizationId) return null;
-    return this.reviewsService.getDeveloperStats(developerId, organizationId);
+    return this.reviewsService.getDeveloperStats(developerId, organizationId, user);
   }
 
   /**
@@ -264,8 +278,9 @@ export class ReviewsController {
   async findById(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    const review = await this.reviewsService.findById(id, organizationId);
+    const review = await this.reviewsService.findById(id, organizationId, user);
     if (!review) {
       throw new NotFoundException('Review not found');
     }

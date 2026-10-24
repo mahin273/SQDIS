@@ -38,7 +38,14 @@ export class CodeIntelligenceController {
 
   @Post('remediation/advise')
   @ApiOperation({ summary: 'Diagnose structural code smells and generate prescriptive refactoring advice' })
-  async generateRemediationAdvice(@Body() dto: RemediationRequestDto): Promise<RemediationResponseDto> {
+  async generateRemediationAdvice(
+    @Body() dto: RemediationRequestDto,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ): Promise<RemediationResponseDto> {
+    if (dto.repositoryId) {
+      await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    }
     return this.codeRemediationService.generateAdvice(dto);
   }
 
@@ -47,8 +54,12 @@ export class CodeIntelligenceController {
   async predictAstDefect(
     @Body() dto: AstDefectDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.codeIntelligenceService.predictAstDefect(dto, organizationId);
+    if (dto.repositoryId) {
+      await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    }
+    return this.codeIntelligenceService.predictAstDefect(dto, organizationId, dto.repositoryId);
   }
 
   @Post('commit-risk')
@@ -56,19 +67,37 @@ export class CodeIntelligenceController {
   async predictCommitRisk(
     @Body() dto: CommitRiskDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.codeIntelligenceService.predictCommitRisk(dto, organizationId);
+    if (dto.repositoryId) {
+      await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    }
+    return this.codeIntelligenceService.predictCommitRisk(dto, organizationId, dto.repositoryId);
   }
 
   @Post('test-impact')
   @ApiOperation({ summary: 'Execute Test Impact Analysis (TIA) via dependency DAG' })
-  async analyzeTestImpact(@Body() dto: TestImpactDto) {
+  async analyzeTestImpact(
+    @Body() dto: TestImpactDto,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ) {
+    if (dto.repositoryId) {
+      await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    }
     return this.codeIntelligenceService.analyzeTestImpact(dto);
   }
 
   @Post('canary-analysis')
   @ApiOperation({ summary: 'Detect deployment performance regressions via Prometheus TSDB' })
-  async analyzeCanary(@Body() dto: CanaryAnalysisDto) {
+  async analyzeCanary(
+    @Body() dto: CanaryAnalysisDto,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ) {
+    if (dto.repositoryId) {
+      await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    }
     return this.codeIntelligenceService.analyzeCanary(dto);
   }
 
@@ -87,8 +116,9 @@ export class CodeIntelligenceController {
   async getDefectHistory(
     @GetOrganization() organizationId: string,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit?: number,
+    @GetUser() user?: any,
   ) {
-    return this.codeIntelligenceService.getDefectHistory(organizationId, limit);
+    return this.codeIntelligenceService.getDefectHistory(organizationId, limit, user);
   }
 
   @Get('bus-factor-snapshots')

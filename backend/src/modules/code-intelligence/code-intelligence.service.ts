@@ -460,9 +460,29 @@ export class CodeIntelligenceService {
   /**
    * Retrieve historical defect predictions.
    */
-  async getDefectHistory(organizationId?: string, limit = 20) {
+  async getDefectHistory(
+    organizationId?: string,
+    limit = 20,
+    caller?: { id: string; role?: string },
+  ) {
+    const where: any = organizationId ? { organizationId } : {};
+
+    if (caller && organizationId && this.dataFilterService && typeof caller === 'object' && caller.id) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        caller.id,
+        organizationId,
+        caller.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return [];
+        }
+        where.repositoryId = { in: scope.repositoryIds };
+      }
+    }
+
     return this.prisma.defectPrediction.findMany({
-      where: organizationId ? { organizationId } : {},
+      where,
       orderBy: { createdAt: 'desc' },
       take: limit,
     });

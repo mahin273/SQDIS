@@ -34,6 +34,14 @@ export class RemediationRequestDto {
   @IsOptional()
   @IsNumber()
   cyclomaticComplexity?: number;
+
+  @ApiPropertyOptional({
+    description: 'Optional repository ID for scoping and access verification',
+    example: 'repo-123',
+  })
+  @IsOptional()
+  @IsString()
+  repositoryId?: string;
 }
 
 export class RemediationRecipeDto {
