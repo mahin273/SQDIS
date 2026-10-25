@@ -14,6 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { sprintsService } from '@/services'
+import { useAuthStore } from '@/stores/authStore'
+import { useUserRole } from '@/rbac/hooks'
 import { queryKeys } from '@/lib/queryClient'
 import { PageHeader, QueryState } from '../pageUtils'
 import type { SprintStatus, Commit } from '@/types'
@@ -95,6 +97,15 @@ export function SprintDetailPage() {
   const sprint = sprintQuery.data
   const report = reportQuery.data
 
+  const user = useAuthStore((state) => state.user)
+  const userRole = useUserRole()
+  const isOwnerOrAdmin = userRole === 'OWNER' || userRole === 'ADMIN'
+  const isTeamLead = userRole === 'TEAM_LEAD'
+
+  const canManageSprint = Boolean(
+    isOwnerOrAdmin || (isTeamLead && user?.id && sprint?.team?.leadId === user.id)
+  )
+
   const getStatusConfig = (status: SprintStatus) => {
     switch (status) {
       case 'COMPLETED':
@@ -141,7 +152,7 @@ export function SprintDetailPage() {
               description={`Iteration cycle running from ${new Date(sprint.startDate).toLocaleDateString()} to ${new Date(sprint.endDate).toLocaleDateString()}`}
               action={
                 <div className="flex gap-3">
-                  {sprint.status === 'PLANNED' && (
+                  {canManageSprint && sprint.status === 'PLANNED' && (
                     <Button
                       onClick={() => updateStatusMutation.mutate('ACTIVE')}
                       isLoading={updateStatusMutation.isPending}
@@ -150,7 +161,7 @@ export function SprintDetailPage() {
                       <PlayCircle className="h-4 w-4" /> Start Sprint
                     </Button>
                   )}
-                  {sprint.status === 'ACTIVE' && (
+                  {canManageSprint && sprint.status === 'ACTIVE' && (
                     <Button
                       onClick={() => updateStatusMutation.mutate('COMPLETED')}
                       isLoading={updateStatusMutation.isPending}
@@ -159,14 +170,16 @@ export function SprintDetailPage() {
                       <CheckCircle2 className="h-4 w-4" /> Complete Sprint
                     </Button>
                   )}
-                  <Button
-                    variant="outline"
-                    className="gap-2"
-                    onClick={() => autoGenerateMutation.mutate()}
-                    isLoading={autoGenerateMutation.isPending}
-                  >
-                    <Zap className="h-4 w-4" /> Auto-Generate
-                  </Button>
+                  {isOwnerOrAdmin && (
+                    <Button
+                      variant="outline"
+                      className="gap-2"
+                      onClick={() => autoGenerateMutation.mutate()}
+                      isLoading={autoGenerateMutation.isPending}
+                    >
+                      <Zap className="h-4 w-4" /> Auto-Generate
+                    </Button>
+                  )}
                   <Dropdown
                     align="right"
                     trigger={
@@ -194,9 +207,11 @@ export function SprintDetailPage() {
                       Download CSV
                     </DropdownItem>
                   </Dropdown>
-                  <Button variant="outline" className="gap-2">
-                    <FileText className="h-4 w-4" /> Edit Details
-                  </Button>
+                  {canManageSprint && (
+                    <Button variant="outline" className="gap-2">
+                      <FileText className="h-4 w-4" /> Edit Details
+                    </Button>
+                  )}
                 </div>
               }
             />

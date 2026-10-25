@@ -28,6 +28,8 @@ import { Progress } from '@/components/ui/progress'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useToast } from '@/components/ui/toast'
 import { sprintsService, teamsService } from '@/services'
+import { useAuthStore } from '@/stores/authStore'
+import { useUserRole } from '@/rbac/hooks'
 import { queryKeys } from '@/lib/queryClient'
 import { QueryState } from '../pageUtils'
 import type { Sprint, SprintStatus, Team, SprintTimelineEntry } from '@/types'
@@ -160,6 +162,27 @@ export function SprintsPage() {
       ? (raw as any).data
       : []
   }, [teamsQuery.data])
+
+  const user = useAuthStore((state) => state.user)
+  const userRole = useUserRole()
+  const isOwnerOrAdmin = userRole === 'OWNER' || userRole === 'ADMIN'
+  const isTeamLead = userRole === 'TEAM_LEAD'
+
+  const canManageSprint = (sprint: Sprint) => {
+    if (isOwnerOrAdmin) return true
+    if (!isTeamLead || !user?.id) return false
+    if (sprint.team?.leadId) {
+      return sprint.team.leadId === user.id
+    }
+    const matchingTeam = teams.find((t) => t.id === sprint.teamId)
+    return matchingTeam?.leadId === user.id
+  }
+
+  const canPlanSprint = useMemo(() => {
+    if (isOwnerOrAdmin) return true
+    if (!isTeamLead || !user?.id) return false
+    return teams.some((t) => t.leadId === user.id)
+  }, [isOwnerOrAdmin, isTeamLead, user?.id, teams])
 
   const timelineEntries: SprintTimelineEntry[] = useMemo(() => {
     const raw = timelineQuery.data
@@ -379,20 +402,22 @@ export function SprintsPage() {
           </Button>
 
           {/* Plan New Sprint Button */}
-          <Button
-            size="sm"
-            onClick={() => {
-              if (teams.length > 0 && !teamId) {
-                setTeamId(teams[0].id)
-              }
-              handleSetTwoWeeks()
-              setIsCreateOpen(true)
-            }}
-            className="rounded-xl text-xs gap-1.5 shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Plan Sprint</span>
-          </Button>
+          {canPlanSprint && (
+            <Button
+              size="sm"
+              onClick={() => {
+                if (teams.length > 0 && !teamId) {
+                  setTeamId(teams[0].id)
+                }
+                handleSetTwoWeeks()
+                setIsCreateOpen(true)
+              }}
+              className="rounded-xl text-xs gap-1.5 shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Plan Sprint</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -723,7 +748,7 @@ export function SprintsPage() {
                           </Button>
                         </Link>
 
-                        {sprint.status === 'PLANNED' && (
+                        {canManageSprint(sprint) && sprint.status === 'PLANNED' && (
                           <Button
                             size="sm"
                             onClick={() => updateStatusMutation.mutate({ id: sprint.id, status: 'ACTIVE' })}
@@ -736,7 +761,7 @@ export function SprintsPage() {
                           </Button>
                         )}
 
-                        {sprint.status === 'ACTIVE' && (
+                        {canManageSprint(sprint) && sprint.status === 'ACTIVE' && (
                           <Button
                             size="sm"
                             onClick={() => updateStatusMutation.mutate({ id: sprint.id, status: 'COMPLETED' })}
