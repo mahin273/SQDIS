@@ -313,9 +313,10 @@ export class GitHubController {
   async listRepositories(
     @GetOrganization('id') organizationId: string | undefined,
     @Query('connected') connected?: string,
+    @GetUser() user?: RequestUser,
   ) {
     const orgId = this.validateOrganizationContext(organizationId);
-    return this.githubService.listRepositories(orgId, connected === 'true');
+    return this.githubService.listRepositories(orgId, connected === 'true', user);
   }
 
   /**

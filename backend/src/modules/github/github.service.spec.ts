@@ -70,6 +70,13 @@ describe('GitHubService', () => {
     };
     dataFilterService = {
       createRepositoryFilter: jest.fn(() => ({ organizationId: 'org-1' })),
+      getScopedProjectAndRepoIds: jest.fn().mockResolvedValue({
+        isOrgScoped: false,
+        effectiveRole: 'DEVELOPER',
+        projectIds: ['p-1'],
+        repositoryIds: ['repo-1'],
+        teamIds: ['t-1'],
+      }),
     };
     cacheService = {
       delete: jest.fn(),
@@ -247,6 +254,32 @@ describe('GitHubService', () => {
         sqsScore: undefined,
       },
     ]);
+  });
+
+  it('scopes connected repositories when caller is non-org-scoped', async () => {
+    prisma.repository.findMany.mockResolvedValue([repository]);
+
+    const result = await service.listRepositories('org-1', true, {
+      id: 'dev-1',
+      role: 'DEVELOPER',
+    });
+
+    expect(dataFilterService.getScopedProjectAndRepoIds).toHaveBeenCalledWith(
+      'dev-1',
+      'org-1',
+      'DEVELOPER',
+    );
+    expect(prisma.repository.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          organizationId: 'org-1',
+          isEnabled: true,
+          id: { in: ['repo-1'] },
+        },
+      }),
+    );
+    expect(result).toHaveLength(1);
+    expect(result[0].id).toBe('repo-1');
   });
 
   it('updates webhook enabled state and clears repository secret cache', async () => {

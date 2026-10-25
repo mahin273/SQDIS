@@ -500,14 +500,16 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
               </Button>
             )}
 
-            <Button
-              size="sm"
-              onClick={() => setIsInviteOpen(true)}
-              className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
-            >
-              <UserPlus className="h-3.5 w-3.5" />
-              Invite Member
-            </Button>
+            {canManageMembers && (
+              <Button
+                size="sm"
+                onClick={() => setIsInviteOpen(true)}
+                className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+              >
+                <UserPlus className="h-3.5 w-3.5" />
+                Invite Member
+              </Button>
+            )}
 
             <Button
               variant="ghost"
@@ -787,13 +789,15 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
                     <Mail className="h-3.5 w-3.5" /> Invite All ({totalUninvitedCount})
                   </Button>
                 )}
-                <Button
-                  size="sm"
-                  onClick={() => setIsInviteOpen(true)}
-                  className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                  <UserPlus className="h-3.5 w-3.5" /> Invite Member
-                </Button>
+                {canManageMembers && (
+                  <Button
+                    size="sm"
+                    onClick={() => setIsInviteOpen(true)}
+                    className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+                  >
+                    <UserPlus className="h-3.5 w-3.5" /> Invite Member
+                  </Button>
+                )}
               </div>
             </CardHeader>
 
@@ -980,28 +984,29 @@ export function MembersPage({ hideHeader = false }: { hideHeader?: boolean } = {
                                   <span className="hidden sm:inline">Inspect</span>
                                 </Button>
 
-                                <select
-                                  value={member.role}
-                                  onChange={(e) =>
-                                    updateRoleMutation.mutate({
-                                      memberId: member.userId || member.id,
-                                      role: e.target.value as UserRole,
-                                    })
-                                  }
-                                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium dark:border-slate-700 dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-colors disabled:opacity-50"
-                                  disabled={
-                                    !isOwner ||
-                                    (updateRoleMutation.isPending &&
+                                {isOwner && (
+                                  <select
+                                    value={member.role}
+                                    onChange={(e) =>
+                                      updateRoleMutation.mutate({
+                                        memberId: member.userId || member.id,
+                                        role: e.target.value as UserRole,
+                                      })
+                                    }
+                                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium dark:border-slate-700 dark:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-600 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 transition-colors disabled:opacity-50"
+                                    disabled={
+                                      updateRoleMutation.isPending &&
                                       (updateRoleMutation.variables?.memberId === member.id ||
-                                        updateRoleMutation.variables?.memberId === member.userId))
-                                  }
-                                  title={!isOwner ? 'Only Organization Owner can change member roles' : 'Change member role'}
-                                >
-                                  <option value="OWNER">Owner</option>
-                                  <option value="ADMIN">Admin</option>
-                                  <option value="TEAM_LEAD">Team Lead</option>
-                                  <option value="DEVELOPER">Developer</option>
-                                </select>
+                                        updateRoleMutation.variables?.memberId === member.userId)
+                                    }
+                                    title="Change member role"
+                                  >
+                                    <option value="OWNER">Owner</option>
+                                    <option value="ADMIN">Admin</option>
+                                    <option value="TEAM_LEAD">Team Lead</option>
+                                    <option value="DEVELOPER">Developer</option>
+                                  </select>
+                                )}
 
                                 {canManageMembers && (
                                   <Button

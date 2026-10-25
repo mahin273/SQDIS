@@ -469,15 +469,35 @@ export class GitHubService {
    * List available repositories from GitHub using Octokit pagination
    * When onlyConnected is true, returns only connected/enabled repositories from the database
    */
-  async listRepositories(organizationId: string, onlyConnected: boolean = false): Promise<RepositoryResponse[]> {
+  async listRepositories(
+    organizationId: string,
+    onlyConnected: boolean = false,
+    caller?: { id: string; role?: string },
+  ): Promise<RepositoryResponse[]> {
     const repoInclude = {
       _count: { select: { commits: true } },
       projectRepositories: { select: { projectId: true } },
     };
 
+    let allowedRepoIds: string[] | undefined;
+    if (caller?.id && this.dataFilterService?.getScopedProjectAndRepoIds) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        caller.id,
+        organizationId,
+        caller.role as Role,
+      );
+      if (!scope.isOrgScoped) {
+        allowedRepoIds = scope.repositoryIds;
+      }
+    }
+
     if (onlyConnected) {
+      const where: any = { organizationId, isEnabled: true };
+      if (allowedRepoIds !== undefined) {
+        where.id = { in: allowedRepoIds };
+      }
       const dbRepos = await this.prisma.repository.findMany({
-        where: { organizationId, isEnabled: true },
+        where,
         orderBy: { name: 'asc' },
         include: repoInclude,
       });
@@ -499,8 +519,12 @@ export class GitHubService {
     });
 
     if (!connection) {
+      const where: any = { organizationId };
+      if (allowedRepoIds !== undefined) {
+        where.id = { in: allowedRepoIds };
+      }
       const dbRepos = await this.prisma.repository.findMany({
-        where: { organizationId },
+        where,
         orderBy: { name: 'asc' },
         include: repoInclude,
       });
@@ -526,15 +550,20 @@ export class GitHubService {
         per_page: 100,
       });
 
+      const existingRepoWhere: any = { organizationId, githubId: { in: repos.map((r) => r.id) } };
+      if (allowedRepoIds !== undefined) {
+        existingRepoWhere.id = { in: allowedRepoIds };
+      }
+
       const existingRepos = await this.prisma.repository.findMany({
-        where: { organizationId, githubId: { in: repos.map((r) => r.id) } },
+        where: existingRepoWhere,
         include: repoInclude,
       });
 
       const existingRepoMap = new Map(existingRepos.map((r) => [r.githubId, r]));
       const projectScoreMap = await this.getProjectScoreMap(existingRepos);
 
-      return repos.map((repo) => {
+      const mappedRepos = repos.map((repo) => {
         const existingRepo = existingRepoMap.get(repo.id);
         return {
           id: existingRepo?.id || '',
@@ -549,10 +578,20 @@ export class GitHubService {
             : undefined,
         };
       });
+
+      if (allowedRepoIds !== undefined) {
+        return mappedRepos.filter((r) => r.id && allowedRepoIds!.includes(r.id));
+      }
+
+      return mappedRepos;
     } catch (error: any) {
       this.logger.warn(`Failed to fetch repositories from GitHub API: ${error?.message}`);
+      const where: any = { organizationId };
+      if (allowedRepoIds !== undefined) {
+        where.id = { in: allowedRepoIds };
+      }
       const dbRepos = await this.prisma.repository.findMany({
-        where: { organizationId },
+        where,
         orderBy: { name: 'asc' },
         include: repoInclude,
       });

@@ -36,13 +36,16 @@ export const useOrganizationStore = create<OrganizationState>()(
       },
 
       setOrganizations: (orgs: Organization[]) => {
-        set({ organizations: orgs })
-        // If no current org is set, set the first one
-        if (!get().currentOrganization && orgs.length > 0) {
-          set({ currentOrganization: orgs[0] })
-          // Sync with API service
-          setCurrentOrganizationId(orgs[0].id)
+        const current = get().currentOrganization
+        let updatedCurrent: Organization | null = null
+        if (current) {
+          updatedCurrent = orgs.find((o: Organization) => o.id === current.id) || null
         }
+        if (!updatedCurrent && orgs.length > 0) {
+          updatedCurrent = orgs[0]
+        }
+        set({ organizations: orgs, currentOrganization: updatedCurrent })
+        setCurrentOrganizationId(updatedCurrent?.id || null)
       },
 
       fetchOrganizations: async () => {

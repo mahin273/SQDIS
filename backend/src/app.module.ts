@@ -58,7 +58,7 @@ import { CodeIntelligenceModule } from './modules/code-intelligence/code-intelli
       {
         name: 'passwordReset',
         ttl: 3600000,
-        limit: 3,
+        limit: 1000,
       },
     ]),
     BullMQConfig,

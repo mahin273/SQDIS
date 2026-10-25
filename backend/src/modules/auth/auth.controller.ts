@@ -37,6 +37,7 @@ import { Public } from './decorators/public.decorator';
 
 @ApiTags('auth')
 @Controller('auth')
+@SkipThrottle({ passwordReset: true })
 export class AuthController {
   constructor(
     private readonly authService: AuthService,
@@ -119,6 +120,7 @@ export class AuthController {
   @Public()
   @Post('forgot-password')
   @HttpCode(HttpStatus.OK)
+  @SkipThrottle({ passwordReset: false })
   @UseGuards(EmailThrottlerGuard)
   @Throttle({ passwordReset: { ttl: 3600000, limit: 3 } }) // 3 requests per hour per identifier
   @ApiOperation({ summary: 'Request a password reset email using email or username' })
