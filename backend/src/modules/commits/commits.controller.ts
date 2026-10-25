@@ -270,6 +270,10 @@ export class CommitsController {
     userId: string,
     allowedRoles?: Role[],
   ): Promise<void> {
+    if (this.dataFilterService) {
+      await this.dataFilterService.verifyOrganizationAccess(organizationId, userId, allowedRoles);
+      return;
+    }
     const membership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {

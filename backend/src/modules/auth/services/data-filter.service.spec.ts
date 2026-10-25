@@ -12,12 +12,17 @@ describe('DataFilterService', () => {
     teamProjectAssignment: Record<string, jest.Mock>;
     projectRepository: Record<string, jest.Mock>;
     repository: Record<string, jest.Mock>;
+    user: Record<string, jest.Mock>;
   };
 
   beforeEach(async () => {
     prisma = {
+      user: {
+        findFirst: jest.fn(),
+      },
       teamMembership: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
       },
       team: {
         findMany: jest.fn(),
@@ -222,6 +227,97 @@ describe('DataFilterService', () => {
       await expect(
         service.verifyTeamAccess('team-1', 'org-1', { id: 'user-1' }),
       ).rejects.toThrow('Access denied: You are not an active member or leader of this team.');
+    });
+  });
+
+  describe('verifyOrganizationAccess', () => {
+    it('allows access when user is an active organization member', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+
+      await expect(
+        service.verifyOrganizationAccess('org-1', 'user-1'),
+      ).resolves.toEqual({ organizationId: 'org-1', role: Role.DEVELOPER });
+    });
+
+    it('allows access when user possesses one of the allowed roles', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.ADMIN });
+
+      await expect(
+        service.verifyOrganizationAccess('org-1', 'user-1', [Role.ADMIN, Role.OWNER]),
+      ).resolves.toEqual({ organizationId: 'org-1', role: Role.ADMIN });
+    });
+
+    it('throws forbidden when user is not a member of the organization', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.verifyOrganizationAccess('org-1', 'user-1'),
+      ).rejects.toThrow('Access denied: You are not an active member of this organization.');
+    });
+
+    it('throws forbidden when user role does not match allowed roles', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+
+      await expect(
+        service.verifyOrganizationAccess('org-1', 'user-1', [Role.ADMIN, Role.OWNER]),
+      ).rejects.toThrow('Access denied: Caller lacks required role in organization.');
+    });
+  });
+
+  describe('verifyDeveloperAccess', () => {
+    it('allows owner access to any developer in organization', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'dev-1' });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.OWNER });
+
+      await expect(
+        service.verifyDeveloperAccess('dev-1', 'org-1', { id: 'caller-1' }),
+      ).resolves.toEqual({ developerId: 'dev-1', organizationId: 'org-1' });
+    });
+
+    it('allows developer to access their own developer data', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'dev-1' });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+
+      await expect(
+        service.verifyDeveloperAccess('dev-1', 'org-1', { id: 'dev-1' }),
+      ).resolves.toEqual({ developerId: 'dev-1', organizationId: 'org-1' });
+    });
+
+    it('throws forbidden when developer attempts to access another developer data', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'dev-2' });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+
+      await expect(
+        service.verifyDeveloperAccess('dev-2', 'org-1', { id: 'dev-1' }),
+      ).rejects.toThrow('Developers can only access their own developer data.');
+    });
+
+    it('allows team lead to access developer data for members of assigned teams', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'dev-2' });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.TEAM_LEAD });
+      prisma.teamMembership.findFirst.mockResolvedValue({ id: 'tm-1' });
+
+      await expect(
+        service.verifyDeveloperAccess('dev-2', 'org-1', { id: 'lead-1' }),
+      ).resolves.toEqual({ developerId: 'dev-2', organizationId: 'org-1' });
+    });
+
+    it('throws forbidden when team lead attempts to access developer outside assigned teams', async () => {
+      prisma.user.findFirst.mockResolvedValue({ id: 'dev-3' });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.TEAM_LEAD });
+      prisma.teamMembership.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.verifyDeveloperAccess('dev-3', 'org-1', { id: 'lead-1' }),
+      ).rejects.toThrow('Team Leads can only access developer data for members of their assigned teams.');
+    });
+
+    it('throws not found when developer does not exist in organization', async () => {
+      prisma.user.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.verifyDeveloperAccess('unknown-dev', 'org-1', { id: 'caller-1' }),
+      ).rejects.toThrow('Developer with ID unknown-dev not found in organization');
     });
   });
 });

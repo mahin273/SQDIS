@@ -9,6 +9,7 @@ import { PrismaModule } from '../../prisma';
 import { ScoreQueueModule } from '../../config';
 import { GitHubModule } from '../github/github.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { AuthModule } from '../auth/auth.module';
 
 /**
  * Scores module for DQS and SQS score management
@@ -20,6 +21,7 @@ import { OrganizationsModule } from '../organizations/organizations.module';
     ScoreQueueModule,
     GitHubModule,
     forwardRef(() => OrganizationsModule),
+    forwardRef(() => AuthModule),
   ],
   controllers: [ScoresController],
   providers: [ScoresService, ScoresMlClientService, ScoresCacheService, ScoreProcessor],

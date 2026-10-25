@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import { Socket } from 'socket.io';
+import { ForbiddenException } from '@nestjs/common';
 import { WebSocketGateway } from './websocket.gateway';
 import { ChannelManager } from './channel-manager.service';
+import { DataFilterService } from '../auth/services/data-filter.service';
 
 describe('WebSocketGateway', () => {
   let gateway: WebSocketGateway;
@@ -12,6 +14,11 @@ describe('WebSocketGateway', () => {
     unsubscribe: jest.Mock;
     unsubscribeAll: jest.Mock;
     getChannelSubscribers: jest.Mock;
+  };
+  let dataFilterService: {
+    verifyOrganizationAccess: jest.Mock;
+    verifyTeamAccess: jest.Mock;
+    verifyDeveloperAccess: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -25,12 +32,18 @@ describe('WebSocketGateway', () => {
       unsubscribeAll: jest.fn(),
       getChannelSubscribers: jest.fn(),
     };
+    dataFilterService = {
+      verifyOrganizationAccess: jest.fn(),
+      verifyTeamAccess: jest.fn(),
+      verifyDeveloperAccess: jest.fn(),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         WebSocketGateway,
         { provide: JwtService, useValue: jwtService },
         { provide: ChannelManager, useValue: channelManager },
+        { provide: DataFilterService, useValue: dataFilterService },
       ],
     }).compile();
 
@@ -140,7 +153,7 @@ describe('WebSocketGateway', () => {
   });
 
   describe('handleSubscribeDashboard', () => {
-    it('subscribes authenticated client to organization dashboard room', () => {
+    it('subscribes authenticated client to organization dashboard room', async () => {
       const mockClient = {
         id: 'socket-1',
         emit: jest.fn(),
@@ -154,10 +167,15 @@ describe('WebSocketGateway', () => {
         subscribedChannels: new Set(),
       });
 
+      dataFilterService.verifyOrganizationAccess.mockResolvedValue({
+        organizationId: 'org-1',
+        role: 'DEVELOPER',
+      });
       channelManager.subscribe.mockReturnValue('dashboard:org-1');
 
-      gateway.handleSubscribeDashboard(mockClient, { orgId: 'org-1' });
+      await gateway.handleSubscribeDashboard(mockClient, { orgId: 'org-1' });
 
+      expect(dataFilterService.verifyOrganizationAccess).toHaveBeenCalledWith('org-1', 'user-1');
       expect(channelManager.subscribe).toHaveBeenCalledWith(
         'socket-1',
         'user-1',
@@ -168,7 +186,7 @@ describe('WebSocketGateway', () => {
       expect(mockClient.emit).toHaveBeenCalledWith('subscribed', { channel: 'dashboard:org-1' });
     });
 
-    it('rejects subscription if client attempts to access unauthorized organization', () => {
+    it('rejects subscription if client attempts to access unauthorized organization', async () => {
       const mockClient = {
         id: 'socket-2',
         emit: jest.fn(),
@@ -182,10 +200,143 @@ describe('WebSocketGateway', () => {
         subscribedChannels: new Set(),
       });
 
-      gateway.handleSubscribeDashboard(mockClient, { orgId: 'other-org' });
+      dataFilterService.verifyOrganizationAccess.mockRejectedValue(
+        new ForbiddenException('Access denied: You are not an active member of this organization.'),
+      );
+
+      await gateway.handleSubscribeDashboard(mockClient, { orgId: 'other-org' });
 
       expect(mockClient.emit).toHaveBeenCalledWith('error', {
-        message: 'Access denied to this organization',
+        message: 'Access denied: You are not an active member of this organization.',
+        code: 'ACCESS_DENIED',
+      });
+      expect(mockClient.join).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleSubscribeTeam', () => {
+    it('subscribes client when team access is verified', async () => {
+      const mockClient = {
+        id: 'socket-1',
+        emit: jest.fn(),
+        join: jest.fn(),
+      } as unknown as Socket;
+
+      (gateway as any).connectedClients.set('socket-1', {
+        id: 'socket-1',
+        userId: 'user-1',
+        organizationId: 'org-1',
+        role: 'DEVELOPER',
+        subscribedChannels: new Set(),
+      });
+
+      dataFilterService.verifyTeamAccess.mockResolvedValue({
+        teamId: 'team-1',
+        organizationId: 'org-1',
+      });
+      channelManager.subscribe.mockReturnValue('team:team-1');
+
+      await gateway.handleSubscribeTeam(mockClient, { teamId: 'team-1' });
+
+      expect(dataFilterService.verifyTeamAccess).toHaveBeenCalledWith('team-1', 'org-1', {
+        id: 'user-1',
+        role: 'DEVELOPER',
+      });
+      expect(channelManager.subscribe).toHaveBeenCalledWith('socket-1', 'user-1', 'team', 'team-1');
+      expect(mockClient.join).toHaveBeenCalledWith('team:team-1');
+      expect(mockClient.emit).toHaveBeenCalledWith('subscribed', { channel: 'team:team-1' });
+    });
+
+    it('rejects subscription when team access is forbidden', async () => {
+      const mockClient = {
+        id: 'socket-1',
+        emit: jest.fn(),
+        join: jest.fn(),
+      } as unknown as Socket;
+
+      (gateway as any).connectedClients.set('socket-1', {
+        id: 'socket-1',
+        userId: 'user-1',
+        organizationId: 'org-1',
+        role: 'DEVELOPER',
+        subscribedChannels: new Set(),
+      });
+
+      dataFilterService.verifyTeamAccess.mockRejectedValue(
+        new ForbiddenException('Access denied: You are not an active member or leader of this team.'),
+      );
+
+      await gateway.handleSubscribeTeam(mockClient, { teamId: 'unassigned-team' });
+
+      expect(mockClient.emit).toHaveBeenCalledWith('error', {
+        message: 'Access denied: You are not an active member or leader of this team.',
+        code: 'ACCESS_DENIED',
+      });
+      expect(mockClient.join).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('handleSubscribeDeveloper', () => {
+    it('subscribes client when developer access is verified', async () => {
+      const mockClient = {
+        id: 'socket-1',
+        emit: jest.fn(),
+        join: jest.fn(),
+      } as unknown as Socket;
+
+      (gateway as any).connectedClients.set('socket-1', {
+        id: 'socket-1',
+        userId: 'user-1',
+        organizationId: 'org-1',
+        role: 'DEVELOPER',
+        subscribedChannels: new Set(),
+      });
+
+      dataFilterService.verifyDeveloperAccess.mockResolvedValue({
+        developerId: 'user-1',
+        organizationId: 'org-1',
+      });
+      channelManager.subscribe.mockReturnValue('developer:user-1');
+
+      await gateway.handleSubscribeDeveloper(mockClient, { developerId: 'user-1' });
+
+      expect(dataFilterService.verifyDeveloperAccess).toHaveBeenCalledWith('user-1', 'org-1', {
+        id: 'user-1',
+        role: 'DEVELOPER',
+      });
+      expect(channelManager.subscribe).toHaveBeenCalledWith(
+        'socket-1',
+        'user-1',
+        'developer',
+        'user-1',
+      );
+      expect(mockClient.join).toHaveBeenCalledWith('developer:user-1');
+      expect(mockClient.emit).toHaveBeenCalledWith('subscribed', { channel: 'developer:user-1' });
+    });
+
+    it('rejects subscription when developer access is forbidden', async () => {
+      const mockClient = {
+        id: 'socket-1',
+        emit: jest.fn(),
+        join: jest.fn(),
+      } as unknown as Socket;
+
+      (gateway as any).connectedClients.set('socket-1', {
+        id: 'socket-1',
+        userId: 'user-1',
+        organizationId: 'org-1',
+        role: 'DEVELOPER',
+        subscribedChannels: new Set(),
+      });
+
+      dataFilterService.verifyDeveloperAccess.mockRejectedValue(
+        new ForbiddenException('Developers can only access their own developer data.'),
+      );
+
+      await gateway.handleSubscribeDeveloper(mockClient, { developerId: 'other-user' });
+
+      expect(mockClient.emit).toHaveBeenCalledWith('error', {
+        message: 'Developers can only access their own developer data.',
         code: 'ACCESS_DENIED',
       });
       expect(mockClient.join).not.toHaveBeenCalled();

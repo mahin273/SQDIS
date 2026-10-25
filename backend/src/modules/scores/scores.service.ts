@@ -605,33 +605,83 @@ export class ScoresService {
     }
     let targetProjectId = projectId;
     if (projectId === 'default') {
-      const defaultRepo = await this.prisma.repository.findFirst({
-        where: { organizationId },
-        orderBy: { createdAt: 'asc' },
-      });
-      if (defaultRepo) {
-        targetProjectId = defaultRepo.id;
-      } else {
-        const defaultProj = await this.prisma.project.findFirst({
-          where: { organizationId },
-          orderBy: { createdAt: 'asc' },
+      let effectiveRole = caller?.role as Role | undefined;
+      if (caller?.id) {
+        const membership = await this.prisma.organizationMember.findUnique({
+          where: {
+            organizationId_userId: {
+              organizationId,
+              userId: caller.id,
+            },
+          },
         });
-        if (defaultProj) {
-          targetProjectId = defaultProj.id;
-        } else {
+        if (!membership) {
+          throw new ForbiddenException('You do not have access to this organization');
+        }
+        if (membership.role) {
+          effectiveRole = membership.role as Role;
+        }
+      }
+
+      if (caller && effectiveRole !== Role.OWNER && effectiveRole !== Role.ADMIN) {
+        const assignedAssignment = await this.prisma.teamProjectAssignment.findFirst({
+          where: {
+            endDate: null,
+            team: {
+              organizationId,
+              isActive: true,
+              memberships: {
+                some: {
+                  userId: caller.id,
+                  leftAt: null,
+                },
+              },
+            },
+          },
+          orderBy: { startDate: 'asc' },
+        });
+
+        if (!assignedAssignment || !assignedAssignment.projectId) {
           return {
             projectId: 'default',
             riskyModules: [],
             totalRiskyModules: 0,
             highCriticalCount: 0,
             calculatedAt: new Date(),
-            message: 'No project or repository found for organization',
+            message: 'No assigned project found for user in organization',
           };
+        }
+
+        targetProjectId = assignedAssignment.projectId;
+      } else {
+        const defaultProj = await this.prisma.project.findFirst({
+          where: { organizationId, isActive: true },
+          orderBy: { createdAt: 'asc' },
+        });
+        if (defaultProj) {
+          targetProjectId = defaultProj.id;
+        } else {
+          const defaultRepo = await this.prisma.repository.findFirst({
+            where: { organizationId },
+            orderBy: { createdAt: 'asc' },
+          });
+          if (defaultRepo) {
+            targetProjectId = defaultRepo.id;
+          } else {
+            return {
+              projectId: 'default',
+              riskyModules: [],
+              totalRiskyModules: 0,
+              highCriticalCount: 0,
+              calculatedAt: new Date(),
+              message: 'No project or repository found for organization',
+            };
+          }
         }
       }
     }
 
-    // Verify project exists and belongs to organization FIRST before checking cache (check repository first, then project)
+    // Verify whether target is a repository or a project (including all its repositories)
     let repository = await this.prisma.repository.findFirst({
       where: {
         id: targetProjectId,
@@ -639,23 +689,38 @@ export class ScoresService {
       },
     });
 
-    if (!repository) {
-      const project = await this.prisma.project.findFirst({
-        where: { id: targetProjectId, organizationId },
-        include: { repositories: true },
-      });
-      if (project && project.repositories && project.repositories.length > 0) {
-        targetProjectId = project.repositories[0].repositoryId;
-        repository = await this.prisma.repository.findFirst({
+    let project = !repository
+      ? await this.prisma.project.findFirst({
           where: { id: targetProjectId, organizationId },
-        });
-      } else if (!project && projectId !== 'default') {
-        throw new NotFoundException(`Project with ID ${projectId} not found in organization`);
+          include: {
+            repositories: {
+              select: { repositoryId: true },
+            },
+          },
+        })
+      : null;
+
+    if (!repository && !project) {
+      if (projectId !== 'default') {
+        throw new NotFoundException(`Project or Repository with ID ${projectId} not found in organization`);
       }
+      return {
+        projectId: 'default',
+        riskyModules: [],
+        totalRiskyModules: 0,
+        highCriticalCount: 0,
+        calculatedAt: new Date(),
+        message: 'No project or repository found for organization',
+      };
     }
 
+    const responseProjectId = project ? project.id : repository!.id;
+    const targetIds = project
+      ? [project.id, ...project.repositories.map((r) => r.repositoryId)]
+      : [repository!.id];
+
     // Try to get from cache with tenant-scoped key
-    const cacheKey = CACHE_KEYS.SQS_RISKS(targetProjectId, organizationId);
+    const cacheKey = CACHE_KEYS.SQS_RISKS(responseProjectId, organizationId);
     const cached = await this.cacheService.get<{
       projectId: string;
       riskyModules: Array<{ path: string; risk_level: string; reason: string }>;
@@ -665,19 +730,25 @@ export class ScoresService {
     }>(cacheKey);
 
     if (cached) {
-      this.logger.debug(`Cache hit for SQS risks: ${targetProjectId} in org ${organizationId}`);
+      this.logger.debug(`Cache hit for SQS risks: ${responseProjectId} in org ${organizationId}`);
       return cached;
     }
 
-    // Get latest SQS score with risky modules
-    const latestScore = await this.prisma.sQSScore.findFirst({
-      where: { projectId: targetProjectId },
-      orderBy: { calculatedAt: 'desc' },
-    });
+    // Get latest SQS score across the project and all its assigned repositories
+    const scores = await Promise.all(
+      targetIds.map((id) =>
+        this.prisma.sQSScore.findFirst({
+          where: { projectId: id },
+          orderBy: { calculatedAt: 'desc' },
+        }),
+      ),
+    );
 
-    if (!latestScore) {
+    const validScores = scores.filter((s): s is NonNullable<typeof s> => s !== null);
+
+    if (validScores.length === 0) {
       return {
-        projectId: targetProjectId,
+        projectId: responseProjectId,
         riskyModules: [],
         totalRiskyModules: 0,
         highCriticalCount: 0,
@@ -686,19 +757,38 @@ export class ScoresService {
       };
     }
 
-    const riskyModules =
-      (latestScore.riskyModules as Array<{
-        path?: string;
-        modulePath?: string;
-        risk_level?: string;
-        riskScore?: number;
-        riskFactors?: string[];
-        reason?: string;
-        recommendation?: string;
-      }>) || [];
+    const modulesMap = new Map<string, any>();
+    let latestCalculatedAt = new Date(0);
+
+    for (const score of validScores) {
+      if (score.calculatedAt > latestCalculatedAt) {
+        latestCalculatedAt = score.calculatedAt;
+      }
+      const riskyModules =
+        (score.riskyModules as Array<{
+          path?: string;
+          modulePath?: string;
+          risk_level?: string;
+          riskScore?: number;
+          riskFactors?: string[];
+          reason?: string;
+          recommendation?: string;
+        }>) || [];
+
+      for (const m of riskyModules) {
+        const key = m.path || m.modulePath || '';
+        if (!key) continue;
+        const existing = modulesMap.get(key);
+        if (!existing || (m.riskScore ?? 0) > (existing.riskScore ?? 0)) {
+          modulesMap.set(key, m);
+        }
+      }
+    }
+
+    const allRiskyModules = Array.from(modulesMap.values());
 
     // Filter to prioritized risky modules (CRITICAL, HIGH, and MEDIUM)
-    const prioritizedModules = riskyModules
+    const prioritizedModules = allRiskyModules
       .filter(
         (m) =>
           m.risk_level === 'CRITICAL' ||
@@ -732,11 +822,11 @@ export class ScoresService {
     ).length;
 
     const result = {
-      projectId: targetProjectId,
+      projectId: responseProjectId,
       riskyModules: prioritizedModules,
-      totalRiskyModules: riskyModules.length,
+      totalRiskyModules: allRiskyModules.length,
       highCriticalCount,
-      calculatedAt: latestScore.calculatedAt,
+      calculatedAt: latestCalculatedAt.getTime() > 0 ? latestCalculatedAt : new Date(),
     };
 
     // Cache the result
