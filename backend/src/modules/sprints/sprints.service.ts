@@ -1473,8 +1473,8 @@ export class SprintsService {
       if (!goal) {
         throw new NotFoundException(`Sprint goal ${goalId} not found in this organization`);
       }
-      if (caller && this.dataFilterService && goal.sprint?.teamId) {
-        await this.dataFilterService.verifyTeamAccess(goal.sprint.teamId, organizationId, caller);
+      if (caller && this.dataFilterService && (goal as any).sprint?.teamId) {
+        await this.dataFilterService.verifyTeamAccess((goal as any).sprint.teamId, organizationId, caller);
       }
     }
     return this.prisma.sprintGoal.delete({ where: { id: goalId } });
@@ -1618,8 +1618,8 @@ export class SprintsService {
       if (!carryOver) {
         throw new NotFoundException(`Sprint carry-over ${carryOverId} not found in this organization`);
       }
-      if (caller && this.dataFilterService && carryOver.fromSprint?.teamId) {
-        await this.dataFilterService.verifyTeamAccess(carryOver.fromSprint.teamId, organizationId, caller);
+      if (caller && this.dataFilterService && (carryOver as any).fromSprint?.teamId) {
+        await this.dataFilterService.verifyTeamAccess((carryOver as any).fromSprint.teamId, organizationId, caller);
       }
     }
     return this.prisma.sprintCarryOver.delete({ where: { id: carryOverId } });
