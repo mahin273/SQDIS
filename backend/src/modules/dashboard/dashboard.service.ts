@@ -34,6 +34,18 @@ export class DashboardService {
   }
 
   /**
+   * Helper to resolve commit IDs belonging to scoped repositories for alert filtering
+   */
+  private async getScopedCommitIds(repositoryIds: string[]): Promise<string[]> {
+    if (repositoryIds.length === 0) return [];
+    const commits = await this.prisma.commit.findMany({
+      where: { repositoryId: { in: repositoryIds } },
+      select: { id: true },
+    });
+    return commits.map((c) => c.id);
+  }
+
+  /**
    * Get organization-wide dashboard statistics
    */
   async getOrganizationStats(organizationId: string, caller?: { id: string; role?: string }) {
@@ -220,7 +232,8 @@ export class DashboardService {
       severity: { in: ['HIGH', 'CRITICAL'] },
     };
     if (!scope.isOrgScoped) {
-      alertWhere.repositoryId = { in: scope.repositoryIds };
+      const commitIds = await this.getScopedCommitIds(scope.repositoryIds);
+      alertWhere.commitId = { in: commitIds };
     }
 
     const riskyModulesCount = await this.prisma.alert.count({
@@ -665,7 +678,8 @@ export class DashboardService {
 
     if (!scope.isOrgScoped) {
       commitWhere.repositoryId = { in: scope.repositoryIds };
-      alertWhere.repositoryId = { in: scope.repositoryIds };
+      const commitIds = await this.getScopedCommitIds(scope.repositoryIds);
+      alertWhere.commitId = { in: commitIds };
       debtWhere.repositoryId = { in: scope.repositoryIds };
       releaseWhere.repositoryId = { in: scope.repositoryIds };
     }
@@ -880,7 +894,8 @@ export class DashboardService {
     const repoWhere: any = { organizationId, isEnabled: true };
 
     if (!scope.isOrgScoped) {
-      alertWhere.repositoryId = { in: scope.repositoryIds };
+      const commitIds = await this.getScopedCommitIds(scope.repositoryIds);
+      alertWhere.commitId = { in: commitIds };
       projectWhere.id = { in: scope.projectIds };
       repoWhere.id = { in: scope.repositoryIds };
     }
