@@ -1460,13 +1460,16 @@ export class SprintsService {
    */
   async deleteGoal(goalId: string, organizationId?: string, caller?: any) {
     if (organizationId) {
-      const goal = await this.prisma.sprintGoal.findFirst({
+      const queryOptions: any = {
         where: {
           id: goalId,
           sprint: { organizationId },
         },
-        include: { sprint: true },
-      });
+      };
+      if (caller && this.dataFilterService) {
+        queryOptions.include = { sprint: true };
+      }
+      const goal = await this.prisma.sprintGoal.findFirst(queryOptions);
       if (!goal) {
         throw new NotFoundException(`Sprint goal ${goalId} not found in this organization`);
       }
@@ -1602,13 +1605,16 @@ export class SprintsService {
    */
   async deleteCarryOver(carryOverId: string, organizationId?: string, caller?: any) {
     if (organizationId) {
-      const carryOver = await this.prisma.sprintCarryOver.findFirst({
+      const queryOptions: any = {
         where: {
           id: carryOverId,
           fromSprint: { organizationId },
         },
-        include: { fromSprint: true },
-      });
+      };
+      if (caller && this.dataFilterService) {
+        queryOptions.include = { fromSprint: true };
+      }
+      const carryOver = await this.prisma.sprintCarryOver.findFirst(queryOptions);
       if (!carryOver) {
         throw new NotFoundException(`Sprint carry-over ${carryOverId} not found in this organization`);
       }

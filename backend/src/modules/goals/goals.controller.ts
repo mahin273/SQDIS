@@ -55,15 +55,16 @@ export class GoalsController {
     );
   }
 
-  private async verifyGoalItemAccess(goalId: string, orgId: string, user: any) {
-    if (!this.dataFilterService) return;
+  private async verifyGoalItemAccess(goalId: string, orgId: string, user?: any) {
     const goal = await this.goalsService.findById(goalId, orgId);
-    if ((goal as any).teamId) {
+    if (!this.dataFilterService || !user) return goal;
+    if ((goal as any)?.teamId) {
       await this.dataFilterService.verifyTeamAccess((goal as any).teamId, orgId, user);
     }
-    if ((goal as any).projectId) {
+    if ((goal as any)?.projectId) {
       await this.dataFilterService.verifyProjectAccess((goal as any).projectId, orgId, user);
     }
+    return goal;
   }
 
   // ==================== GOAL ENDPOINTS ====================
@@ -341,8 +342,7 @@ export class GoalsController {
   @ApiResponse({ status: 200, description: 'Goal details retrieved.' })
   async findById(@Request() req: any, @Param('id') id: string) {
     const orgId = this.getOrgId(req);
-    await this.verifyGoalItemAccess(id, orgId, req.user);
-    return this.goalsService.findById(id, orgId);
+    return this.verifyGoalItemAccess(id, orgId, req.user);
   }
 
   /**
