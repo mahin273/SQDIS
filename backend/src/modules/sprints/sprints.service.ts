@@ -104,6 +104,7 @@ export class SprintsService {
           select: {
             id: true,
             name: true,
+            leadId: true,
           },
         },
       },
@@ -135,6 +136,7 @@ export class SprintsService {
           select: {
             id: true,
             name: true,
+            leadId: true,
           },
         },
         reports: {
@@ -157,6 +159,7 @@ export class SprintsService {
           select: {
             id: true,
             name: true,
+            leadId: true,
             memberships: {
               where: { leftAt: null },
               include: {
@@ -270,6 +273,7 @@ export class SprintsService {
           select: {
             id: true,
             name: true,
+            leadId: true,
           },
         },
       },
@@ -1307,7 +1311,7 @@ export class SprintsService {
     const sprints = await this.prisma.sprint.findMany({
       where,
       include: {
-        team: { select: { id: true, name: true } },
+        team: { select: { id: true, name: true, leadId: true } },
         reports: { orderBy: { generatedAt: 'desc' }, take: 1 },
       },
       orderBy: { startDate: 'asc' },
