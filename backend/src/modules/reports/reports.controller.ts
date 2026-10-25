@@ -10,6 +10,7 @@ import {
   Res,
   StreamableFile,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -19,6 +20,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { ReportsService } from './reports.service';
 import { LeaderboardService } from './services/leaderboard.service';
 import {
@@ -48,6 +50,7 @@ export class ReportsController {
     private readonly fileStorageService: FileStorageService,
     private readonly leaderboardService: LeaderboardService,
     private readonly prisma: PrismaService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
   ) {}
 
   /**
@@ -81,6 +84,12 @@ export class ReportsController {
     if (!orgId) {
       throw new BadRequestException('Organization context required');
     }
+    if (dto.repositoryId && this.dataFilterService) {
+      await this.dataFilterService.verifyRepositoryAccess(dto.repositoryId, orgId, user);
+    }
+    if (dto.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(dto.teamId, orgId, user);
+    }
     const reportDto: CreateReportDto = {
       ...dto,
       scope: dto.scope || ReportScope.ORGANIZATION,
@@ -103,6 +112,12 @@ export class ReportsController {
     const orgId = await this.resolveOrgId(user, organizationId);
     if (!orgId) {
       throw new BadRequestException('Organization context required');
+    }
+    if (dto.repositoryId && this.dataFilterService) {
+      await this.dataFilterService.verifyRepositoryAccess(dto.repositoryId, orgId, user);
+    }
+    if (dto.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(dto.teamId, orgId, user);
     }
     const reportDto: CreateReportDto = {
       ...dto,
@@ -128,6 +143,12 @@ export class ReportsController {
     if (!orgId) {
       throw new BadRequestException('Organization context required');
     }
+    if (dto.repositoryId && this.dataFilterService) {
+      await this.dataFilterService.verifyRepositoryAccess(dto.repositoryId, orgId, user);
+    }
+    if (dto.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(dto.teamId, orgId, user);
+    }
     const reportDto: CreateReportDto = {
       ...dto,
       scope: dto.scope || ReportScope.ORGANIZATION,
@@ -151,6 +172,15 @@ export class ReportsController {
     const orgId = await this.resolveOrgId(user, organizationId);
     if (!orgId) {
       return { reports: [], total: 0, page: 1, limit: 20, totalPages: 0 };
+    }
+    if (filters.repositoryId && this.dataFilterService) {
+      await this.dataFilterService.verifyRepositoryAccess(filters.repositoryId, orgId, user);
+    }
+    if (filters.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(filters.teamId, orgId, user);
+    }
+    if (filters.projectId && this.dataFilterService) {
+      await this.dataFilterService.verifyProjectAccess(filters.projectId, orgId, user);
     }
     return this.reportsService.findAll(orgId, filters);
   }
@@ -252,7 +282,10 @@ export class ReportsController {
 @Controller('leaderboard')
 @UseGuards(JwtAuthGuard, OrganizationGuard)
 export class LeaderboardController {
-  constructor(private readonly leaderboardService: LeaderboardService) {}
+  constructor(
+    private readonly leaderboardService: LeaderboardService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
+  ) {}
 
   /**
    * Get developer leaderboard
@@ -266,7 +299,10 @@ export class LeaderboardController {
     @GetUser() user: any,
   ) {
     const orgId = organizationId || user.organizationId;
-    return this.leaderboardService.getLeaderboard(orgId, query);
+    if (query.teamId && this.dataFilterService && orgId) {
+      await this.dataFilterService.verifyTeamAccess(query.teamId, orgId, user);
+    }
+    return this.leaderboardService.getLeaderboard(orgId, query, user);
   }
 
   /**

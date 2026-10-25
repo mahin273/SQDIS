@@ -8,6 +8,7 @@ import {
   UseGuards,
   ParseIntPipe,
   DefaultValuePipe,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard, OrganizationGuard } from '../auth/guards/index.js';
@@ -45,6 +46,14 @@ export class CodeIntelligenceController {
   ): Promise<RemediationResponseDto> {
     if (dto.repositoryId) {
       await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    } else if (user) {
+      const scoped = await this.codeIntelligenceService.getScopedProjectAndRepoIds(user.id, organizationId, user.role);
+      if (!scoped.isOrgScoped) {
+        if (scoped.repositoryIds.length === 0) {
+          throw new ForbiddenException('No assigned repositories available for this operation');
+        }
+        dto.repositoryId = scoped.repositoryIds[0];
+      }
     }
     return this.codeRemediationService.generateAdvice(dto);
   }
@@ -58,6 +67,14 @@ export class CodeIntelligenceController {
   ) {
     if (dto.repositoryId) {
       await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    } else if (user) {
+      const scoped = await this.codeIntelligenceService.getScopedProjectAndRepoIds(user.id, organizationId, user.role);
+      if (!scoped.isOrgScoped) {
+        if (scoped.repositoryIds.length === 0) {
+          throw new ForbiddenException('No assigned repositories available for this operation');
+        }
+        dto.repositoryId = scoped.repositoryIds[0];
+      }
     }
     return this.codeIntelligenceService.predictAstDefect(dto, organizationId, dto.repositoryId);
   }
@@ -71,6 +88,14 @@ export class CodeIntelligenceController {
   ) {
     if (dto.repositoryId) {
       await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    } else if (user) {
+      const scoped = await this.codeIntelligenceService.getScopedProjectAndRepoIds(user.id, organizationId, user.role);
+      if (!scoped.isOrgScoped) {
+        if (scoped.repositoryIds.length === 0) {
+          throw new ForbiddenException('No assigned repositories available for this operation');
+        }
+        dto.repositoryId = scoped.repositoryIds[0];
+      }
     }
     return this.codeIntelligenceService.predictCommitRisk(dto, organizationId, dto.repositoryId);
   }
@@ -84,6 +109,14 @@ export class CodeIntelligenceController {
   ) {
     if (dto.repositoryId) {
       await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
+    } else if (user) {
+      const scoped = await this.codeIntelligenceService.getScopedProjectAndRepoIds(user.id, organizationId, user.role);
+      if (!scoped.isOrgScoped) {
+        if (scoped.repositoryIds.length === 0) {
+          throw new ForbiddenException('No assigned repositories available for this operation');
+        }
+        dto.repositoryId = scoped.repositoryIds[0];
+      }
     }
     return this.codeIntelligenceService.analyzeTestImpact(dto);
   }
@@ -95,6 +128,9 @@ export class CodeIntelligenceController {
     @GetOrganization() organizationId: string,
     @GetUser() user: any,
   ) {
+    if (user?.role === 'DEVELOPER') {
+      throw new ForbiddenException('Developers cannot trigger deployment canary analysis');
+    }
     if (dto.repositoryId) {
       await this.codeIntelligenceService.verifyRepositoryAccess(dto.repositoryId, organizationId, user);
     }

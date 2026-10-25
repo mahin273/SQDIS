@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Role } from '@prisma/client';
 import { PrismaService } from '../../../prisma';
 import { CacheService, CACHE_TTL, CACHE_PREFIX } from '../../cache';
 import {
@@ -63,6 +64,7 @@ export class LeaderboardService {
   async getLeaderboard(
     organizationId: string | undefined,
     query: LeaderboardQueryDto,
+    caller?: any,
   ): Promise<LeaderboardResponseDto> {
     const page = query.page ?? 1;
     const limit = query.limit ?? 20;
@@ -80,8 +82,30 @@ export class LeaderboardService {
       };
     }
 
+    let effectiveRole = caller?.role as Role | undefined;
+    if (caller?.id && organizationId && this.prisma.organizationMember) {
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: caller.id,
+          },
+        },
+      });
+      if (membership?.role) {
+        effectiveRole = membership.role;
+      }
+    }
+
+    let callerScope: string | undefined;
+    if (effectiveRole === Role.DEVELOPER) {
+      callerScope = `dev_${caller.id}`;
+    } else if (effectiveRole === Role.TEAM_LEAD) {
+      callerScope = `lead_${caller.id}`;
+    }
+
     const { teamId, sortBy, sortOrder } = query;
-    const cacheKey = this.buildCacheKey(organizationId, query);
+    const cacheKey = this.buildCacheKey(organizationId, query, callerScope);
 
     const cached = await this.cacheService.get<LeaderboardResponseDto>(cacheKey);
     if (cached) {
@@ -95,6 +119,8 @@ export class LeaderboardService {
       organizationId,
       teamId,
       period,
+      caller,
+      effectiveRole,
     );
     const sortedDevelopers = this.sortDevelopers(developers, sortBy, sortOrder);
 
@@ -127,6 +153,8 @@ export class LeaderboardService {
     organizationId: string,
     teamId?: string,
     period: TimePeriod = TimePeriod.MONTH,
+    caller?: any,
+    effectiveRole?: Role,
   ): Promise<Omit<LeaderboardEntryDto, 'rank'>[]> {
     if (!organizationId) {
       return [];
@@ -135,7 +163,32 @@ export class LeaderboardService {
 
     const memberWhere: any = { organizationId };
 
-    if (teamId) {
+    if (effectiveRole === Role.DEVELOPER && caller?.id) {
+      memberWhere.userId = caller.id;
+    } else if (effectiveRole === Role.TEAM_LEAD && caller?.id && !teamId) {
+      const leadTeams = await this.prisma.team.findMany({
+        where: {
+          organizationId,
+          isActive: true,
+          OR: [
+            { leadId: caller.id },
+            { memberships: { some: { userId: caller.id, leftAt: null } } },
+          ],
+        },
+        select: { id: true },
+      });
+      const leadTeamIds = leadTeams.map((t) => t.id);
+      memberWhere.user = {
+        OR: [
+          { id: caller.id },
+          {
+            teamMemberships: {
+              some: { teamId: { in: leadTeamIds }, leftAt: null },
+            },
+          },
+        ],
+      };
+    } else if (teamId) {
       memberWhere.user = {
         teamMemberships: {
           some: { teamId, leftAt: null },
@@ -592,7 +645,11 @@ export class LeaderboardService {
     });
   }
 
-  private buildCacheKey(organizationId: string, query: LeaderboardQueryDto): string {
+  private buildCacheKey(
+    organizationId: string,
+    query: LeaderboardQueryDto,
+    callerScope?: string,
+  ): string {
     const parts = [
       CACHE_PREFIX.LEADERBOARD,
       organizationId,
@@ -603,6 +660,9 @@ export class LeaderboardService {
       `p${query.page || 1}`,
       `l${query.limit || 20}`,
     ];
+    if (callerScope) {
+      parts.push(callerScope);
+    }
     return parts.join(':');
   }
 

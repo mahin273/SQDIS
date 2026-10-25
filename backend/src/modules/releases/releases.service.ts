@@ -12,6 +12,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma';
 import { GitHubService } from '../github/github.service';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { CreateReleaseDto } from './dto/create-release.dto';
 import { UpdateReleaseDto } from './dto/update-release.dto';
 import {
@@ -48,6 +49,7 @@ export class ReleasesService {
     private readonly prisma: PrismaService,
     @Optional() private readonly configService?: ConfigService,
     @Optional() @Inject(forwardRef(() => GitHubService)) private readonly githubService?: GitHubService,
+    @Optional() @Inject(forwardRef(() => DataFilterService)) private readonly dataFilterService?: DataFilterService,
   ) {
     this.mlServiceUrl =
       this.configService?.get<string>('ML_SERVICE_URL', 'http://ml-service:8000') ||
@@ -128,13 +130,19 @@ export class ReleasesService {
   /**
    * Get all releases for an organization
    */
-  async findAll(organizationId: string, repositoryId?: string): Promise<ReleaseResponseDto[]> {
+  async findAll(
+    organizationId: string,
+    repositoryId?: string,
+    allowedRepositoryIds?: string[],
+  ): Promise<ReleaseResponseDto[]> {
     const where: any = {
       organizationId,
       isActive: true,
     };
     if (repositoryId) {
       where.repositoryId = repositoryId;
+    } else if (allowedRepositoryIds && allowedRepositoryIds.length > 0) {
+      where.repositoryId = { in: allowedRepositoryIds };
     }
 
     const releases = await this.prisma.release.findMany({
@@ -702,7 +710,7 @@ export class ReleasesService {
   /**
    * Verify release access
    */
-  async verifyReleaseAccess(releaseId: string, organizationId: string) {
+  async verifyReleaseAccess(releaseId: string, organizationId: string, caller?: any) {
     const release = await this.prisma.release.findFirst({
       where: {
         id: releaseId,
@@ -712,6 +720,10 @@ export class ReleasesService {
 
     if (!release) {
       throw new ForbiddenException('Access denied to this release');
+    }
+
+    if (caller && this.dataFilterService && release.repositoryId) {
+      await this.dataFilterService.verifyRepositoryAccess(release.repositoryId, organizationId, caller);
     }
 
     return release;
@@ -960,8 +972,8 @@ export class ReleasesService {
   /**
    * Get all past telemetry analyses for a release
    */
-  async getTelemetryHistory(releaseId: string, organizationId: string): Promise<ReleaseTelemetryResponseDto[]> {
-    await this.verifyReleaseAccess(releaseId, organizationId);
+  async getTelemetryHistory(releaseId: string, organizationId: string, caller?: any): Promise<ReleaseTelemetryResponseDto[]> {
+    await this.verifyReleaseAccess(releaseId, organizationId, caller);
 
     const analyses = await this.prisma.releaseTelemetryAnalysis.findMany({
       where: { releaseId },

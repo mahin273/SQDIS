@@ -29,7 +29,11 @@ export class DebtService {
   /**
    * Find all debt items with pagination and filters
    */
-  async findAll(organizationId: string, filters: DebtFilters): Promise<PaginatedResult<DebtItem>> {
+  async findAll(
+    organizationId: string,
+    filters: DebtFilters,
+    allowedRepositoryIds?: string[],
+  ): Promise<PaginatedResult<DebtItem>> {
     const {
       page = 1,
       limit = 20,
@@ -47,7 +51,11 @@ export class DebtService {
       repository: { organizationId },
     };
 
-    if (repositoryId) where.repositoryId = repositoryId;
+    if (repositoryId) {
+      where.repositoryId = repositoryId;
+    } else if (allowedRepositoryIds && allowedRepositoryIds.length > 0) {
+      where.repositoryId = { in: allowedRepositoryIds };
+    }
     if (authorId) where.authorId = authorId;
     if (markerType) where.markerType = markerType;
     if (isResolved !== undefined) where.isResolved = isResolved;
@@ -237,7 +245,17 @@ export class DebtService {
   /**
    * Get hot spots - files with high churn and bug correlation
    */
-  async getHotSpots(organizationId: string, repositoryId?: string): Promise<HotSpot[]> {
+  async getHotSpots(
+    organizationId: string,
+    repositoryId?: string,
+    allowedRepositoryIds?: string[],
+  ): Promise<HotSpot[]> {
+    const repoFilter = repositoryId
+      ? { id: repositoryId }
+      : allowedRepositoryIds && allowedRepositoryIds.length > 0
+      ? { id: { in: allowedRepositoryIds } }
+      : {};
+
     // Get file changes with churn data
     const fileChanges = await this.prisma.fileChange.groupBy({
       by: ['filePath'],
@@ -245,7 +263,7 @@ export class DebtService {
         commit: {
           repository: {
             organizationId,
-            ...(repositoryId && { id: repositoryId }),
+            ...repoFilter,
           },
         },
       },
@@ -259,7 +277,7 @@ export class DebtService {
       where: {
         repository: {
           organizationId,
-          ...(repositoryId && { id: repositoryId }),
+          ...repoFilter,
         },
         isResolved: false,
       },
@@ -273,7 +291,7 @@ export class DebtService {
           classification: 'BUGFIX',
           repository: {
             organizationId,
-            ...(repositoryId && { id: repositoryId }),
+            ...repoFilter,
           },
         },
       },
@@ -358,21 +376,30 @@ export class DebtService {
   }
 
   /**
-   * Get debt trends over time6
+   * Get debt trends over time
    */
   async getTrends(
     organizationId: string,
     days: number = 30,
     repositoryId?: string,
     teamId?: string,
+    allowedRepositoryIds?: string[],
   ): Promise<DebtTrend> {
     const startDate = new Date();
     startDate.setDate(startDate.getDate() - days);
 
+    const repoFilter = repositoryId
+      ? { id: repositoryId }
+      : allowedRepositoryIds && allowedRepositoryIds.length > 0
+      ? { id: { in: allowedRepositoryIds } }
+      : {};
+
     const where: Prisma.DebtItemWhereInput = {
-      repository: { organizationId },
+      repository: {
+        organizationId,
+        ...repoFilter,
+      },
     };
-    if (repositoryId) where.repositoryId = repositoryId;
 
     // Get all debt items created or resolved in the period
     const debtItems = await this.prisma.debtItem.findMany({
@@ -459,12 +486,21 @@ export class DebtService {
     organizationId: string,
     repositoryId?: string,
     limit: number = 10,
+    allowedRepositoryIds?: string[],
   ): Promise<DebtRecommendation[]> {
+    const repoFilter = repositoryId
+      ? { id: repositoryId }
+      : allowedRepositoryIds && allowedRepositoryIds.length > 0
+      ? { id: { in: allowedRepositoryIds } }
+      : {};
+
     const where: Prisma.DebtItemWhereInput = {
-      repository: { organizationId },
+      repository: {
+        organizationId,
+        ...repoFilter,
+      },
       isResolved: false,
     };
-    if (repositoryId) where.repositoryId = repositoryId;
 
     // Group debt by file
     const debtByFile = await this.prisma.debtItem.groupBy({
@@ -559,25 +595,43 @@ export class DebtService {
   /**
    * Get debt attribution by developer
    */
-  async getAttribution(organizationId: string): Promise<DebtAttribution[]> {
+  async getAttribution(
+    organizationId: string,
+    allowedDeveloperIds?: string[] | null,
+    allowedRepositoryIds?: string[],
+  ): Promise<DebtAttribution[]> {
+    const repoFilter = allowedRepositoryIds && allowedRepositoryIds.length > 0
+      ? { organizationId, id: { in: allowedRepositoryIds } }
+      : { organizationId };
+
+    const introducedWhere: any = {
+      repository: repoFilter,
+      authorId: { not: null },
+    };
+    if (allowedDeveloperIds && allowedDeveloperIds.length > 0) {
+      introducedWhere.authorId = { in: allowedDeveloperIds };
+    }
+
+    const resolvedWhere: any = {
+      repository: repoFilter,
+      resolverId: { not: null },
+      isResolved: true,
+    };
+    if (allowedDeveloperIds && allowedDeveloperIds.length > 0) {
+      resolvedWhere.resolverId = { in: allowedDeveloperIds };
+    }
+
     // Get debt introduced per developer
     const introduced = await this.prisma.debtItem.groupBy({
       by: ['authorId'],
-      where: {
-        repository: { organizationId },
-        authorId: { not: null },
-      },
+      where: introducedWhere,
       _count: { id: true },
     });
 
     // Get debt resolved per developer
     const resolved = await this.prisma.debtItem.groupBy({
       by: ['resolverId'],
-      where: {
-        repository: { organizationId },
-        resolverId: { not: null },
-        isResolved: true,
-      },
+      where: resolvedWhere,
       _count: { id: true },
     });
 
@@ -644,12 +698,21 @@ export class DebtService {
     organizationId: string,
     repositoryId?: string,
     threshold: number = 10,
+    allowedRepositoryIds?: string[],
   ): Promise<ModuleDebtScore[]> {
+    const repoFilter = repositoryId
+      ? { id: repositoryId }
+      : allowedRepositoryIds && allowedRepositoryIds.length > 0
+      ? { id: { in: allowedRepositoryIds } }
+      : {};
+
     const where: Prisma.DebtItemWhereInput = {
-      repository: { organizationId },
+      repository: {
+        organizationId,
+        ...repoFilter,
+      },
       isResolved: false,
     };
-    if (repositoryId) where.repositoryId = repositoryId;
 
     // Get debt items grouped by module (directory)
     const debtItems = await this.prisma.debtItem.findMany({
@@ -1076,5 +1139,28 @@ export class DebtService {
     }
 
     return null;
+  }
+
+  /**
+   * Helper to retrieve team member user IDs for a given team lead
+   */
+  async getTeamMemberUserIds(organizationId: string, leadUserId: string): Promise<string[]> {
+    const memberships = await this.prisma.teamMembership.findMany({
+      where: {
+        leftAt: null,
+        team: {
+          organizationId,
+          isActive: true,
+          OR: [
+            { leadId: leadUserId },
+            { memberships: { some: { userId: leadUserId, leftAt: null } } },
+          ],
+        },
+      },
+      select: { userId: true },
+    });
+    const ids = new Set(memberships.map((m) => m.userId));
+    ids.add(leadUserId);
+    return Array.from(ids);
   }
 }
