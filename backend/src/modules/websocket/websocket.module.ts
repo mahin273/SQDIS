@@ -1,4 +1,4 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -8,6 +8,7 @@ import { WebSocketEventsService } from './websocket-events.service';
 import { WebSocketAuthGuard } from './guards/websocket-auth.guard';
 import { RedisPubSubSubscriber } from './redis-pubsub-subscriber.service';
 import { CacheModule } from '../cache/cache.module';
+import { AuthModule } from '../auth/auth.module';
 
 /**
  * WebSocket Module for real-time communication
@@ -17,6 +18,7 @@ import { CacheModule } from '../cache/cache.module';
   imports: [
     EventEmitterModule.forRoot(),
     CacheModule,
+    forwardRef(() => AuthModule),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

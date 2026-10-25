@@ -9,11 +9,12 @@ import {
   ConnectedSocket,
   MessageBody,
 } from '@nestjs/websockets';
-import { Logger, UseGuards } from '@nestjs/common';
+import { Logger, UseGuards, Optional, Inject, forwardRef } from '@nestjs/common';
 import { Server, Socket } from 'socket.io';
 import { JwtService } from '@nestjs/jwt';
 import { ChannelManager } from './channel-manager.service';
 import { WebSocketAuthGuard } from './guards/websocket-auth.guard';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import {
   AuthenticatedSocket,
   CommitNewEvent,
@@ -47,6 +48,9 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
   constructor(
     private readonly jwtService: JwtService,
     private readonly channelManager: ChannelManager,
+    @Optional()
+    @Inject(forwardRef(() => DataFilterService))
+    private readonly dataFilterService?: DataFilterService,
   ) {}
 
   /**
@@ -82,6 +86,19 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
         role: payload.role,
         subscribedChannels: new Set(),
       };
+
+      if (this.dataFilterService && payload.organizationId) {
+        try {
+          const verified = await this.dataFilterService.verifyOrganizationAccess(
+            payload.organizationId,
+            payload.sub,
+          );
+          authSocket.role = verified.role;
+        } catch {
+          authSocket.organizationId = undefined;
+          authSocket.role = undefined;
+        }
+      }
 
       // Enforce token lifetime limits to prevent session hijacking
       if (payload.exp) {
@@ -146,7 +163,7 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
    * Subscribe to organization dashboard channel
    */
   @SubscribeMessage('subscribe:dashboard')
-  handleSubscribeDashboard(
+  async handleSubscribeDashboard(
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { orgId: string },
   ) {
@@ -157,13 +174,35 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
       return;
     }
 
-    // Verify user has access to this organization
-    if (authSocket.organizationId !== data.orgId) {
-      client.emit('error', {
-        message: 'Access denied to this organization',
-        code: 'ACCESS_DENIED',
-      });
+    if (!data?.orgId) {
+      client.emit('error', { message: 'Organization ID is required', code: 'INVALID_DATA' });
       return;
+    }
+
+    // Verify current membership and role in organization
+    if (this.dataFilterService) {
+      try {
+        const verified = await this.dataFilterService.verifyOrganizationAccess(
+          data.orgId,
+          authSocket.userId,
+        );
+        authSocket.organizationId = verified.organizationId;
+        authSocket.role = verified.role;
+      } catch (err: any) {
+        client.emit('error', {
+          message: err.message || 'Access denied to this organization',
+          code: 'ACCESS_DENIED',
+        });
+        return;
+      }
+    } else {
+      if (authSocket.organizationId !== data.orgId) {
+        client.emit('error', {
+          message: 'Access denied to this organization',
+          code: 'ACCESS_DENIED',
+        });
+        return;
+      }
     }
 
     const channelName = this.channelManager.subscribe(
@@ -185,12 +224,44 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
    * Subscribe to team channel
    */
   @SubscribeMessage('subscribe:team')
-  handleSubscribeTeam(@ConnectedSocket() client: Socket, @MessageBody() data: { teamId: string }) {
+  async handleSubscribeTeam(
+    @ConnectedSocket() client: Socket,
+    @MessageBody() data: { teamId: string; orgId?: string },
+  ) {
     const authSocket = this.connectedClients.get(client.id);
 
     if (!authSocket) {
       client.emit('error', { message: 'Not authenticated', code: 'NOT_AUTHENTICATED' });
       return;
+    }
+
+    if (!data?.teamId) {
+      client.emit('error', { message: 'Team ID is required', code: 'INVALID_DATA' });
+      return;
+    }
+
+    const organizationId = data.orgId || authSocket.organizationId;
+    if (!organizationId) {
+      client.emit('error', {
+        message: 'Organization ID is required to subscribe to team',
+        code: 'ACCESS_DENIED',
+      });
+      return;
+    }
+
+    if (this.dataFilterService) {
+      try {
+        await this.dataFilterService.verifyTeamAccess(data.teamId, organizationId, {
+          id: authSocket.userId,
+          role: authSocket.role,
+        });
+      } catch (err: any) {
+        client.emit('error', {
+          message: err.message || 'Access denied to this team',
+          code: 'ACCESS_DENIED',
+        });
+        return;
+      }
     }
 
     const channelName = this.channelManager.subscribe(
@@ -212,15 +283,52 @@ export class WebSocketGateway implements OnGatewayInit, OnGatewayConnection, OnG
    * Subscribe to developer channel
    */
   @SubscribeMessage('subscribe:developer')
-  handleSubscribeDeveloper(
+  async handleSubscribeDeveloper(
     @ConnectedSocket() client: Socket,
-    @MessageBody() data: { developerId: string },
+    @MessageBody() data: { developerId: string; orgId?: string },
   ) {
     const authSocket = this.connectedClients.get(client.id);
 
     if (!authSocket) {
       client.emit('error', { message: 'Not authenticated', code: 'NOT_AUTHENTICATED' });
       return;
+    }
+
+    if (!data?.developerId) {
+      client.emit('error', { message: 'Developer ID is required', code: 'INVALID_DATA' });
+      return;
+    }
+
+    const organizationId = data.orgId || authSocket.organizationId;
+    if (!organizationId) {
+      client.emit('error', {
+        message: 'Organization ID is required to subscribe to developer',
+        code: 'ACCESS_DENIED',
+      });
+      return;
+    }
+
+    if (this.dataFilterService) {
+      try {
+        await this.dataFilterService.verifyDeveloperAccess(data.developerId, organizationId, {
+          id: authSocket.userId,
+          role: authSocket.role,
+        });
+      } catch (err: any) {
+        client.emit('error', {
+          message: err.message || 'Access denied to this developer',
+          code: 'ACCESS_DENIED',
+        });
+        return;
+      }
+    } else {
+      if (authSocket.role === 'DEVELOPER' && authSocket.userId !== data.developerId) {
+        client.emit('error', {
+          message: 'Access denied: Developers can only access their own developer data.',
+          code: 'ACCESS_DENIED',
+        });
+        return;
+      }
     }
 
     const channelName = this.channelManager.subscribe(

@@ -62,8 +62,13 @@ describe('ScoresService', () => {
       },
       organizationMember: {
         findFirst: jest.fn(),
+        findUnique: jest.fn(),
       },
       project: {
+        findFirst: jest.fn(),
+        findUnique: jest.fn(),
+      },
+      teamProjectAssignment: {
         findFirst: jest.fn(),
       },
     };
@@ -273,6 +278,72 @@ describe('ScoresService', () => {
         }),
         expect.any(Object),
       );
+    });
+  });
+
+  describe('getRiskyModules', () => {
+    it('returns empty risky modules for developer with default projectId and no assigned projects', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: 'DEVELOPER' });
+      prisma.teamProjectAssignment.findFirst.mockResolvedValue(null);
+
+      const result = await service.getRiskyModules('default', 'org-1', {
+        id: 'dev-1',
+        role: 'DEVELOPER',
+      });
+
+      expect(result).toMatchObject({
+        projectId: 'default',
+        riskyModules: [],
+        totalRiskyModules: 0,
+        highCriticalCount: 0,
+      });
+    });
+
+    it('aggregates risky modules across all repositories in a project', async () => {
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: 'OWNER' });
+      prisma.repository.findFirst.mockResolvedValue(null);
+      prisma.project.findFirst.mockResolvedValue({
+        id: 'proj-1',
+        organizationId: 'org-1',
+        repositories: [{ repositoryId: 'repo-1' }, { repositoryId: 'repo-2' }],
+      });
+
+      // Scores for proj-1, repo-1, repo-2
+      prisma.sQSScore.findFirst
+        .mockResolvedValueOnce({
+          projectId: 'proj-1',
+          calculatedAt: new Date('2026-01-01T00:00:00Z'),
+          riskyModules: [
+            { path: 'src/main.ts', risk_level: 'HIGH', riskScore: 75, reason: 'High churn' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          projectId: 'repo-1',
+          calculatedAt: new Date('2026-01-02T00:00:00Z'),
+          riskyModules: [
+            { path: 'src/auth.ts', risk_level: 'CRITICAL', riskScore: 92, reason: 'Complexity' },
+          ],
+        })
+        .mockResolvedValueOnce({
+          projectId: 'repo-2',
+          calculatedAt: new Date('2026-01-03T00:00:00Z'),
+          riskyModules: [
+            { path: 'src/billing.ts', risk_level: 'MEDIUM', riskScore: 50, reason: 'Smells' },
+          ],
+        });
+
+      const result = await service.getRiskyModules('proj-1', 'org-1', {
+        id: 'admin-1',
+        role: 'ADMIN',
+      });
+
+      expect(result.projectId).toBe('proj-1');
+      expect(result.totalRiskyModules).toBe(3);
+      expect(result.riskyModules.map((m) => m.path)).toEqual([
+        'src/auth.ts',
+        'src/main.ts',
+        'src/billing.ts',
+      ]);
     });
   });
 });

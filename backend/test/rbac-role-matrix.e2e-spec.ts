@@ -111,6 +111,7 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
     scoresServiceMock = {
       getSQS: jest.fn(),
       getDQS: jest.fn(),
+      getRiskyModules: jest.fn(),
       triggerRecalculation: jest.fn().mockResolvedValue({ success: true }),
     };
 
@@ -301,6 +302,18 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
           throw new ForbiddenException('Access denied: You are not an active member or leader of this team.');
         }
         return { teamId, organizationId: orgId };
+      }),
+      verifyOrganizationAccess: jest.fn().mockImplementation(async (orgId, userId, allowedRoles) => {
+        if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(currentAuthUser.role as Role)) {
+          throw new ForbiddenException('Access denied: Caller lacks required role in organization');
+        }
+        return { organizationId: orgId, role: currentAuthUser.role };
+      }),
+      verifyDeveloperAccess: jest.fn().mockImplementation(async (devId, orgId, user) => {
+        if (user?.role === Role.DEVELOPER && user.id !== devId) {
+          throw new ForbiddenException('Developers can only access their own developer data.');
+        }
+        return { developerId: devId, organizationId: orgId };
       }),
     };
 
@@ -625,6 +638,75 @@ describe('RBAC Stakeholder Role Matrix & Tenant Isolation (e2e)', () => {
       await request(app.getHttpServer())
         .get(`/scores/sqs/${assignedProjectId}`)
         .expect(200);
+    });
+
+    it('Developer accessing assigned project SQS risks succeeds', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      scoresServiceMock.getRiskyModules.mockResolvedValueOnce({
+        projectId: assignedProjectId,
+        riskyModules: [],
+        totalRiskyModules: 0,
+        highCriticalCount: 0,
+      });
+
+      await request(app.getHttpServer())
+        .get(`/scores/sqs/${assignedProjectId}/risks`)
+        .expect(200);
+
+      expect(scoresServiceMock.getRiskyModules).toHaveBeenCalledWith(
+        assignedProjectId,
+        'org-1',
+        currentAuthUser,
+      );
+    });
+
+    it('Developer accessing unassigned project SQS risks is denied (403)', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      scoresServiceMock.getRiskyModules.mockRejectedValueOnce(
+        new ForbiddenException('Access denied: This project is not assigned to any of your active teams.'),
+      );
+
+      await request(app.getHttpServer())
+        .get(`/scores/sqs/${unassignedProjectId}/risks`)
+        .expect(403);
+    });
+
+    it('Developer accessing default SQS risks delegates with caller context', async () => {
+      currentAuthUser = {
+        id: 'dev-1',
+        email: 'dev@acme.com',
+        role: Role.DEVELOPER,
+        organizationId: 'org-1',
+      };
+
+      scoresServiceMock.getRiskyModules.mockResolvedValueOnce({
+        projectId: assignedProjectId,
+        riskyModules: [],
+        totalRiskyModules: 0,
+        highCriticalCount: 0,
+      });
+
+      await request(app.getHttpServer())
+        .get('/scores/sqs/default/risks')
+        .expect(200);
+
+      expect(scoresServiceMock.getRiskyModules).toHaveBeenCalledWith(
+        'default',
+        'org-1',
+        currentAuthUser,
+      );
     });
   });
 

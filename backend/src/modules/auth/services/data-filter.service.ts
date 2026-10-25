@@ -527,4 +527,124 @@ export class DataFilterService {
 
     return { teamId, organizationId };
   }
+
+  /**
+   * Verify caller active organization membership and optional role requirements.
+   */
+  async verifyOrganizationAccess(
+    organizationId: string,
+    userId: string,
+    allowedRoles?: Role[],
+  ): Promise<{ organizationId: string; role: Role }> {
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId,
+          userId,
+        },
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('Access denied: You are not an active member of this organization.');
+    }
+
+    if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(membership.role as Role)) {
+      throw new ForbiddenException('Access denied: Caller lacks required role in organization.');
+    }
+
+    return { organizationId, role: membership.role as Role };
+  }
+
+  /**
+   * Verify access to individual developer data.
+   * OWNER/ADMIN: org-wide access to any developer in organization.
+   * DEVELOPER: can only access their own developer data.
+   * TEAM_LEAD: can access their own data or developers who share active membership in an assigned team.
+   */
+  async verifyDeveloperAccess(
+    developerId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<{ developerId: string; organizationId: string }> {
+    const developer = await this.prisma.user.findFirst({
+      where: {
+        id: developerId,
+        memberships: {
+          some: { organizationId },
+        },
+      },
+    });
+
+    if (!developer) {
+      throw new NotFoundException(`Developer with ID ${developerId} not found in organization`);
+    }
+
+    if (!caller) {
+      return { developerId, organizationId };
+    }
+
+    let effectiveRole = caller.role as Role | undefined;
+    if (this.prisma.organizationMember) {
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: caller.id,
+          },
+        },
+      });
+      if (membership?.role) {
+        effectiveRole = membership.role as Role;
+      }
+    }
+
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return { developerId, organizationId };
+    }
+
+    if (effectiveRole === Role.DEVELOPER) {
+      if (caller.id !== developerId) {
+        throw new ForbiddenException('Developers can only access their own developer data.');
+      }
+      return { developerId, organizationId };
+    }
+
+    if (effectiveRole === Role.TEAM_LEAD) {
+      if (caller.id === developerId) {
+        return { developerId, organizationId };
+      }
+
+      const sharedTeam = await this.prisma.teamMembership.findFirst({
+        where: {
+          userId: developerId,
+          leftAt: null,
+          team: {
+            organizationId,
+            isActive: true,
+            OR: [
+              { leadId: caller.id },
+              {
+                memberships: {
+                  some: {
+                    userId: caller.id,
+                    leftAt: null,
+                  },
+                },
+              },
+            ],
+          },
+        },
+      });
+
+      if (!sharedTeam) {
+        throw new ForbiddenException(
+          'Team Leads can only access developer data for members of their assigned teams.',
+        );
+      }
+      return { developerId, organizationId };
+    }
+
+    throw new ForbiddenException('Access denied: Unauthorized role for developer data.');
+  }
 }

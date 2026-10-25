@@ -9,6 +9,7 @@ import { JwtStrategy } from './strategies/jwt.strategy';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { GitHubStrategy } from './strategies/github.strategy';
 import { OrganizationGuard } from './guards/organization.guard';
+import { RolesGuard } from './guards/roles.guard';
 import { EmailThrottlerGuard } from './guards/email-throttler.guard';
 import { OrganizationContextService } from './services/organization-context.service';
 import { TokenService } from './services/token.service';
@@ -50,6 +51,7 @@ import { getRequiredJwtSecret } from './utils/jwt-secret.util';
     GoogleStrategy,
     GitHubStrategy,
     OrganizationGuard,
+    RolesGuard,
     EmailThrottlerGuard,
     OrganizationContextService,
     TokenService,
@@ -62,6 +64,7 @@ import { getRequiredJwtSecret } from './utils/jwt-secret.util';
     AuthService,
     JwtModule,
     OrganizationGuard,
+    RolesGuard,
     OrganizationsModule,
     OrganizationContextService,
     PermissionCacheService,
