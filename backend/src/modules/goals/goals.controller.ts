@@ -17,6 +17,9 @@ import { GoalAchievementService } from './services/goal-achievement.service';
 import { GoalHistoryService } from './services/goal-history.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
+import { Role } from '@prisma/client';
 import { DataFilterService } from '../auth/services/data-filter.service';
 import {
   CreateGoalDto,
@@ -37,7 +40,7 @@ import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery }
 @ApiTags('Goals')
 @ApiBearerAuth()
 @Controller('goals')
-@UseGuards(JwtAuthGuard, OrganizationGuard)
+@UseGuards(JwtAuthGuard, OrganizationGuard, RolesGuard)
 export class GoalsController {
   constructor(
     private readonly goalsService: GoalsService,
@@ -157,6 +160,7 @@ export class GoalsController {
    * Create a goal template
    */
   @Post('templates')
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Create a new goal template' })
   @ApiResponse({ status: 201, description: 'Goal template created successfully.' })
   async createTemplate(@Request() req: any, @Body() dto: CreateGoalTemplateDto) {
@@ -178,6 +182,7 @@ export class GoalsController {
    * Update a goal template
    */
   @Patch('templates/:id')
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Update goal template details by ID' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template updated successfully.' })
@@ -193,6 +198,7 @@ export class GoalsController {
    * Delete a goal template
    */
   @Delete('templates/:id')
+  @Roles(Role.OWNER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a goal template' })
   @ApiParam({ name: 'id', description: 'Template ID' })
   @ApiResponse({ status: 200, description: 'Template deleted successfully.' })
@@ -305,6 +311,7 @@ export class GoalsController {
    * Manually trigger snapshot for a goal
    */
   @Post(':id/snapshot')
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Trigger a snapshot record for a goal' })
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 201, description: 'Snapshot successfully created.' })
@@ -320,6 +327,7 @@ export class GoalsController {
    * Create a new goal
    */
   @Post()
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Create a new quality goal / OKR' })
   @ApiResponse({ status: 201, description: 'Goal successfully created.' })
   async create(@Request() req: any, @Body() dto: CreateGoalDto) {
@@ -349,6 +357,7 @@ export class GoalsController {
    * Update a goal
    */
   @Patch(':id')
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Update goal details by ID' })
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Goal updated successfully.' })
@@ -368,6 +377,7 @@ export class GoalsController {
    * Delete a goal
    */
   @Delete(':id')
+  @Roles(Role.OWNER, Role.ADMIN)
   @ApiOperation({ summary: 'Delete a goal' })
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Goal deleted successfully.' })
@@ -409,6 +419,7 @@ export class GoalsController {
    * Add a key result to a goal
    */
   @Post(':id/key-results')
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Add a new key result to a goal' })
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 201, description: 'Key result successfully added.' })
@@ -426,6 +437,7 @@ export class GoalsController {
    * Update a key result
    */
   @Patch(':goalId/key-results/:keyResultId')
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Update a key result detail' })
   @ApiParam({ name: 'goalId', description: 'Goal ID' })
   @ApiParam({ name: 'keyResultId', description: 'Key Result ID' })
@@ -445,6 +457,7 @@ export class GoalsController {
    * Delete a key result
    */
   @Delete(':goalId/key-results/:keyResultId')
+  @Roles(Role.OWNER, Role.ADMIN, Role.TEAM_LEAD)
   @ApiOperation({ summary: 'Delete a key result from a goal' })
   @ApiParam({ name: 'goalId', description: 'Goal ID' })
   @ApiParam({ name: 'keyResultId', description: 'Key Result ID' })

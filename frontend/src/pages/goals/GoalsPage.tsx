@@ -30,6 +30,7 @@ import { useToast } from '@/components/ui/toast'
 import { goalsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { QueryState } from '../pageUtils'
+import { usePermission } from '@/rbac/hooks'
 import type {
   Goal,
   GoalStatus,
@@ -43,6 +44,11 @@ import type {
 export function GoalsPage() {
   const queryClient = useQueryClient()
   const { toast } = useToast()
+
+  // RBAC Permission Resolution
+  const canCreateGoal = usePermission('goals:create').hasPermission
+  const canEditGoal = usePermission('goals:edit').hasPermission
+  const canDeleteGoal = usePermission('goals:delete').hasPermission
 
   // Navigation & Filter States
   const [activeTab, setActiveTab] = useState<'objectives' | 'templates' | 'achievements'>('objectives')
@@ -487,14 +493,16 @@ export function GoalsPage() {
           </Button>
 
           {/* Create Objective Button */}
-          <Button
-            size="sm"
-            onClick={openCreateModal}
-            className="rounded-xl text-xs gap-1.5 shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
-          >
-            <Plus className="h-3.5 w-3.5" />
-            <span>Create Objective</span>
-          </Button>
+          {canCreateGoal && (
+            <Button
+              size="sm"
+              onClick={openCreateModal}
+              className="rounded-xl text-xs gap-1.5 shadow-sm bg-indigo-600 hover:bg-indigo-700 text-white font-medium"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              <span>Create Objective</span>
+            </Button>
+          )}
         </div>
       </div>
 
@@ -829,26 +837,32 @@ export function GoalsPage() {
                                 )}
                               </span>
 
-                              <div className="flex items-center gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-slate-500 hover:text-indigo-600"
-                                  onClick={(e) => openEditModal(goal, e)}
-                                  title="Edit Objective"
-                                >
-                                  <Edit3 className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="h-7 px-2 text-slate-500 hover:text-rose-600"
-                                  onClick={(e) => handleDeleteGoal(goal.id, e)}
-                                  title="Delete Objective"
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
+                              {(canEditGoal || canDeleteGoal) && (
+                                <div className="flex items-center gap-1">
+                                  {canEditGoal && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-slate-500 hover:text-indigo-600"
+                                      onClick={(e) => openEditModal(goal, e)}
+                                      title="Edit Objective"
+                                    >
+                                      <Edit3 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                  {canDeleteGoal && (
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="h-7 px-2 text-slate-500 hover:text-rose-600"
+                                      onClick={(e) => handleDeleteGoal(goal.id, e)}
+                                      title="Delete Objective"
+                                    >
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         </div>
@@ -864,19 +878,21 @@ export function GoalsPage() {
                                 Measurable Key Results
                               </h4>
                             </div>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 text-xs gap-1 bg-white dark:bg-slate-900"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setKrGoalId(goal.id)
-                                setIsKRModalOpen(true)
-                              }}
-                            >
-                              <Plus className="h-3 w-3" />
-                              <span>Add Key Result</span>
-                            </Button>
+                            {canEditGoal && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-7 text-xs gap-1 bg-white dark:bg-slate-900"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setKrGoalId(goal.id)
+                                  setIsKRModalOpen(true)
+                                }}
+                              >
+                                <Plus className="h-3 w-3" />
+                                <span>Add Key Result</span>
+                              </Button>
+                            )}
                           </div>
 
                           <div className="space-y-2.5">
@@ -911,19 +927,21 @@ export function GoalsPage() {
 
                                   <div className="w-full sm:w-44 flex items-center gap-3">
                                     <Progress value={krProgress} className="h-1.5 flex-1" />
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-7 text-[11px] text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        setActiveKR({ goalId: goal.id, kr })
-                                        setNewKRValue(kr.currentValue)
-                                        setIsUpdateKRValueOpen(true)
-                                      }}
-                                    >
-                                      Update
-                                    </Button>
+                                    {canEditGoal && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-7 text-[11px] text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:hover:bg-indigo-950/40"
+                                        onClick={(e) => {
+                                          e.stopPropagation()
+                                          setActiveKR({ goalId: goal.id, kr })
+                                          setNewKRValue(kr.currentValue)
+                                          setIsUpdateKRValueOpen(true)
+                                        }}
+                                      >
+                                        Update
+                                      </Button>
+                                    )}
                                   </div>
                                 </div>
                               )
@@ -952,14 +970,16 @@ export function GoalsPage() {
                         ? `No engineering objectives matching "${searchQuery}". Try adjusting your filters.`
                         : 'Define your first engineering objective to align your team around critical quality benchmarks.'}
                     </p>
-                    <Button
-                      size="sm"
-                      onClick={openCreateModal}
-                      className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      <span>Create First Objective</span>
-                    </Button>
+                    {canCreateGoal && (
+                      <Button
+                        size="sm"
+                        onClick={openCreateModal}
+                        className="text-xs gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>Create First Objective</span>
+                      </Button>
+                    )}
                   </Card>
                 )}
               </div>
@@ -1011,15 +1031,17 @@ export function GoalsPage() {
                         </p>
                       </div>
 
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleUseTemplate(tpl)}
-                        className="w-full text-xs gap-1.5 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 transition-colors"
-                      >
-                        <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
-                        <span>Use This Template</span>
-                      </Button>
+                      {canCreateGoal && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleUseTemplate(tpl)}
+                          className="w-full text-xs gap-1.5 bg-white dark:bg-slate-900 hover:bg-indigo-50 dark:hover:bg-indigo-950/40 hover:text-indigo-600 transition-colors"
+                        >
+                          <Sparkles className="h-3.5 w-3.5 text-indigo-500" />
+                          <span>Use This Template</span>
+                        </Button>
+                      )}
                     </div>
                   ))}
 
