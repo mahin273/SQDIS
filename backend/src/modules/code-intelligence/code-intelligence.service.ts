@@ -512,6 +512,26 @@ export class CodeIntelligenceService {
   }
 
   /**
+   * Helper to resolve scoped project and repository IDs for a user.
+   */
+  async getScopedProjectAndRepoIds(
+    userId: string,
+    organizationId: string,
+    callerRole?: any,
+  ) {
+    if (this.dataFilterService) {
+      return this.dataFilterService.getScopedProjectAndRepoIds(userId, organizationId, callerRole);
+    }
+    return {
+      isOrgScoped: true,
+      effectiveRole: callerRole,
+      projectIds: [] as string[],
+      repositoryIds: [] as string[],
+      teamIds: [] as string[],
+    };
+  }
+
+  /**
    * Retrieve historical Bus Factor snapshots.
    */
   async getBusFactorSnapshots(

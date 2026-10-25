@@ -8,9 +8,11 @@ import {
   Param,
   Query,
   UseGuards,
+  Optional,
 } from '@nestjs/common';
 import { OnboardingService } from './onboarding.service';
 import { ProgressTrackingService } from './services/progress-tracking.service';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -35,6 +37,7 @@ export class OnboardingController {
   constructor(
     private readonly onboardingService: OnboardingService,
     private readonly progressTrackingService: ProgressTrackingService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
   ) {}
 
   @Post()
@@ -87,10 +90,14 @@ export class OnboardingController {
   @ApiResponse({ status: 200, description: 'Velocity comparison stats retrieved.' })
   async getVelocityComparison(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query('teamId') teamId?: string,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ) {
+    if (teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(teamId, organizationId, user);
+    }
     const filters: { teamId?: string; startDate?: Date; endDate?: Date } = {};
     if (teamId) filters.teamId = teamId;
     if (startDate) filters.startDate = new Date(startDate);
@@ -106,7 +113,11 @@ export class OnboardingController {
   async getDeveloperVelocity(
     @GetOrganization() organizationId: string,
     @Param('userId') userId: string,
+    @GetUser() user: any,
   ) {
+    if (this.dataFilterService) {
+      await this.dataFilterService.verifyDeveloperAccess(userId, organizationId, user);
+    }
     return this.onboardingService.getDeveloperVelocity(organizationId, userId);
   }
 
@@ -172,7 +183,11 @@ export class OnboardingController {
   async getDeveloperProgress(
     @GetOrganization() organizationId: string,
     @Param('userId') userId: string,
+    @GetUser() user: any,
   ) {
+    if (this.dataFilterService) {
+      await this.dataFilterService.verifyDeveloperAccess(userId, organizationId, user);
+    }
     return this.progressTrackingService.getDeveloperProgress(userId, organizationId);
   }
 
@@ -187,7 +202,11 @@ export class OnboardingController {
   async getMilestoneTimeline(
     @GetOrganization() organizationId: string,
     @Param('userId') userId: string,
+    @GetUser() user: any,
   ) {
+    if (this.dataFilterService) {
+      await this.dataFilterService.verifyDeveloperAccess(userId, organizationId, user);
+    }
     return this.progressTrackingService.getMilestoneTimeline(userId, organizationId);
   }
 
@@ -213,7 +232,11 @@ export class OnboardingController {
   async getMentorCapacity(
     @GetOrganization() organizationId: string,
     @Param('mentorId') mentorId: string,
+    @GetUser() user: any,
   ) {
+    if (this.dataFilterService) {
+      await this.dataFilterService.verifyDeveloperAccess(mentorId, organizationId, user);
+    }
     return this.progressTrackingService.getMentorCapacity(mentorId, organizationId);
   }
 
@@ -224,8 +247,13 @@ export class OnboardingController {
   async findById(
     @GetOrganization() organizationId: string,
     @Param('id') id: string,
+    @GetUser() user: any,
   ) {
-    return this.onboardingService.findById(id, organizationId);
+    const onboarding = await this.onboardingService.findById(id, organizationId);
+    if (this.dataFilterService && onboarding?.userId) {
+      await this.dataFilterService.verifyDeveloperAccess(onboarding.userId, organizationId, user);
+    }
+    return onboarding;
   }
 
   @Patch(':id/mentor')
@@ -273,7 +301,12 @@ export class OnboardingController {
   async getChecklist(
     @GetOrganization() organizationId: string,
     @Param('id') id: string,
+    @GetUser() user: any,
   ) {
+    const onboarding = await this.onboardingService.findById(id, organizationId);
+    if (this.dataFilterService && onboarding?.userId) {
+      await this.dataFilterService.verifyDeveloperAccess(onboarding.userId, organizationId, user);
+    }
     return this.onboardingService.getChecklist(id, organizationId);
   }
 
@@ -287,7 +320,12 @@ export class OnboardingController {
     @Param('id') id: string,
     @Param('itemId') itemId: string,
     @Body() dto: UpdateChecklistItemDto,
+    @GetUser() user: any,
   ) {
+    const onboarding = await this.onboardingService.findById(id, organizationId);
+    if (this.dataFilterService && onboarding?.userId) {
+      await this.dataFilterService.verifyDeveloperAccess(onboarding.userId, organizationId, user);
+    }
     return this.onboardingService.updateChecklistItem(id, itemId, dto, organizationId);
   }
 }

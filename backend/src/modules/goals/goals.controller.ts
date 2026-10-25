@@ -9,6 +9,7 @@ import {
   Query,
   UseGuards,
   Request,
+  Optional,
 } from '@nestjs/common';
 import { GoalsService } from './goals.service';
 import { GoalTemplatesService } from './services/goal-templates.service';
@@ -16,6 +17,7 @@ import { GoalAchievementService } from './services/goal-achievement.service';
 import { GoalHistoryService } from './services/goal-history.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import {
   CreateGoalDto,
   UpdateGoalDto,
@@ -42,6 +44,7 @@ export class GoalsController {
     private readonly templatesService: GoalTemplatesService,
     private readonly achievementService: GoalAchievementService,
     private readonly historyService: GoalHistoryService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
   ) {}
 
   private getOrgId(req: any): string {
@@ -50,6 +53,17 @@ export class GoalsController {
       req.headers?.['x-organization-id'] ||
       req.user?.organizationId
     );
+  }
+
+  private async verifyGoalItemAccess(goalId: string, orgId: string, user: any) {
+    if (!this.dataFilterService) return;
+    const goal = await this.goalsService.findById(goalId, orgId);
+    if ((goal as any).teamId) {
+      await this.dataFilterService.verifyTeamAccess((goal as any).teamId, orgId, user);
+    }
+    if ((goal as any).projectId) {
+      await this.dataFilterService.verifyProjectAccess((goal as any).projectId, orgId, user);
+    }
   }
 
   // ==================== GOAL ENDPOINTS ====================
@@ -61,7 +75,14 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get goals dashboard data' })
   @ApiResponse({ status: 200, description: 'Dashboard stats and active goals list retrieved successfully.' })
   async getDashboard(@Request() req: any, @Query() filters: GoalsDashboardFiltersDto) {
-    return this.goalsService.getDashboard(this.getOrgId(req), filters);
+    const orgId = this.getOrgId(req);
+    if (filters.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(filters.teamId, orgId, req.user);
+    }
+    if (filters.ownerId && this.dataFilterService) {
+      await this.dataFilterService.verifyDeveloperAccess(filters.ownerId, orgId, req.user);
+    }
+    return this.goalsService.getDashboard(orgId, filters);
   }
 
   /**
@@ -71,7 +92,14 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get all goals with filters' })
   @ApiResponse({ status: 200, description: 'Goals list retrieved successfully.' })
   async findAll(@Request() req: any, @Query() filters: GoalFiltersDto) {
-    return this.goalsService.findAll(this.getOrgId(req), filters);
+    const orgId = this.getOrgId(req);
+    if (filters.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(filters.teamId, orgId, req.user);
+    }
+    if (filters.projectId && this.dataFilterService) {
+      await this.dataFilterService.verifyProjectAccess(filters.projectId, orgId, req.user);
+    }
+    return this.goalsService.findAll(orgId, filters);
   }
 
   /**
@@ -81,7 +109,14 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get history of goals' })
   @ApiResponse({ status: 200, description: 'Goals history retrieved successfully.' })
   async getHistory(@Request() req: any, @Query() filters: GoalFiltersDto) {
-    return this.goalsService.getHistory(this.getOrgId(req), filters);
+    const orgId = this.getOrgId(req);
+    if (filters.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(filters.teamId, orgId, req.user);
+    }
+    if (filters.projectId && this.dataFilterService) {
+      await this.dataFilterService.verifyProjectAccess(filters.projectId, orgId, req.user);
+    }
+    return this.goalsService.getHistory(orgId, filters);
   }
 
   /**
@@ -173,7 +208,14 @@ export class GoalsController {
   @ApiOperation({ summary: 'Get historical goal snapshots' })
   @ApiResponse({ status: 200, description: 'Snapshots list retrieved.' })
   async getSnapshots(@Request() req: any, @Query() filters: GoalHistoryFiltersDto) {
-    return this.historyService.getGoalHistory(this.getOrgId(req), {
+    const orgId = this.getOrgId(req);
+    if (filters.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(filters.teamId, orgId, req.user);
+    }
+    if (filters.ownerId && this.dataFilterService) {
+      await this.dataFilterService.verifyDeveloperAccess(filters.ownerId, orgId, req.user);
+    }
+    return this.historyService.getGoalHistory(orgId, {
       teamId: filters.teamId,
       ownerId: filters.ownerId,
       metricType: filters.metricType,
@@ -198,8 +240,12 @@ export class GoalsController {
     @Query('teamId') teamId?: string,
     @Query('periodMonths') periodMonths?: number,
   ) {
+    const orgId = this.getOrgId(req);
+    if (teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(teamId, orgId, req.user);
+    }
     return this.historyService.calculateAchievementRateOverTime(
-      this.getOrgId(req),
+      orgId,
       teamId,
       periodMonths || 12,
     );
@@ -242,7 +288,11 @@ export class GoalsController {
     @Query('endDate') endDate?: string,
     @Query('includeTeamComparison') includeTeamComparison?: string,
   ) {
-    return this.historyService.getGoalHistoryForReports(this.getOrgId(req), {
+    const orgId = this.getOrgId(req);
+    if (teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(teamId, orgId, req.user);
+    }
+    return this.historyService.getGoalHistoryForReports(orgId, {
       teamId,
       startDate: startDate ? new Date(startDate) : undefined,
       endDate: endDate ? new Date(endDate) : undefined,
@@ -258,8 +308,8 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 201, description: 'Snapshot successfully created.' })
   async snapshotGoal(@Request() req: any, @Param('id') id: string) {
-    // Verify goal belongs to organization
-    await this.goalsService.findById(id, this.getOrgId(req));
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(id, orgId, req.user);
     return this.historyService.snapshotGoal(id);
   }
 
@@ -272,7 +322,14 @@ export class GoalsController {
   @ApiOperation({ summary: 'Create a new quality goal / OKR' })
   @ApiResponse({ status: 201, description: 'Goal successfully created.' })
   async create(@Request() req: any, @Body() dto: CreateGoalDto) {
-    return this.goalsService.create(this.getOrgId(req), req.user.id, dto);
+    const orgId = this.getOrgId(req);
+    if (dto.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(dto.teamId, orgId, req.user);
+    }
+    if (dto.projectId && this.dataFilterService) {
+      await this.dataFilterService.verifyProjectAccess(dto.projectId, orgId, req.user);
+    }
+    return this.goalsService.create(orgId, req.user.id, dto);
   }
 
   /**
@@ -283,7 +340,9 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Goal details retrieved.' })
   async findById(@Request() req: any, @Param('id') id: string) {
-    return this.goalsService.findById(id, this.getOrgId(req));
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(id, orgId, req.user);
+    return this.goalsService.findById(id, orgId);
   }
 
   /**
@@ -294,7 +353,15 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Goal updated successfully.' })
   async update(@Request() req: any, @Param('id') id: string, @Body() dto: UpdateGoalDto) {
-    return this.goalsService.update(id, this.getOrgId(req), dto);
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(id, orgId, req.user);
+    if (dto.teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(dto.teamId, orgId, req.user);
+    }
+    if (dto.projectId && this.dataFilterService) {
+      await this.dataFilterService.verifyProjectAccess(dto.projectId, orgId, req.user);
+    }
+    return this.goalsService.update(id, orgId, dto);
   }
 
   /**
@@ -305,7 +372,9 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Goal deleted successfully.' })
   async delete(@Request() req: any, @Param('id') id: string) {
-    return this.goalsService.delete(id, this.getOrgId(req));
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(id, orgId, req.user);
+    return this.goalsService.delete(id, orgId);
   }
 
   /**
@@ -316,7 +385,9 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'Current progress metrics retrieved.' })
   async getProgress(@Request() req: any, @Param('id') id: string) {
-    return this.goalsService.getProgress(id, this.getOrgId(req));
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(id, orgId, req.user);
+    return this.goalsService.getProgress(id, orgId);
   }
 
   /**
@@ -327,7 +398,9 @@ export class GoalsController {
   @ApiParam({ name: 'id', description: 'Goal ID' })
   @ApiResponse({ status: 200, description: 'OKR summary retrieved.' })
   async getOKRSummary(@Request() req: any, @Param('id') id: string) {
-    return this.goalsService.getOKRSummary(id, this.getOrgId(req));
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(id, orgId, req.user);
+    return this.goalsService.getOKRSummary(id, orgId);
   }
 
   // ==================== KEY RESULT ENDPOINTS ====================
@@ -344,7 +417,9 @@ export class GoalsController {
     @Param('id') id: string,
     @Body() dto: CreateKeyResultDto,
   ) {
-    return this.goalsService.addKeyResult(id, this.getOrgId(req), dto);
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(id, orgId, req.user);
+    return this.goalsService.addKeyResult(id, orgId, dto);
   }
 
   /**
@@ -361,7 +436,9 @@ export class GoalsController {
     @Param('keyResultId') keyResultId: string,
     @Body() dto: UpdateKeyResultDto,
   ) {
-    return this.goalsService.updateKeyResult(goalId, keyResultId, this.getOrgId(req), dto);
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(goalId, orgId, req.user);
+    return this.goalsService.updateKeyResult(goalId, keyResultId, orgId, dto);
   }
 
   /**
@@ -377,6 +454,8 @@ export class GoalsController {
     @Param('goalId') goalId: string,
     @Param('keyResultId') keyResultId: string,
   ) {
-    return this.goalsService.deleteKeyResult(goalId, keyResultId, this.getOrgId(req));
+    const orgId = this.getOrgId(req);
+    await this.verifyGoalItemAccess(goalId, orgId, req.user);
+    return this.goalsService.deleteKeyResult(goalId, keyResultId, orgId);
   }
 }

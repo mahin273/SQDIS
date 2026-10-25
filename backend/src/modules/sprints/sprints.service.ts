@@ -5,8 +5,12 @@ import {
   ForbiddenException,
   BadRequestException,
   Logger,
+  Inject,
+  forwardRef,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { CreateSprintDto } from './dto/create-sprint.dto';
 import { UpdateSprintDto } from './dto/update-sprint.dto';
 import {
@@ -23,7 +27,12 @@ import {
 export class SprintsService {
   private readonly logger = new Logger(SprintsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    @Inject(forwardRef(() => DataFilterService))
+    private readonly dataFilterService?: DataFilterService,
+  ) {}
 
   /**
    * Create a new sprint
@@ -104,14 +113,19 @@ export class SprintsService {
   /**
    * Get all sprints for an organization
    */
-  async findAll(organizationId: string, teamId?: string) {
+  async findAll(organizationId: string, teamId?: string, allowedTeamIds?: string[] | null) {
     const where: any = {
       organizationId,
       isActive: true,
     };
 
     if (teamId) {
+      if (allowedTeamIds && !allowedTeamIds.includes(teamId)) {
+        return [];
+      }
       where.teamId = teamId;
+    } else if (allowedTeamIds) {
+      where.teamId = { in: allowedTeamIds };
     }
 
     return this.prisma.sprint.findMany({
@@ -293,7 +307,7 @@ export class SprintsService {
   /**
    * Verify sprint access
    */
-  async verifySprintAccess(sprintId: string, organizationId: string) {
+  async verifySprintAccess(sprintId: string, organizationId: string, caller?: any) {
     const sprint = await this.prisma.sprint.findFirst({
       where: {
         id: sprintId,
@@ -303,6 +317,10 @@ export class SprintsService {
 
     if (!sprint) {
       throw new ForbiddenException('Access denied to this sprint');
+    }
+
+    if (caller && this.dataFilterService && sprint.teamId) {
+      await this.dataFilterService.verifyTeamAccess(sprint.teamId, organizationId, caller);
     }
 
     return sprint;
@@ -646,6 +664,7 @@ export class SprintsService {
   async compareSprints(
     sprintIds: string[],
     organizationId: string,
+    caller?: any,
   ): Promise<SprintCompareResponseDto> {
     if (sprintIds.length < 2) {
       throw new BadRequestException('At least 2 sprints are required for comparison');
@@ -666,6 +685,14 @@ export class SprintsService {
 
     if (sprints.length !== sprintIds.length) {
       throw new NotFoundException('One or more sprints not found');
+    }
+
+    if (caller && this.dataFilterService) {
+      for (const sprint of sprints) {
+        if (sprint.teamId) {
+          await this.dataFilterService.verifyTeamAccess(sprint.teamId, organizationId, caller);
+        }
+      }
     }
 
     // Get or generate reports for each sprint
@@ -792,12 +819,29 @@ export class SprintsService {
    * Get sprint velocity trend across multiple sprints
    * Feature 1: Sprint Velocity Chart
    */
-  async getVelocityTrend(organizationId: string, teamId?: string, limit = 10) {
+  async getVelocityTrend(
+    organizationId: string,
+    teamId?: string,
+    limit = 10,
+    allowedTeamIds?: string[] | null,
+  ) {
     const where: any = {
       organizationId,
       isActive: true,
     };
-    if (teamId) where.teamId = teamId;
+    if (teamId) {
+      if (allowedTeamIds && !allowedTeamIds.includes(teamId)) {
+        return {
+          sprints: [],
+          avgVelocity: 0,
+          velocityTrend: 'stable' as const,
+          predictedNextVelocity: 0,
+        };
+      }
+      where.teamId = teamId;
+    } else if (allowedTeamIds) {
+      where.teamId = { in: allowedTeamIds };
+    }
 
     const sprints = await this.prisma.sprint.findMany({
       where,
@@ -1235,23 +1279,33 @@ export class SprintsService {
    * Get sprint timeline for Gantt view
    * Feature 7: Sprint Timeline/Gantt View
    */
-  async getSprintTimeline(organizationId: string, months = 3) {
+  async getSprintTimeline(
+    organizationId: string,
+    months = 3,
+    allowedTeamIds?: string[] | null,
+  ) {
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - months);
 
     const endDate = new Date();
     endDate.setMonth(endDate.getMonth() + 1);
 
+    const where: any = {
+      organizationId,
+      isActive: true,
+      OR: [
+        { startDate: { gte: startDate, lte: endDate } },
+        { endDate: { gte: startDate, lte: endDate } },
+        { startDate: { lte: startDate }, endDate: { gte: endDate } },
+      ],
+    };
+
+    if (allowedTeamIds) {
+      where.teamId = { in: allowedTeamIds };
+    }
+
     const sprints = await this.prisma.sprint.findMany({
-      where: {
-        organizationId,
-        isActive: true,
-        OR: [
-          { startDate: { gte: startDate, lte: endDate } },
-          { endDate: { gte: startDate, lte: endDate } },
-          { startDate: { lte: startDate }, endDate: { gte: endDate } },
-        ],
-      },
+      where,
       include: {
         team: { select: { id: true, name: true } },
         reports: { orderBy: { generatedAt: 'desc' }, take: 1 },
@@ -1404,16 +1458,20 @@ export class SprintsService {
   /**
    * Delete a sprint goal with organization boundary verification
    */
-  async deleteGoal(goalId: string, organizationId?: string) {
+  async deleteGoal(goalId: string, organizationId?: string, caller?: any) {
     if (organizationId) {
       const goal = await this.prisma.sprintGoal.findFirst({
         where: {
           id: goalId,
           sprint: { organizationId },
         },
+        include: { sprint: true },
       });
       if (!goal) {
         throw new NotFoundException(`Sprint goal ${goalId} not found in this organization`);
+      }
+      if (caller && this.dataFilterService && goal.sprint?.teamId) {
+        await this.dataFilterService.verifyTeamAccess(goal.sprint.teamId, organizationId, caller);
       }
     }
     return this.prisma.sprintGoal.delete({ where: { id: goalId } });
@@ -1542,16 +1600,20 @@ export class SprintsService {
   /**
    * Delete a carry-over item with organization boundary verification
    */
-  async deleteCarryOver(carryOverId: string, organizationId?: string) {
+  async deleteCarryOver(carryOverId: string, organizationId?: string, caller?: any) {
     if (organizationId) {
       const carryOver = await this.prisma.sprintCarryOver.findFirst({
         where: {
           id: carryOverId,
           fromSprint: { organizationId },
         },
+        include: { fromSprint: true },
       });
       if (!carryOver) {
         throw new NotFoundException(`Sprint carry-over ${carryOverId} not found in this organization`);
+      }
+      if (caller && this.dataFilterService && carryOver.fromSprint?.teamId) {
+        await this.dataFilterService.verifyTeamAccess(carryOver.fromSprint.teamId, organizationId, caller);
       }
     }
     return this.prisma.sprintCarryOver.delete({ where: { id: carryOverId } });

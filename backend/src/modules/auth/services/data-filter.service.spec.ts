@@ -12,6 +12,7 @@ describe('DataFilterService', () => {
     teamProjectAssignment: Record<string, jest.Mock>;
     projectRepository: Record<string, jest.Mock>;
     repository: Record<string, jest.Mock>;
+    project: Record<string, jest.Mock>;
     user: Record<string, jest.Mock>;
   };
 
@@ -33,12 +34,16 @@ describe('DataFilterService', () => {
       },
       teamProjectAssignment: {
         findMany: jest.fn(),
+        findFirst: jest.fn(),
       },
       projectRepository: {
         findMany: jest.fn(),
         findFirst: jest.fn(),
       },
       repository: {
+        findFirst: jest.fn(),
+      },
+      project: {
         findFirst: jest.fn(),
       },
     };
@@ -227,6 +232,45 @@ describe('DataFilterService', () => {
       await expect(
         service.verifyTeamAccess('team-1', 'org-1', { id: 'user-1' }),
       ).rejects.toThrow('Access denied: You are not an active member or leader of this team.');
+    });
+  });
+
+  describe('verifyProjectAccess', () => {
+    it('allows owner access to any project in organization', async () => {
+      prisma.project.findFirst.mockResolvedValue({ id: 'proj-1', organizationId: 'org-1', isActive: true });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.OWNER });
+
+      await expect(
+        service.verifyProjectAccess('proj-1', 'org-1', { id: 'user-1' }),
+      ).resolves.toEqual({ projectId: 'proj-1', organizationId: 'org-1' });
+    });
+
+    it('allows developer access if project is assigned to active team', async () => {
+      prisma.project.findFirst.mockResolvedValue({ id: 'proj-1', organizationId: 'org-1', isActive: true });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+      prisma.teamProjectAssignment.findFirst.mockResolvedValue({ id: 'tpa-1' });
+
+      await expect(
+        service.verifyProjectAccess('proj-1', 'org-1', { id: 'user-1' }),
+      ).resolves.toEqual({ projectId: 'proj-1', organizationId: 'org-1' });
+    });
+
+    it('throws forbidden if developer has no team assigned to project', async () => {
+      prisma.project.findFirst.mockResolvedValue({ id: 'proj-1', organizationId: 'org-1', isActive: true });
+      prisma.organizationMember.findUnique.mockResolvedValue({ role: Role.DEVELOPER });
+      prisma.teamProjectAssignment.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.verifyProjectAccess('proj-1', 'org-1', { id: 'user-1' }),
+      ).rejects.toThrow('Access denied: This project is not assigned to any of your active teams.');
+    });
+
+    it('throws not found if project does not exist', async () => {
+      prisma.project.findFirst.mockResolvedValue(null);
+
+      await expect(
+        service.verifyProjectAccess('unknown-proj', 'org-1', { id: 'user-1' }),
+      ).rejects.toThrow('Project with ID unknown-proj not found in organization');
     });
   });
 

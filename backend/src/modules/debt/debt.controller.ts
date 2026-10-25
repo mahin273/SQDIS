@@ -6,6 +6,7 @@ import {
   Query,
   UseGuards,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery } from '@nestjs/swagger';
 import { DebtService } from './debt.service';
@@ -13,6 +14,8 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OrganizationGuard } from '../auth/guards/organization.guard';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { GetUser } from '../auth/decorators/get-user.decorator';
+import { DataFilterService } from '../auth/services/data-filter.service';
+import { Role } from '@prisma/client';
 import { DebtFiltersDto } from './dto';
 
 /**
@@ -23,7 +26,40 @@ import { DebtFiltersDto } from './dto';
 @UseGuards(JwtAuthGuard, OrganizationGuard)
 @ApiBearerAuth()
 export class DebtController {
-  constructor(private readonly debtService: DebtService) {}
+  constructor(
+    private readonly debtService: DebtService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
+  ) {}
+
+  /**
+   * Helper to resolve allowed repositories for the caller
+   */
+  private async resolveAllowedRepositoryIds(
+    organizationId: string,
+    user: any,
+    repositoryId?: string,
+  ): Promise<{ repositoryId?: string; allowedRepoIds?: string[]; empty: boolean }> {
+    if (repositoryId) {
+      if (this.dataFilterService && user && typeof user === 'object' && user.id) {
+        await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, user);
+      }
+      return { repositoryId, allowedRepoIds: [repositoryId], empty: false };
+    }
+    if (this.dataFilterService && user && typeof user === 'object' && user.id) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        user.id,
+        organizationId,
+        user.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return { empty: true };
+        }
+        return { allowedRepoIds: scope.repositoryIds, empty: false };
+      }
+    }
+    return { empty: false };
+  }
 
   /**
    * Get all debt items with pagination and filters
@@ -35,12 +71,17 @@ export class DebtController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async findAll(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query() filters: DebtFiltersDto,
   ) {
     if (!organizationId) {
       return { data: [], total: 0, page: 1, limit: 20, totalPages: 0 };
     }
-    return await this.debtService.findAll(organizationId, filters);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, filters.repositoryId);
+    if (scope.empty) {
+      return { data: [], total: 0, page: filters.page || 1, limit: filters.limit || 20, totalPages: 0 };
+    }
+    return await this.debtService.findAll(organizationId, filters, scope.allowedRepoIds);
   }
 
   /**
@@ -54,10 +95,13 @@ export class DebtController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getHotSpots(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query('repositoryId') repositoryId?: string,
   ) {
     if (!organizationId) return [];
-    return await this.debtService.getHotSpots(organizationId, repositoryId);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) return [];
+    return await this.debtService.getHotSpots(organizationId, scope.repositoryId, scope.allowedRepoIds);
   }
 
   /**
@@ -73,12 +117,18 @@ export class DebtController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getTrends(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query('days') days?: number,
     @Query('repositoryId') repositoryId?: string,
     @Query('teamId') teamId?: string,
   ) {
     if (!organizationId) return { trends: [], velocity: 0, status: 'STABLE' };
-    return await this.debtService.getTrends(organizationId, days || 30, repositoryId, teamId);
+    if (teamId && this.dataFilterService && user && typeof user === 'object' && user.id) {
+      await this.dataFilterService.verifyTeamAccess(teamId, organizationId, user);
+    }
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) return { trends: [], velocity: 0, status: 'STABLE' };
+    return await this.debtService.getTrends(organizationId, days || 30, scope.repositoryId, teamId, scope.allowedRepoIds);
   }
 
   /**
@@ -93,11 +143,14 @@ export class DebtController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getRecommendations(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query('repositoryId') repositoryId?: string,
     @Query('limit') limit?: number,
   ) {
     if (!organizationId) return [];
-    return await this.debtService.getRecommendations(organizationId, repositoryId, limit || 10);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) return [];
+    return await this.debtService.getRecommendations(organizationId, scope.repositoryId, limit || 10, scope.allowedRepoIds);
   }
 
   /**
@@ -108,9 +161,33 @@ export class DebtController {
   @ApiOperation({ summary: 'Get debt attribution by developer' })
   @ApiResponse({ status: 200, description: 'Debt introduced and resolved per developer' })
   @ApiResponse({ status: 401, description: 'Unauthorized' })
-  async getAttribution(@GetOrganization() organizationId: string) {
+  async getAttribution(
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ) {
     if (!organizationId) return [];
-    return await this.debtService.getAttribution(organizationId);
+    let allowedDeveloperIds: string[] | null = null;
+    let allowedRepoIds: string[] | undefined;
+
+    if (this.dataFilterService && user && typeof user === 'object' && user.id) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        user.id,
+        organizationId,
+        user.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) return [];
+        allowedRepoIds = scope.repositoryIds;
+
+        if (user.role === Role.DEVELOPER) {
+          allowedDeveloperIds = [user.id];
+        } else if (user.role === Role.TEAM_LEAD) {
+          const teamMembers = await this.debtService.getTeamMemberUserIds(organizationId, user.id);
+          allowedDeveloperIds = teamMembers;
+        }
+      }
+    }
+    return await this.debtService.getAttribution(organizationId, allowedDeveloperIds, allowedRepoIds);
   }
 
   /**
@@ -125,14 +202,18 @@ export class DebtController {
   @ApiResponse({ status: 401, description: 'Unauthorized' })
   async getModuleScores(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query('repositoryId') repositoryId?: string,
     @Query('threshold') threshold?: number,
   ) {
     if (!organizationId) return [];
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) return [];
     return await this.debtService.getModuleDebtScore(
       organizationId,
-      repositoryId,
+      scope.repositoryId,
       threshold || 10,
+      scope.allowedRepoIds,
     );
   }
 
@@ -149,11 +230,15 @@ export class DebtController {
   async resolve(
     @Param('id') id: string,
     @GetUser('id') userId: string,
+    @GetUser() user: any,
     @GetOrganization() organizationId: string,
   ) {
     const existing = await this.debtService.findById(id, organizationId);
     if (!existing) {
       throw new NotFoundException(`Debt item with ID ${id} not found`);
+    }
+    if (this.dataFilterService && user && typeof user === 'object' && existing.repositoryId) {
+      await this.dataFilterService.verifyRepositoryAccess(existing.repositoryId, organizationId, user);
     }
     return await this.debtService.resolve(id, userId, undefined, organizationId);
   }
@@ -172,10 +257,14 @@ export class DebtController {
   async findById(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
     const debtItem = await this.debtService.findById(id, organizationId);
     if (!debtItem) {
       throw new NotFoundException(`Debt item with ID ${id} not found`);
+    }
+    if (this.dataFilterService && user && typeof user === 'object' && debtItem.repositoryId) {
+      await this.dataFilterService.verifyRepositoryAccess(debtItem.repositoryId, organizationId, user);
     }
     return debtItem;
   }

@@ -529,6 +529,78 @@ export class DataFilterService {
   }
 
   /**
+   * Verify project access for caller.
+   * OWNER/ADMIN: verified if project belongs to organizationId.
+   * TEAM_LEAD/DEVELOPER: verified if project is assigned to caller's active teams in organizationId.
+   */
+  async verifyProjectAccess(
+    projectId: string,
+    organizationId: string,
+    caller?: { id: string; role?: string },
+  ): Promise<{ projectId: string; organizationId: string }> {
+    const project = await this.prisma.project.findFirst({
+      where: { id: projectId, organizationId, isActive: true },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Project with ID ${projectId} not found in organization`);
+    }
+
+    if (!caller) {
+      return { projectId, organizationId };
+    }
+
+    let effectiveRole = caller.role as Role | undefined;
+    if (this.prisma.organizationMember) {
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: caller.id,
+          },
+        },
+      });
+      if (membership?.role) {
+        effectiveRole = membership.role as Role;
+      }
+    }
+
+    if (effectiveRole === Role.OWNER || effectiveRole === Role.ADMIN) {
+      return { projectId, organizationId };
+    }
+
+    const hasAssignment = await this.prisma.teamProjectAssignment.findFirst({
+      where: {
+        projectId,
+        endDate: null,
+        team: {
+          organizationId,
+          isActive: true,
+          OR: [
+            { leadId: caller.id },
+            {
+              memberships: {
+                some: {
+                  userId: caller.id,
+                  leftAt: null,
+                },
+              },
+            },
+          ],
+        },
+      },
+    });
+
+    if (!hasAssignment) {
+      throw new ForbiddenException(
+        'Access denied: This project is not assigned to any of your active teams.',
+      );
+    }
+
+    return { projectId, organizationId };
+  }
+
+  /**
    * Verify caller active organization membership and optional role requirements.
    */
   async verifyOrganizationAccess(

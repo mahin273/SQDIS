@@ -12,6 +12,7 @@ import {
   HttpCode,
   HttpStatus,
   Res,
+  Optional,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -48,6 +49,7 @@ import { GetUser } from '../auth/decorators/get-user.decorator';
 import { GetOrganization } from '../auth/decorators/get-organization.decorator';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { TeamsService } from '../teams/teams.service';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { Role } from '@prisma/client';
 
 /**
@@ -64,7 +66,20 @@ export class SprintsController {
     private readonly sprintExportService: SprintExportService,
     private readonly organizationsService: OrganizationsService,
     private readonly teamsService: TeamsService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
   ) {}
+
+  private async resolveAllowedTeamIds(organizationId: string, user: any): Promise<string[] | null> {
+    if (!user || user.role === Role.OWNER || user.role === Role.ADMIN || !this.dataFilterService) {
+      return null;
+    }
+    const scoped = await this.dataFilterService.getScopedProjectAndRepoIds(
+      user.id,
+      organizationId,
+      user.role,
+    );
+    return scoped.isOrgScoped ? null : scoped.teamIds;
+  }
 
   /**
    * Create a new sprint
@@ -102,7 +117,6 @@ export class SprintsController {
       await this.organizationsService.verifyUserRole(organizationId, userId, [
         Role.OWNER,
         Role.ADMIN,
-        Role.TEAM_LEAD,
       ]);
     }
 
@@ -122,8 +136,13 @@ export class SprintsController {
   async findAll(
     @Query('teamId') teamId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.sprintsService.findAll(organizationId, teamId);
+    const allowedTeamIds = await this.resolveAllowedTeamIds(organizationId, user);
+    if (teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(teamId, organizationId, user);
+    }
+    return this.sprintsService.findAll(organizationId, teamId, allowedTeamIds);
   }
 
   /**
@@ -139,8 +158,13 @@ export class SprintsController {
   async getActive(
     @Query('teamId') teamId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.sprintsService.findAll(organizationId, teamId);
+    const allowedTeamIds = await this.resolveAllowedTeamIds(organizationId, user);
+    if (teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(teamId, organizationId, user);
+    }
+    return this.sprintsService.findAll(organizationId, teamId, allowedTeamIds);
   }
 
   /**
@@ -169,12 +193,13 @@ export class SprintsController {
   async compareSprints(
     @Query('sprintIds') sprintIds: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ): Promise<SprintCompareResponseDto> {
     const ids = sprintIds
       .split(',')
       .map((id) => id.trim())
       .filter((id) => id);
-    return this.sprintsService.compareSprints(ids, organizationId);
+    return this.sprintsService.compareSprints(ids, organizationId, user);
   }
 
   /**
@@ -226,13 +251,19 @@ export class SprintsController {
   @ApiResponse({ status: 200, description: 'Velocity trend data', type: VelocityTrendDto })
   async getVelocityTrend(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query('teamId') teamId?: string,
     @Query('limit') limit?: string,
   ): Promise<VelocityTrendDto> {
+    const allowedTeamIds = await this.resolveAllowedTeamIds(organizationId, user);
+    if (teamId && this.dataFilterService) {
+      await this.dataFilterService.verifyTeamAccess(teamId, organizationId, user);
+    }
     return this.sprintsService.getVelocityTrend(
       organizationId,
       teamId,
       limit ? parseInt(limit, 10) : 10,
+      allowedTeamIds,
     );
   }
 
@@ -246,9 +277,15 @@ export class SprintsController {
   @ApiResponse({ status: 200, description: 'Sprint timeline data' })
   async getSprintTimeline(
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Query('months') months?: string,
   ) {
-    return this.sprintsService.getSprintTimeline(organizationId, months ? parseInt(months, 10) : 3);
+    const allowedTeamIds = await this.resolveAllowedTeamIds(organizationId, user);
+    return this.sprintsService.getSprintTimeline(
+      organizationId,
+      months ? parseInt(months, 10) : 3,
+      allowedTeamIds,
+    );
   }
 
   /**
@@ -265,8 +302,12 @@ export class SprintsController {
     status: 404,
     description: 'Sprint not found',
   })
-  async findOne(@Param('id') id: string, @GetOrganization() organizationId: string) {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+  async findOne(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ) {
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.findById(id);
   }
 
@@ -301,8 +342,9 @@ export class SprintsController {
     @Body() dto: UpdateSprintDto,
     @GetUser('id') userId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    const sprint = await this.sprintsService.verifySprintAccess(id, organizationId);
+    const sprint = await this.sprintsService.verifySprintAccess(id, organizationId, user);
 
     // Check if user is OWNER, ADMIN, or Team Lead of the sprint's team
     const isTeamLead = await this.teamsService.isTeamLead(sprint.teamId, userId);
@@ -339,8 +381,9 @@ export class SprintsController {
     @Param('id') id: string,
     @GetUser('id') userId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    const sprint = await this.sprintsService.verifySprintAccess(id, organizationId);
+    const sprint = await this.sprintsService.verifySprintAccess(id, organizationId, user);
 
     // Check if user is OWNER, ADMIN, or Team Lead of the sprint's team
     const isTeamLead = await this.teamsService.isTeamLead(sprint.teamId, userId);
@@ -372,8 +415,9 @@ export class SprintsController {
   async getReport(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ): Promise<SprintReportDto> {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.generateReport(id);
   }
 
@@ -399,9 +443,10 @@ export class SprintsController {
   async exportPdf(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Res() res: Response,
   ): Promise<void> {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     const sprintDetails = await this.sprintsService.findById(id);
     const pdfBuffer = await this.sprintExportService.exportPdf(id);
     const filename = this.sprintExportService.generateFilename(sprintDetails.name, 'pdf');
@@ -437,9 +482,10 @@ export class SprintsController {
   async exportCsv(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
     @Res() res: Response,
   ): Promise<void> {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     const sprintDetails = await this.sprintsService.findById(id);
     const csvContent = await this.sprintExportService.exportCsv(id);
     const filename = this.sprintExportService.generateFilename(sprintDetails.name, 'csv');
@@ -465,8 +511,9 @@ export class SprintsController {
   async getBurndown(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ): Promise<SprintBurndownDto> {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.getBurndown(id);
   }
 
@@ -482,8 +529,9 @@ export class SprintsController {
   async getSprintHealth(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.getSprintHealth(id);
   }
 
@@ -503,8 +551,9 @@ export class SprintsController {
   async getDeveloperContributions(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ): Promise<SprintContributionsDto> {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.getDeveloperContributions(id);
   }
 
@@ -523,8 +572,9 @@ export class SprintsController {
     @Param('id') id: string,
     @Body() dto: CreateSprintGoalDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.createGoal(id, dto);
   }
 
@@ -536,8 +586,12 @@ export class SprintsController {
   @ApiParam({ name: 'id', description: 'Sprint ID' })
   @ApiResponse({ status: 200, description: 'Sprint goals' })
   @ApiResponse({ status: 404, description: 'Sprint not found' })
-  async getGoals(@Param('id') id: string, @GetOrganization() organizationId: string) {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+  async getGoals(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ) {
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.getGoals(id);
   }
 
@@ -552,8 +606,9 @@ export class SprintsController {
   async deleteGoal(
     @Param('goalId') goalId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.sprintsService.deleteGoal(goalId, organizationId);
+    return this.sprintsService.deleteGoal(goalId, organizationId, user);
   }
 
   // ==================== RETROSPECTIVES ====================
@@ -571,8 +626,9 @@ export class SprintsController {
     @Param('id') id: string,
     @Body() dto: CreateRetrospectiveDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.upsertRetrospective(id, dto);
   }
 
@@ -586,8 +642,9 @@ export class SprintsController {
   async getRetrospective(
     @Param('id') id: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.getRetrospective(id);
   }
 
@@ -606,8 +663,9 @@ export class SprintsController {
     @Param('id') id: string,
     @Body() dto: CreateCarryOverDto,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.createCarryOver(id, dto);
   }
 
@@ -618,8 +676,12 @@ export class SprintsController {
   @ApiOperation({ summary: 'Get carry-overs for a sprint' })
   @ApiParam({ name: 'id', description: 'Sprint ID' })
   @ApiResponse({ status: 200, description: 'Sprint carry-overs' })
-  async getCarryOvers(@Param('id') id: string, @GetOrganization() organizationId: string) {
-    await this.sprintsService.verifySprintAccess(id, organizationId);
+  async getCarryOvers(
+    @Param('id') id: string,
+    @GetOrganization() organizationId: string,
+    @GetUser() user: any,
+  ) {
+    await this.sprintsService.verifySprintAccess(id, organizationId, user);
     return this.sprintsService.getCarryOvers(id);
   }
 
@@ -634,7 +696,8 @@ export class SprintsController {
   async deleteCarryOver(
     @Param('carryOverId') carryOverId: string,
     @GetOrganization() organizationId: string,
+    @GetUser() user: any,
   ) {
-    return this.sprintsService.deleteCarryOver(carryOverId, organizationId);
+    return this.sprintsService.deleteCarryOver(carryOverId, organizationId, user);
   }
 }

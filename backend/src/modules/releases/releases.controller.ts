@@ -11,6 +11,7 @@ import {
   HttpCode,
   HttpStatus,
   Res,
+  Optional,
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiParam, ApiQuery, ApiProduces } from '@nestjs/swagger';
@@ -34,6 +35,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { GetUser } from '../auth/decorators/get-user.decorator';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { DataFilterService } from '../auth/services/data-filter.service';
 import { Role } from '@prisma/client';
 
 /**
@@ -47,7 +49,38 @@ export class ReleasesController {
   constructor(
     private readonly releasesService: ReleasesService,
     private readonly organizationsService: OrganizationsService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
   ) {}
+
+  /**
+   * Helper to resolve allowed repositories for the caller
+   */
+  private async resolveAllowedRepositoryIds(
+    organizationId: string,
+    user: any,
+    repositoryId?: string,
+  ): Promise<{ repositoryId?: string; allowedRepoIds?: string[]; empty: boolean }> {
+    if (repositoryId) {
+      if (this.dataFilterService && user && typeof user === 'object' && user.id) {
+        await this.dataFilterService.verifyRepositoryAccess(repositoryId, organizationId, user);
+      }
+      return { repositoryId, allowedRepoIds: [repositoryId], empty: false };
+    }
+    if (this.dataFilterService && user && typeof user === 'object' && user.id) {
+      const scope = await this.dataFilterService.getScopedProjectAndRepoIds(
+        user.id,
+        organizationId,
+        user.role as any,
+      );
+      if (!scope.isOrgScoped) {
+        if (scope.repositoryIds.length === 0) {
+          return { empty: true };
+        }
+        return { allowedRepoIds: scope.repositoryIds, empty: false };
+      }
+    }
+    return { empty: false };
+  }
 
   /**
    * Create a new release
@@ -92,9 +125,12 @@ export class ReleasesController {
   })
   async findAll(
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
     @Query('repositoryId') repositoryId?: string,
   ) {
-    return this.releasesService.findAll(organizationId, repositoryId);
+    const scope = await this.resolveAllowedRepositoryIds(organizationId, user, repositoryId);
+    if (scope.empty) return [];
+    return this.releasesService.findAll(organizationId, scope.repositoryId, scope.allowedRepoIds);
   }
 
   /**
@@ -115,8 +151,9 @@ export class ReleasesController {
   async findOne(
     @Param('id') id: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ): Promise<ReleaseResponseDto> {
-    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.releasesService.verifyReleaseAccess(id, organizationId, user);
     return this.releasesService.findById(id);
   }
 
@@ -147,8 +184,9 @@ export class ReleasesController {
     @Body() dto: UpdateReleaseDto,
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ) {
-    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.releasesService.verifyReleaseAccess(id, organizationId, user);
 
     // Only OWNER and ADMIN can update releases
     await this.organizationsService.verifyUserRole(organizationId, userId, [
@@ -177,8 +215,9 @@ export class ReleasesController {
     @Body() dto: ShipReleaseDto,
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ): Promise<ShipReleaseResponseDto> {
-    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.releasesService.verifyReleaseAccess(id, organizationId, user);
     await this.organizationsService.verifyUserRole(organizationId, userId, [
       Role.OWNER,
       Role.ADMIN,
@@ -205,9 +244,10 @@ export class ReleasesController {
   async exportPdf(
     @Param('id') id: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
     @Res() res: Response,
   ): Promise<void> {
-    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.releasesService.verifyReleaseAccess(id, organizationId, user);
     const release = await this.releasesService.findById(id);
     const pdfBuffer = await this.releasesService.exportPdf(id, organizationId);
     const safeVersion = release.version.replace(/[^a-zA-Z0-9._-]/g, '_');
@@ -245,8 +285,9 @@ export class ReleasesController {
     @Param('id') id: string,
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ) {
-    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.releasesService.verifyReleaseAccess(id, organizationId, user);
 
     // Only OWNER and ADMIN can delete releases
     await this.organizationsService.verifyUserRole(organizationId, userId, [
@@ -284,7 +325,9 @@ export class ReleasesController {
     @Body() dto: AssociateSprintDto,
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ) {
+    await this.releasesService.verifyReleaseAccess(releaseId, organizationId, user);
     // Only OWNER and ADMIN can associate sprints
     await this.organizationsService.verifyUserRole(organizationId, userId, [
       Role.OWNER,
@@ -319,7 +362,9 @@ export class ReleasesController {
     @Param('sprintId') sprintId: string,
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ) {
+    await this.releasesService.verifyReleaseAccess(releaseId, organizationId, user);
     // Only OWNER and ADMIN can remove sprint associations
     await this.organizationsService.verifyUserRole(organizationId, userId, [
       Role.OWNER,
@@ -347,8 +392,9 @@ export class ReleasesController {
   async getReadiness(
     @Param('id') id: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ): Promise<ReadinessScoreDto> {
-    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.releasesService.verifyReleaseAccess(id, organizationId, user);
     return this.releasesService.calculateReadiness(id);
   }
 
@@ -368,8 +414,9 @@ export class ReleasesController {
     @Body() dto: EvaluateTelemetryDto,
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ): Promise<ReleaseTelemetryResponseDto> {
-    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.releasesService.verifyReleaseAccess(id, organizationId, user);
 
     // Only OWNER and ADMIN can trigger telemetry evaluations
     await this.organizationsService.verifyUserRole(organizationId, userId, [
@@ -394,8 +441,9 @@ export class ReleasesController {
   async getTelemetryHistory(
     @Param('id') id: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ): Promise<ReleaseTelemetryResponseDto[]> {
-    return this.releasesService.getTelemetryHistory(id, organizationId);
+    return this.releasesService.getTelemetryHistory(id, organizationId, user);
   }
 
   /**
@@ -414,8 +462,9 @@ export class ReleasesController {
     @Body() dto: RollbackReleaseDto,
     @GetUser('id') userId: string,
     @GetUser('organizationId') organizationId: string,
+    @GetUser() user: any,
   ): Promise<RollbackResponseDto> {
-    await this.releasesService.verifyReleaseAccess(id, organizationId);
+    await this.releasesService.verifyReleaseAccess(id, organizationId, user);
 
     // Only OWNER and ADMIN can trigger rollbacks
     await this.organizationsService.verifyUserRole(organizationId, userId, [
