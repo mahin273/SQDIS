@@ -197,8 +197,17 @@ You can run SQDIS either using Docker Compose (recommended for full functionalit
 
 ---
 
-### Option 1: Running with Docker Compose (Recommended)
+### Option 1: Running with Docker (Recommended)
 
+#### Quickstart with Makefile
+The project includes a comprehensive [Makefile](file:///mnt/D-Drive/Projects/SQDIS-work/SQDIS/Makefile) automating all Docker operations:
+```bash
+make init          # Configures .env, builds images, starts containers, and seeds database
+make help          # Displays all available lifecycle, build, log, db, and test commands
+make info          # Displays active service URLs, ports, and demo presentation credentials
+```
+
+#### Manual Docker Compose
 1. **Clone the repository and enter the directory**:
    ```bash
    git clone https://github.com/mahin273/SQDIS.git
@@ -210,7 +219,7 @@ You can run SQDIS either using Docker Compose (recommended for full functionalit
    cp .env.example .env
    ```
 
-3. **Build and launch all 12 container services**:
+3. **Build and launch all container services**:
    ```bash
    docker compose up -d --build
    ```
