@@ -1355,7 +1355,7 @@ export class ScoresService {
 
         // 2. If result is null or has 0 files analyzed, cache is cold. Warm it up!
         if (!qualityResult || qualityResult.complexity.length === 0) {
-          this.logger.log(`AST cache for repository ${repoId} is cold. Running full initial warm-up...`);
+          this.logger.log(`AST cache for repository ${repoId} is cold. Running warm-up...`);
           
           const repository = await this.prisma.repository.findUnique({
             where: { id: repoId },
@@ -1366,23 +1366,14 @@ export class ScoresService {
             const [owner, repoName] = repository.fullName.split('/');
             const octokit = await this.githubService.getOctokitForOrganization(organizationId);
             
-            // Download up to 200 files for complete repository mapping
-            const initialFiles = await this.githubApiService.fetchRepositoryCodeFiles(octokit, owner, repoName, 200);
+            // Download up to 40 core files for fast, complete repository mapping
+            const initialFiles = await this.githubApiService.fetchRepositoryCodeFiles(octokit, owner, repoName, 40);
             
             if (initialFiles.length > 0) {
-              // Upload in chunks of 40 to avoid payload size/timeout limits
-              const chunkSize = 40;
-              for (let i = 0; i < initialFiles.length; i += chunkSize) {
-                const chunk = initialFiles.slice(i, i + chunkSize);
-                await this.mlClient.analyzeCodeQuality({
-                  repository_id: repoId,
-                  files: chunk,
-                });
-              }
-              // Final query to get full integrated analysis
+              // Analyze full initial set in a single request, warming cache and producing analysis
               qualityResult = await this.mlClient.analyzeCodeQuality({
                 repository_id: repoId,
-                files: [],
+                files: initialFiles,
               });
             }
           }

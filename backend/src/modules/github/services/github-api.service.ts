@@ -250,23 +250,29 @@ export class GitHubApiService {
       );
 
       const results: Array<{ path: string; content: string }> = [];
+      const batchSize = 8;
 
-      for (const file of selectedFiles) {
-        if (!file.sha || !file.path) continue;
-        try {
-          const { data: blob } = await octokit.rest.git.getBlob({
-            owner,
-            repo,
-            file_sha: file.sha,
-          });
-
-          const content = Buffer.from(blob.content, 'base64').toString('utf8');
-          results.push({
-            path: file.path,
-            content,
-          });
-        } catch (fileErr) {
-          this.logger.warn(`Failed to fetch blob for ${file.path}: ${fileErr}`);
+      for (let i = 0; i < selectedFiles.length; i += batchSize) {
+        const batch = selectedFiles.slice(i, i + batchSize);
+        const batchResults = await Promise.all(
+          batch.map(async (file) => {
+            if (!file.sha || !file.path) return null;
+            try {
+              const { data: blob } = await octokit.rest.git.getBlob({
+                owner,
+                repo,
+                file_sha: file.sha,
+              });
+              const content = Buffer.from(blob.content, 'base64').toString('utf8');
+              return { path: file.path, content };
+            } catch (fileErr) {
+              this.logger.warn(`Failed to fetch blob for ${file.path}: ${fileErr}`);
+              return null;
+            }
+          }),
+        );
+        for (const item of batchResults) {
+          if (item) results.push(item);
         }
       }
 

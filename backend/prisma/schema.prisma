@@ -507,6 +507,8 @@ model Commit {
   commitComments       CommitComment[]
 
   @@unique([repositoryId, sha])
+  @@index([repositoryId])
+  @@index([committedAt])
   @@map("commits")
 }
 
@@ -520,6 +522,8 @@ model FileChange {
 
   commit Commit @relation(fields: [commitId], references: [id], onDelete: Cascade)
 
+  @@index([commitId])
+  @@index([filePath])
   @@map("file_changes")
 }
 

@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional, Inject } from '@nestjs/common';
 import { PrismaService } from '../../prisma';
 import { ScoresService } from '../scores/scores.service';
 import { DataFilterService } from '../auth/services/data-filter.service';
+import { CacheService } from '../cache/cache.service.js';
 
 @Injectable()
 export class DashboardService {
@@ -10,7 +11,8 @@ export class DashboardService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly scoresService: ScoresService,
-    private readonly dataFilterService?: DataFilterService,
+    @Optional() private readonly dataFilterService?: DataFilterService,
+    @Optional() @Inject(CacheService) private readonly cacheService?: CacheService,
   ) {}
 
   /**
@@ -49,6 +51,12 @@ export class DashboardService {
    * Get organization-wide dashboard statistics
    */
   async getOrganizationStats(organizationId: string, caller?: { id: string; role?: string }) {
+    const cacheKey = `dashboard:stats:${organizationId}:${caller?.id || 'all'}`;
+    if (this.cacheService) {
+      const cached = await this.cacheService.get<any>(cacheKey);
+      if (cached) return cached;
+    }
+
     const scope = await this.resolveScope(organizationId, caller);
 
     const repoWhere: any = { organizationId, isEnabled: true };
@@ -179,13 +187,13 @@ export class DashboardService {
             where: { repositoryId },
           });
           if (commitCount > 0) {
-            try {
-              const calculated = await this.scoresService.calculateSQS(repositoryId, organizationId);
-              if (calculated && typeof calculated.score === 'number') {
-                scoreRecord = { score: calculated.score };
-              }
-            } catch (calcErr) {
-              this.logger.warn(`Failed on-demand SQS calculation for repository ${repositoryId}: ${calcErr}`);
+            // Trigger asynchronous calculation in BullMQ worker without blocking user HTTP request
+            if (this.scoresService?.triggerSQSRecalculationOnCommit) {
+              this.scoresService.triggerSQSRecalculationOnCommit(repositoryId, organizationId).catch((calcErr) => {
+                this.logger.warn(`Failed background SQS enqueue for repository ${repositoryId}: ${calcErr}`);
+              });
+            } else if (this.scoresService?.calculateSQS) {
+              this.scoresService.calculateSQS(repositoryId, organizationId).catch(() => {});
             }
           }
         }
@@ -240,7 +248,7 @@ export class DashboardService {
       where: alertWhere,
     });
 
-    return {
+    const statsResult = {
       totalRepositories,
       totalTeams,
       totalDevelopers,
@@ -252,12 +260,24 @@ export class DashboardService {
       avgSQS: Number(avgSQS.toFixed(1)),
       riskyModulesCount,
     };
+
+    if (this.cacheService) {
+      await this.cacheService.set(cacheKey, statsResult, 60);
+    }
+
+    return statsResult;
   }
 
   /**
    * Get SQS trend over time for organization
    */
   async getSQSTrend(organizationId: string, days: number = 30, caller?: { id: string; role?: string }) {
+    const cacheKey = `dashboard:sqs-trend:${organizationId}:${caller?.id || 'all'}:${days}`;
+    if (this.cacheService) {
+      const cached = await this.cacheService.get<any>(cacheKey);
+      if (cached) return cached;
+    }
+
     const scope = await this.resolveScope(organizationId, caller);
     if (!scope.isOrgScoped && scope.projectIds.length === 0 && scope.repositoryIds.length === 0) {
       return [];
@@ -317,16 +337,28 @@ export class DashboardService {
       {} as Record<string, { total: number; count: number }>,
     );
 
-    return Object.entries(grouped).map(([date, { total, count }]) => ({
+    const trendResult = Object.entries(grouped).map(([date, { total, count }]) => ({
       date,
       value: Number((total / count).toFixed(1)),
     }));
+
+    if (this.cacheService) {
+      await this.cacheService.set(cacheKey, trendResult, 60);
+    }
+
+    return trendResult;
   }
 
   /**
    * Get commit activity trend
    */
   async getCommitTrend(organizationId: string, days: number = 30, caller?: { id: string; role?: string }) {
+    const cacheKey = `dashboard:commit-trend:${organizationId}:${caller?.id || 'all'}:${days}`;
+    if (this.cacheService) {
+      const cached = await this.cacheService.get<any>(cacheKey);
+      if (cached) return cached;
+    }
+
     const scope = await this.resolveScope(organizationId, caller);
     if (!scope.isOrgScoped && scope.repositoryIds.length === 0) {
       return [];
@@ -358,15 +390,27 @@ export class DashboardService {
       {} as Record<string, number>,
     );
 
-    return Object.entries(grouped)
+    const trend = Object.entries(grouped)
       .map(([date, count]) => ({ date, value: count }))
       .sort((a, b) => a.date.localeCompare(b.date));
+
+    if (this.cacheService) {
+      await this.cacheService.set(cacheKey, trend, 60);
+    }
+
+    return trend;
   }
 
   /**
    * Get top repositories by SQS
    */
   async getTopRepositories(organizationId: string, limit: number = 5, caller?: { id: string; role?: string }) {
+    const cacheKey = `dashboard:top-repos:${organizationId}:${caller?.id || 'all'}:${limit}`;
+    if (this.cacheService) {
+      const cached = await this.cacheService.get<any>(cacheKey);
+      if (cached) return cached;
+    }
+
     const scope = await this.resolveScope(organizationId, caller);
     if (!scope.isOrgScoped && scope.repositoryIds.length === 0) {
       return [];
@@ -415,13 +459,12 @@ export class DashboardService {
 
         // 3. On-demand calculation if repository has commits but no score yet
         if (sqs === 0 && repo._count.commits > 0) {
-          try {
-            const calculated = await this.scoresService.calculateSQS(repo.id, organizationId);
-            if (calculated && typeof calculated.score === 'number') {
-              sqs = calculated.score;
-            }
-          } catch (calcErr) {
-            this.logger.warn(`Failed on-demand SQS calculation for repository ${repo.id}: ${calcErr}`);
+          if (this.scoresService?.triggerSQSRecalculationOnCommit) {
+            this.scoresService.triggerSQSRecalculationOnCommit(repo.id, organizationId).catch((calcErr) => {
+              this.logger.warn(`Failed background SQS enqueue for repo ${repo.id}: ${calcErr}`);
+            });
+          } else if (this.scoresService?.calculateSQS) {
+            this.scoresService.calculateSQS(repo.id, organizationId).catch(() => {});
           }
         }
 
@@ -453,7 +496,11 @@ export class DashboardService {
       }),
     );
 
-    return repoScores.sort((a, b) => b.sqs - a.sqs).slice(0, limit);
+    const sortedRepos = repoScores.sort((a, b) => b.sqs - a.sqs).slice(0, limit);
+    if (this.cacheService) {
+      await this.cacheService.set(cacheKey, sortedRepos, 60);
+    }
+    return sortedRepos;
   }
 
   /**
@@ -462,8 +509,8 @@ export class DashboardService {
   async getBottomRepositories(organizationId: string, limit: number = 5, caller?: { id: string; role?: string }) {
     const topRepos = await this.getTopRepositories(organizationId, 50, caller);
     return topRepos
-      .filter((r) => r.sqs > 0 || r.commits > 0)
-      .sort((a, b) => a.sqs - b.sqs)
+      .filter((r: any) => (r.sqs ?? 0) > 0 || (r.commits ?? 0) > 0)
+      .sort((a: any, b: any) => (a.sqs ?? 0) - (b.sqs ?? 0))
       .slice(0, limit);
   }
 
@@ -475,6 +522,12 @@ export class DashboardService {
     limit: number = 5,
     caller?: { id: string; role?: string },
   ) {
+    const cacheKey = `dashboard:top-devs:${organizationId}:${caller?.id || 'all'}:${limit}`;
+    if (this.cacheService) {
+      const cached = await this.cacheService.get<any>(cacheKey);
+      if (cached) return cached;
+    }
+
     let allowedUserIds: string[] | null = null;
     if (caller) {
       const membership = await this.prisma.organizationMember.findUnique({
@@ -532,18 +585,14 @@ export class DashboardService {
           select: { score: true },
         });
 
-        // Auto-evaluate developer DQS if not yet persisted
+        // Auto-evaluate developer DQS asynchronously in BullMQ worker if not yet persisted
         if (!latestScore) {
-          try {
-            const calculated = await this.scoresService.calculateDQS(
-              member.userId,
-              organizationId,
-            );
-            if (calculated && calculated.score !== null) {
-              latestScore = { score: calculated.score };
-            }
-          } catch (error) {
-            this.logger.warn(`Failed to auto-evaluate DQS for developer ${member.userId}: ${error}`);
+          if (this.scoresService?.triggerDQSRecalculationOnCommit) {
+            this.scoresService.triggerDQSRecalculationOnCommit(member.userId, organizationId).catch((error) => {
+              this.logger.warn(`Failed to enqueue background DQS for developer ${member.userId}: ${error}`);
+            });
+          } else if (this.scoresService?.calculateDQS) {
+            this.scoresService.calculateDQS(member.userId, organizationId).catch(() => {});
           }
         }
 
@@ -569,7 +618,7 @@ export class DashboardService {
       }),
     );
 
-    return devScores
+    const sortedDevs = devScores
       .sort((a, b) => {
         if (b.dqs !== a.dqs) {
           return b.dqs - a.dqs;
@@ -577,6 +626,12 @@ export class DashboardService {
         return b.commits - a.commits;
       })
       .slice(0, limit);
+
+    if (this.cacheService) {
+      await this.cacheService.set(cacheKey, sortedDevs, 60);
+    }
+
+    return sortedDevs;
   }
 
   /**

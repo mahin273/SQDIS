@@ -1507,6 +1507,7 @@ export class ReviewsService {
           'X-Service-Key': mlServiceSecret,
         },
         body: JSON.stringify({ body }),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
