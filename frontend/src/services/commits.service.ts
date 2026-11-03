@@ -87,6 +87,18 @@ export const commitsService = {
     const response = await api.get<Commit>(`/commits/${id}`);
     return response.data;
   },
+
+  /**
+   * Re-attribute existing unattributed commits to developers
+   */
+  async reattribute(repositoryId?: string): Promise<{ updated: number; developersDiscovered: number }> {
+    const response = await api.post<{ updated: number; developersDiscovered: number }>(
+      '/commits/reattribute',
+      {},
+      { params: repositoryId ? { repositoryId } : undefined },
+    );
+    return response.data;
+  },
 };
 
 export default commitsService;

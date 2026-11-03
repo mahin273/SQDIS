@@ -25,6 +25,15 @@ describe('sprintsService', () => {
     expect(result).toEqual(mockSprints);
   });
 
+  it('fetches active sprints', async () => {
+    const mockActive = [{ id: 's-active', name: 'Sprint Active' }];
+    vi.mocked(api.get).mockResolvedValueOnce({ data: mockActive });
+
+    const result = await sprintsService.getActive('team-1');
+    expect(api.get).toHaveBeenCalledWith('/sprints/active', { params: { teamId: 'team-1' } });
+    expect(result).toEqual(mockActive);
+  });
+
   it('fetches sprint by id', async () => {
     const mockSprint = { id: 's-1', name: 'Sprint 1' };
     vi.mocked(api.get).mockResolvedValueOnce({ data: mockSprint });

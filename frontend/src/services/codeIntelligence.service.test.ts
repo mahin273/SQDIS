@@ -114,5 +114,46 @@ describe('codeIntelligenceService - Automated Remediation Advice', () => {
     expect(result.hotspots.total).toBe(194);
     expect(result.jitScreenedCommits).toBe(370);
   });
+
+  it('calls GET /code-intelligence/bus-factor-snapshots and returns snapshots', async () => {
+    const mockSnapshots = [
+      {
+        id: 'snap-1',
+        overallBusFactor: 2.5,
+        averageGini: 0.35,
+        criticalSilosCount: 0,
+        vulnerableCount: 1,
+        resilientCount: 4,
+        totalModulesAnalyzed: 5,
+        createdAt: '2026-09-01T00:00:00Z',
+      },
+    ];
+    vi.mocked(api.get).mockResolvedValueOnce({ data: mockSnapshots });
+
+    const result = await codeIntelligenceService.getBusFactorSnapshots({ teamId: 'team-1', limit: 5 });
+    expect(api.get).toHaveBeenCalledWith('/code-intelligence/bus-factor-snapshots', {
+      params: { teamId: 'team-1', limit: 5 },
+    });
+    expect(result).toEqual(mockSnapshots);
+  });
+
+  it('calls POST /code-intelligence/canary-analysis and returns telemetry regression analysis', async () => {
+    const mockCanary = {
+      verdict: 'HEALTHY',
+      baseline_metrics: { p99_latency_ms: 120 },
+      canary_metrics: { p99_latency_ms: 125 },
+    };
+    vi.mocked(api.post).mockResolvedValueOnce({ data: mockCanary });
+
+    const result = await codeIntelligenceService.analyzeCanary({
+      repositoryId: 'repo-1',
+      latencyThresholdPct: 15,
+    });
+    expect(api.post).toHaveBeenCalledWith('/code-intelligence/canary-analysis', {
+      repositoryId: 'repo-1',
+      latencyThresholdPct: 15,
+    });
+    expect(result.verdict).toBe('HEALTHY');
+  });
 });
 

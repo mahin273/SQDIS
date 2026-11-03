@@ -151,6 +151,36 @@ export interface RepositoryIntelligenceStats {
   totalCommits: number;
 }
 
+export interface BusFactorSnapshot {
+  id: string;
+  teamId?: string;
+  teamName?: string;
+  overallBusFactor: number;
+  averageGini: number;
+  criticalSilosCount: number;
+  vulnerableCount: number;
+  resilientCount: number;
+  totalModulesAnalyzed: number;
+  moduleResults?: any;
+  createdAt: string;
+}
+
+export interface CanaryAnalysisRequest {
+  repositoryId?: string;
+  baselineWindowSeconds?: number;
+  canaryWindowSeconds?: number;
+  latencyThresholdPct?: number;
+}
+
+export interface CanaryAnalysisResponse {
+  verdict: 'HEALTHY' | 'DEGRADED' | 'CRITICAL_REGRESSION' | string;
+  baseline_metrics?: Record<string, any>;
+  canary_metrics?: Record<string, any>;
+  comparison?: Record<string, any>;
+  recommendation?: string;
+  [key: string]: any;
+}
+
 export const codeIntelligenceService = {
   async predictAstDefect(payload: AstDefectRequest): Promise<AstDefectResponse> {
     const resp = await api.post<AstDefectResponse>('/code-intelligence/ast-defect', payload);
@@ -225,6 +255,18 @@ export const codeIntelligenceService = {
     const resp = await api.get<RepositoryIntelligenceStats>(
       `/code-intelligence/repositories/${repositoryId}/stats`,
     );
+    return resp.data;
+  },
+
+  async getBusFactorSnapshots(params?: { teamId?: string; limit?: number }): Promise<BusFactorSnapshot[]> {
+    const resp = await api.get<BusFactorSnapshot[]>('/code-intelligence/bus-factor-snapshots', {
+      params,
+    });
+    return resp.data;
+  },
+
+  async analyzeCanary(payload: CanaryAnalysisRequest): Promise<CanaryAnalysisResponse> {
+    const resp = await api.post<CanaryAnalysisResponse>('/code-intelligence/canary-analysis', payload);
     return resp.data;
   },
 };

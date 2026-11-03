@@ -72,6 +72,14 @@ export const reportsService = {
     const response = await api.get<Blob>(`/reports/${id}/download`, { responseType: 'blob' });
     return response.data;
   },
+
+  /**
+   * Get team leaderboard ranked by average DQS
+   */
+  async getTeamLeaderboard(query?: LeaderboardQuery): Promise<LeaderboardEntry[]> {
+    const response = await api.get<LeaderboardEntry[]>('/reports/teams', { params: query });
+    return response.data;
+  },
 };
 
 export const leaderboardService = {

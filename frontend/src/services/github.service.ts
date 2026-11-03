@@ -91,6 +91,14 @@ export const githubService = {
   },
 
   /**
+   * Test WebSocket commit event broadcast
+   */
+  async testWebSocket(): Promise<{ success: boolean; message: string }> {
+    const response = await api.post<{ success: boolean; message: string }>('/github/webhooks/test');
+    return response.data;
+  },
+
+  /**
    * Retry a previously failed webhook delivery
    */
   async retryWebhookDelivery(deliveryId: string): Promise<{ message: string }> {

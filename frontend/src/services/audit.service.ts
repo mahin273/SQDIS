@@ -67,6 +67,24 @@ export const auditService = {
   },
 
   /**
+   * List recent audit log exports
+   */
+  async listExports(): Promise<AuditExport[]> {
+    const response = await api.get<AuditExport[]>('/audit-logs/export');
+    return response.data;
+  },
+
+  /**
+   * Download export file as Blob
+   */
+  async downloadExport(id: string): Promise<Blob> {
+    const response = await api.get(`/audit-logs/export/${id}/download`, {
+      responseType: 'blob',
+    });
+    return response.data;
+  },
+
+  /**
    * Get export status
    */
   async getExportStatus(id: string): Promise<AuditExport> {

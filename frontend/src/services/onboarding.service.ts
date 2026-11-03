@@ -84,6 +84,14 @@ export const onboardingService = {
   },
 
   /**
+   * Get general onboarding dashboard stats (active, completed, at-risk counts)
+   */
+  async getGeneralStats(): Promise<{ active: number; completed: number; atRisk: number }> {
+    const response = await api.get<{ active: number; completed: number; atRisk: number }>('/onboarding/stats');
+    return response.data;
+  },
+
+  /**
    * Get list of developers at risk during onboarding
    */
   async getAtRiskDevelopers(): Promise<AtRiskDeveloper[]> {

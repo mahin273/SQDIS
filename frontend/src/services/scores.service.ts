@@ -114,6 +114,14 @@ export const scoresService = {
   },
 
   /**
+   * Get direct SQS score for a repository
+   */
+  async getRepositorySQS(repositoryId: string): Promise<SqsScore> {
+    const response = await api.get<SqsScore>(`/scores/sqs/repository/${repositoryId}`);
+    return response.data;
+  },
+
+  /**
    * Trigger score recalculation
    */
   async recalculate(data: RecalculateRequest): Promise<{ message: string }> {
