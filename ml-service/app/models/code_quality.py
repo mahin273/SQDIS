@@ -1286,10 +1286,14 @@ class CodeQualityAnalyzer:
         path_stack = []
 
         def dfs(node):
+            if len(cycles) >= 50:
+                return
             visited[node] = 1
             path_stack.append(node)
 
             for neighbor in import_graph.get(node, []):
+                if len(cycles) >= 50:
+                    break
                 if visited.get(neighbor, 0) == 1:
                     cycle_index = path_stack.index(neighbor)
                     cycle_path = path_stack[cycle_index:] + [neighbor]
@@ -1304,6 +1308,8 @@ class CodeQualityAnalyzer:
             visited[node] = 2
 
         for f in files:
+            if len(cycles) >= 50:
+                break
             if visited.get(f.path, 0) == 0:
                 dfs(f.path)
 
@@ -1816,7 +1822,8 @@ class CodeQualityAnalyzer:
                 try:
                     with open(cache_file, "r", encoding="utf-8") as inp:
                         data = json.load(inp)
-                        all_files.append(FileInput(path=data["path"], content=data["content"]))
+                        if data and "path" in data:
+                            all_files.append(FileInput(path=data["path"], content=data.get("content") or ""))
                 except Exception as e:
                     logger.error(f"Failed to read cache file {filename}: {e}")
                     

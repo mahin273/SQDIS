@@ -166,14 +166,21 @@ api.interceptors.response.use(
       isRefreshing = true;
 
       try {
-        const response = await axios.post<{ accessToken: string; refreshToken: string }>(
+        const response = await axios.post<any>(
           `${API_BASE_URL}/auth/refresh`,
           { refreshToken },
           { headers: { 'Content-Type': 'application/json' } }
         );
 
-        const { accessToken, refreshToken: newRefreshToken } = response.data;
-        tokenManager.setTokens(accessToken, newRefreshToken);
+        const data = response.data?.data || response.data;
+        const accessToken = data?.accessToken;
+        const newRefreshToken = data?.refreshToken;
+
+        if (!accessToken) {
+          throw new Error('Refresh response missing access token');
+        }
+
+        tokenManager.setTokens(accessToken, newRefreshToken || refreshToken);
         onRefreshed(accessToken);
         isRefreshing = false;
 
