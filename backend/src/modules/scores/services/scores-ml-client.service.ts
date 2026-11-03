@@ -151,6 +151,7 @@ export class ScoresMlClientService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -310,6 +311,7 @@ export class ScoresMlClientService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -500,6 +502,7 @@ export class ScoresMlClientService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!response.ok) {
@@ -528,6 +531,7 @@ export class ScoresMlClientService {
     try {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/health`, {
         method: 'GET',
+        signal: AbortSignal.timeout(5000),
       });
       return response.ok;
     } catch {
@@ -548,6 +552,7 @@ export class ScoresMlClientService {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/dqs/model-info`, {
         method: 'GET',
         headers: { 'X-Service-Key': this.mlServiceSecret },
+        signal: AbortSignal.timeout(5000),
       });
 
       if (!response.ok) {
@@ -573,6 +578,7 @@ export class ScoresMlClientService {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/sqs/model-info`, {
         method: 'GET',
         headers: { 'X-Service-Key': this.mlServiceSecret },
+        signal: AbortSignal.timeout(5000),
       });
 
       if (!response.ok) {
@@ -658,6 +664,7 @@ export class ScoresMlClientService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(25000),
       });
 
       if (!response.ok) {
@@ -691,6 +698,7 @@ export class ScoresMlClientService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!response.ok) {
@@ -713,6 +721,7 @@ export class ScoresMlClientService {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/code-quality/cache/${repositoryId}`, {
         method: 'DELETE',
         headers: { 'X-Service-Key': this.mlServiceSecret },
+        signal: AbortSignal.timeout(5000),
       });
       return response.ok;
     } catch (error) {

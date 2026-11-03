@@ -107,6 +107,7 @@ export class MlClientService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {
@@ -157,6 +158,7 @@ export class MlClientService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!response.ok) {
@@ -179,6 +181,7 @@ export class MlClientService {
     try {
       const response = await fetch(`${this.mlServiceUrl}/api/ml/health`, {
         method: 'GET',
+        signal: AbortSignal.timeout(5000),
       });
       return response.ok;
     } catch {
@@ -224,6 +227,7 @@ export class MlClientService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(8000),
       });
 
       if (!response.ok) {

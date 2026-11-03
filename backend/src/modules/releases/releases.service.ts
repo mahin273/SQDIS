@@ -893,6 +893,7 @@ export class ReleasesService {
           'X-Service-Key': this.mlServiceSecret,
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (resp.ok) {

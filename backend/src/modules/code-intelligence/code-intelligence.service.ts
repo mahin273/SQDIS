@@ -54,6 +54,7 @@ export class CodeIntelligenceService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!resp.ok) {
@@ -110,6 +111,7 @@ export class CodeIntelligenceService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(10000),
       });
 
       if (!resp.ok) {
@@ -202,6 +204,7 @@ export class CodeIntelligenceService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!resp.ok) {
@@ -247,6 +250,7 @@ export class CodeIntelligenceService {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(15000),
       });
 
       if (!resp.ok) {
@@ -272,6 +276,7 @@ export class CodeIntelligenceService {
           files,
           repository_id: repositoryId,
         }),
+        signal: AbortSignal.timeout(25000),
       });
 
       if (!resp.ok) {
@@ -424,6 +429,7 @@ export class CodeIntelligenceService {
         repository_name: team.name,
         modules: modulesPayload,
       }),
+      signal: AbortSignal.timeout(15000),
     });
 
     if (!resp.ok) {
