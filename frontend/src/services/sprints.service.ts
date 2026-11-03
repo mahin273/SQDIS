@@ -28,6 +28,14 @@ export const sprintsService = {
   },
 
   /**
+   * Get active sprints for the current organization
+   */
+  async getActive(teamId?: string): Promise<Sprint[]> {
+    const response = await api.get<Sprint[]>('/sprints/active', { params: teamId ? { teamId } : undefined });
+    return response.data;
+  },
+
+  /**
    * Get sprint by ID
    */
   async getById(id: string): Promise<Sprint> {

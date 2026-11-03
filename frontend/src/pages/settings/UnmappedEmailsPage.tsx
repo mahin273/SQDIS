@@ -2,13 +2,14 @@ import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { 
   HelpCircle, Search, 
-  Calendar, ChevronDown, CheckCircle2, X
+  Calendar, ChevronDown, CheckCircle2, X, RefreshCw
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { emailAliasesService, membersService } from '@/services'
+import { useToast } from '@/components/ui/toast'
+import { emailAliasesService, membersService, commitsService } from '@/services'
 import { queryKeys } from '@/lib/queryClient'
 import { useOrganizationStore } from '@/stores/organizationStore'
 import { QueryState } from '../pageUtils'
@@ -17,6 +18,7 @@ import type { UnmappedEmail, OrganizationMember } from '@/types'
 export function UnmappedEmailsPage() {
   const queryClient = useQueryClient()
   const { currentOrganization } = useOrganizationStore()
+  const { toast } = useToast()
   
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedEmails, setSelectedEmails] = useState<string[]>([])
@@ -34,6 +36,18 @@ export function UnmappedEmailsPage() {
   })
 
   // Mutations
+  const reattributeMutation = useMutation({
+    mutationFn: () => commitsService.reattribute(),
+    onSuccess: (res) => {
+      queryClient.invalidateQueries({ queryKey: ['unmapped-emails', currentOrganization?.id] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.commits.all() })
+      toast(`Successfully re-attributed ${res?.updated ?? 0} commit(s) across ${res?.developersDiscovered ?? 0} developer(s).`, { type: 'success' })
+    },
+    onError: (err: any) => {
+      toast(err?.response?.data?.message || err?.message || 'Failed to re-attribute commits', { type: 'error' })
+    },
+  })
+
   const assignMutation = useMutation({
     mutationFn: ({ email, userId }: { email: string; userId: string }) => {
       return emailAliasesService.assignEmail({ email, userId })
@@ -98,6 +112,14 @@ export function UnmappedEmailsPage() {
             These email addresses were found in your repository history but aren't mapped to any active SQDIS user.
           </p>
         </div>
+        <Button
+          onClick={() => reattributeMutation.mutate()}
+          disabled={reattributeMutation.isPending}
+          className="gap-2 shrink-0 bg-blue-600 hover:bg-blue-700 text-white"
+        >
+          <RefreshCw className={`h-4 w-4 ${reattributeMutation.isPending ? 'animate-spin' : ''}`} />
+          {reattributeMutation.isPending ? 'Re-attributing...' : 'Re-attribute Commits'}
+        </Button>
       </div>
 
       <Card>

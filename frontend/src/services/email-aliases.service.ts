@@ -42,6 +42,14 @@ export const emailAliasesService = {
   },
 
   /**
+   * Verify an email alias using verification token
+   */
+  async verify(token: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.get<{ success: boolean; message: string }>(`/email-aliases/verify/${token}`);
+    return response.data;
+  },
+
+  /**
    * Remove an email alias
    */
   async remove(id: string): Promise<void> {

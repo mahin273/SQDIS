@@ -48,4 +48,13 @@ describe('emailAliasesService', () => {
     await emailAliasesService.removeEmailMapping('alias-1');
     expect(api.delete).toHaveBeenCalledWith('/admin/email-aliases/alias-1');
   });
+
+  it('verifies email alias with token', async () => {
+    const mockRes = { success: true, message: 'Verified' };
+    vi.mocked(api.get).mockResolvedValueOnce({ data: mockRes });
+
+    const result = await emailAliasesService.verify('token-123');
+    expect(api.get).toHaveBeenCalledWith('/email-aliases/verify/token-123');
+    expect(result).toEqual(mockRes);
+  });
 });

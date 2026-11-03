@@ -22,6 +22,7 @@ import {
   ChevronRight,
   TrendingUp,
   FolderGit2,
+  History,
 } from 'lucide-react'
 import { Avatar } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -120,6 +121,12 @@ export function TeamDetailPage() {
   const busFactorQuery = useQuery({
     queryKey: ['team-bus-factor', id],
     queryFn: () => codeIntelligenceService.getTeamBusFactor(id!),
+    enabled: !!id,
+  })
+
+  const busFactorSnapshotsQuery = useQuery({
+    queryKey: ['team-bus-factor-snapshots', id],
+    queryFn: () => codeIntelligenceService.getBusFactorSnapshots({ teamId: id!, limit: 5 }),
     enabled: !!id,
   })
 
@@ -836,6 +843,32 @@ export function TeamDetailPage() {
                                 </li>
                               ))}
                             </ul>
+                          </div>
+                        )}
+
+                        {busFactorSnapshotsQuery.data && busFactorSnapshotsQuery.data.length > 0 && (
+                          <div className="rounded-xl border border-slate-200 dark:border-slate-800 p-4 text-xs space-y-3 bg-slate-50/50 dark:bg-slate-900/30">
+                            <span className="font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 text-xs">
+                              <History className="h-4 w-4 text-slate-500" />
+                              Historical Resilience Audits
+                            </span>
+                            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                              {busFactorSnapshotsQuery.data.map((snap) => (
+                                <div key={snap.id} className="py-2 flex items-center justify-between">
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="font-mono text-[10px]">
+                                      BF: {Number(snap.overallBusFactor ?? 1).toFixed(1)}
+                                    </Badge>
+                                    <span className="text-slate-500">
+                                      Gini: {Number(snap.averageGini ?? 0).toFixed(2)} &bull; {snap.criticalSilosCount ?? 0} Silos
+                                    </span>
+                                  </div>
+                                  <span className="text-slate-400 text-[11px] font-mono">
+                                    {new Date(snap.createdAt).toLocaleDateString()}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </>
