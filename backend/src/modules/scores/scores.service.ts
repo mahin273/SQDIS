@@ -1028,7 +1028,7 @@ export class ScoresService {
         score: mlResult.score,
         modelVersion: mlResult.model_version,
         featureValues: features as unknown as Prisma.InputJsonValue,
-        shapValues: mlResult.shap_values as unknown as Prisma.InputJsonValue,
+        shapValues: (mlResult.shap_values || {}) as unknown as Prisma.InputJsonValue,
         calculatedAt: new Date(),
       },
     });
@@ -1462,9 +1462,8 @@ export class ScoresService {
     }
 
     // Prepend AST recommendations to the SQS model recommendations
-    if (astRecommendations.length > 0) {
-      mlResult.recommendations = [...astRecommendations, ...mlResult.recommendations];
-    }
+    const existingRecs = Array.isArray(mlResult.recommendations) ? mlResult.recommendations : [];
+    mlResult.recommendations = [...astRecommendations, ...existingRecs];
 
     // Store the score
     const storedScore = await this.prisma.sQSScore.create({
@@ -1473,8 +1472,8 @@ export class ScoresService {
         score: mlResult.score,
         modelVersion: mlResult.model_version,
         featureValues: features as unknown as Prisma.InputJsonValue,
-        riskyModules: mlResult.risky_modules as unknown as Prisma.InputJsonValue,
-        recommendations: mlResult.recommendations as unknown as Prisma.InputJsonValue,
+        riskyModules: (Array.isArray(mlResult.risky_modules) ? mlResult.risky_modules : []) as unknown as Prisma.InputJsonValue,
+        recommendations: (Array.isArray(mlResult.recommendations) ? mlResult.recommendations : []) as unknown as Prisma.InputJsonValue,
         calculatedAt: new Date(),
       },
     });

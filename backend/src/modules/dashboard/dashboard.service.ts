@@ -328,19 +328,29 @@ export class DashboardService {
     // Group by date and average
     const grouped = scores.reduce(
       (acc, s) => {
-        const date = s.calculatedAt.toISOString().split('T')[0];
-        if (!acc[date]) acc[date] = { total: 0, count: 0 };
-        acc[date].total += s.score || 0;
-        acc[date].count += 1;
+        if (!s.calculatedAt) return acc;
+        try {
+          const date = (s.calculatedAt instanceof Date ? s.calculatedAt : new Date(s.calculatedAt))
+            .toISOString()
+            .split('T')[0];
+          if (!acc[date]) acc[date] = { total: 0, count: 0 };
+          const val = typeof s.score === 'number' && !isNaN(s.score) ? s.score : 0;
+          acc[date].total += val;
+          acc[date].count += 1;
+        } catch {
+          // ignore invalid date
+        }
         return acc;
       },
       {} as Record<string, { total: number; count: number }>,
     );
 
-    const trendResult = Object.entries(grouped).map(([date, { total, count }]) => ({
-      date,
-      value: Number((total / count).toFixed(1)),
-    }));
+    const trendResult = Object.entries(grouped)
+      .map(([date, { total, count }]) => ({
+        date,
+        value: count > 0 ? Number((total / count).toFixed(1)) : 0,
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
 
     if (this.cacheService) {
       await this.cacheService.set(cacheKey, trendResult, 60);
@@ -383,8 +393,15 @@ export class DashboardService {
     // Group by date
     const grouped = commits.reduce(
       (acc, c) => {
-        const date = c.committedAt.toISOString().split('T')[0];
-        acc[date] = (acc[date] || 0) + 1;
+        if (!c.committedAt) return acc;
+        try {
+          const date = (c.committedAt instanceof Date ? c.committedAt : new Date(c.committedAt))
+            .toISOString()
+            .split('T')[0];
+          acc[date] = (acc[date] || 0) + 1;
+        } catch {
+          // ignore invalid date
+        }
         return acc;
       },
       {} as Record<string, number>,
@@ -682,9 +699,13 @@ export class DashboardService {
         );
         const scores = memberScores.filter((s) => s !== null);
 
+        const validScores = scores.filter(
+          (s): s is { score: number } => s !== null && typeof s.score === 'number' && !isNaN(s.score),
+        );
+
         const avgDqs =
-          scores.length > 0
-            ? scores.reduce((sum, s) => sum + (s.score || 0), 0) / scores.length
+          validScores.length > 0
+            ? validScores.reduce((sum, s) => sum + s.score, 0) / validScores.length
             : 0;
 
         return {
@@ -895,11 +916,14 @@ export class DashboardService {
 
     // 4. Releases
     for (const r of releases) {
+      const targetDateFormatted = r.targetDate
+        ? new Date(r.targetDate).toLocaleDateString()
+        : null;
       activities.push({
         id: r.id,
         type: 'release',
         title: `Release ${r.version} Deployed`,
-        description: r.description || `Target Date: ${new Date(r.targetDate).toLocaleDateString()}`,
+        description: r.description || (targetDateFormatted ? `Target Date: ${targetDateFormatted}` : `Release ${r.version}`),
         message: r.description || `Release ${r.version}`,
         repository: 'Deployment Pipeline',
         repositoryName: 'Deployment Pipeline',
